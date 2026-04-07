@@ -1,7 +1,7 @@
 import pyttsx3
 
 def speak(text):
-    print(f"Goku: {text}")
+    print(f"AURA: {text}")
     try:
         engine = pyttsx3.init()
         voices = engine.getProperty('voices')

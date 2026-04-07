@@ -77,7 +77,7 @@ def process_command(command):
 
     # Shutdown
     if intent == "shutdown":
-        return intent, "Goodbye! Shutting down Hey Goku."
+        return intent, "Goodbye! Shutting down AURA."
 
     # General — use Groq AI
     response = generate_response(command)

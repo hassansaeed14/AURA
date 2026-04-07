@@ -10,7 +10,7 @@ def start_goku():
     print(f"{'='*40}\n")
     print("Commands: 'voice mode' to talk | 'bye' to exit\n")
 
-    speak(f"Hello! I am {APP_NAME}, your personal AI assistant. How can I help you?")
+    speak(f"Hello! I am AURA, How can I help you?")
 
     voice_mode = False
 
