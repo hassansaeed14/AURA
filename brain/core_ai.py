@@ -8,14 +8,16 @@ from memory.knowledge_base import (
     store_info, get_info
 )
 from agents.study_agent import study
-from agents.research_agent import research
+from agents.research_agent import research, web_search_simulation
 from agents.coding_agent import code_help
 from voice.text_to_speech import set_voice_preference, get_voice_preference
+from memory.vector_memory import store_memory, search_memory
 
 def process_command(command):
 
     command_lower = command.lower()
 
+    # English memory commands
     if "my name is" in command_lower:
         name = command_lower.replace("my name is", "").strip()
         store_user_name(name)
@@ -38,6 +40,17 @@ def process_command(command):
             return "memory", f"You are {age} years old."
         return "memory", "I don't know your age yet. Tell me by saying 'my age is ...'"
 
+    if "i live in" in command_lower:
+        city = command_lower.replace("i live in", "").strip()
+        store_user_city(city)
+        return "memory", f"Got it! I will remember that you live in {city}."
+
+    if "where do i live" in command_lower:
+        city = get_user_city()
+        if city:
+            return "memory", f"You live in {city}."
+        return "memory", "I don't know where you live yet."
+
     # Urdu memory commands
     if "میرا نام" in command and "ہے" in command:
         name = command.replace("میرا نام", "").replace("ہے", "").strip()
@@ -51,7 +64,6 @@ def process_command(command):
         return "memory", "مجھے ابھی تک آپ کا نام معلوم نہیں۔ بتائیں کہ آپ کا نام کیا ہے؟"
 
     if "وقت کیا ہے" in command or "ٹائم" in command:
-        import datetime
         now = datetime.datetime.now().strftime("%H:%M:%S")
         return "time", f"ابھی وقت {now} ہے۔"
 
@@ -60,20 +72,7 @@ def process_command(command):
         if name:
             return "greeting", f"وعلیکم السلام {name}! میں آپ کی کیا مدد کر سکتا ہوں؟"
         return "greeting", "وعلیکم السلام! میں آپ کی کیا مدد کر سکتا ہوں؟"
-    
-    if "i live in" in command_lower:
-        city = command_lower.replace("i live in", "").strip()
-        store_user_city(city)
-        return "memory", f"Got it! I will remember that you live in {city}."
 
-    if "where do i live" in command_lower:
-        city = get_user_city()
-        if city:
-            return "memory", f"You live in {city}."
-        return "memory", "I don't know where you live yet."
-    
-    # Voice control commands
-    
     # Voice control commands
     if "female voice" in command_lower:
         set_voice_preference(voice="female")
@@ -84,20 +83,27 @@ def process_command(command):
         return "voice", "Done! I switched to male voice."
 
     if "speak slow" in command_lower or "slowly" in command_lower:
-        _, speed = get_voice_preference()
         set_voice_preference(speed="slow")
         return "voice", "Okay! I will speak slowly now."
 
     if "speak fast" in command_lower or "faster" in command_lower:
-        _, speed = get_voice_preference()
         set_voice_preference(speed="fast")
         return "voice", "Okay! I will speak faster now."
 
     if "speak normal" in command_lower or "normal speed" in command_lower:
-        _, speed = get_voice_preference()
         set_voice_preference(speed="normal")
         return "voice", "Okay! Back to normal speed."
 
+    # Vector memory commands
+    store_memory(command, {"type": "user_input"})
+
+    if "remember" in command_lower or "recall" in command_lower:
+        memories = search_memory(command)
+        if memories:
+            memory_text = " | ".join(memories[:2])
+            return "memory", f"Here is what I remember: {memory_text}"
+
+    # Detect intent
     intent = detect_intent(command)
 
     if intent == "time":
@@ -115,13 +121,13 @@ def process_command(command):
         return intent, "Hello! How can I help you today?"
 
     if intent == "identity":
-        return intent, "I am AURA, your Autonomous Universal Responsive Assistant!"
+        return intent, "I am AURA!"
 
     if intent == "shutdown":
-        return intent, "Goodbye! Shutting down AURA."
+        return intent, "Goodbye!."
 
     if intent == "study":
-        topic = command_lower.replace("study", "").replace("explain", "").replace("teach me", "").replace("learn", "").strip()
+        topic = command_lower.replace("study", "").replace("explain", "").replace("teach me", "").replace("learn", "").replace("what is", "").replace("what are", "").replace("how does", "").replace("how do", "").replace("define", "").replace("tell me about", "").strip()
         response = study(topic)
         return intent, response
 
@@ -133,6 +139,16 @@ def process_command(command):
     if intent == "code":
         request = command_lower.replace("code", "").replace("program", "").replace("debug", "").strip()
         response = code_help(request)
+        return intent, response
+
+    if intent == "general":
+        memories = search_memory(command)
+        if memories and len(memories) > 0:
+            context = " ".join(memories[:2])
+            enhanced_command = f"Context from memory: {context}\n\nUser question: {command}"
+            response = generate_response(enhanced_command)
+        else:
+            response = generate_response(command)
         return intent, response
 
     response = generate_response(command)

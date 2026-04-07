@@ -1,34 +1,45 @@
 def detect_intent(command):
-    command = command.lower()
+    command_lower = command.lower().strip()
+    words = command_lower.split()
 
-    if any(word in command for word in ["time", "clock"]):
+    # Time
+    if any(word in words for word in ["time", "clock"]):
         return "time"
 
-    if any(word in command for word in ["date", "today"]):
+    # Date
+    if any(word in words for word in ["date", "today"]):
         return "date"
 
-    if any(word in command for word in ["hello", "hi", "hey"]):
+    # Greeting — exact words only
+    if command_lower in ["hi", "hello", "hey", "hey aura", "hi aura", "hello aura"]:
         return "greeting"
 
-    if any(word in command for word in ["bye", "exit", "quit", "shutdown"]):
+    # Shutdown
+    if any(word in words for word in ["bye", "exit", "quit", "shutdown"]):
         return "shutdown"
 
-    if any(word in command for word in ["your name", "who are you"]):
+    # Identity
+    if "your name" in command_lower or "who are you" in command_lower:
         return "identity"
 
-    if any(word in command for word in ["weather"]):
+    # Weather
+    if "weather" in command_lower:
         return "weather"
 
-    if any(word in command for word in ["joke"]):
+    # Joke
+    if "joke" in command_lower:
         return "joke"
 
-    if any(word in command for word in ["study", "explain", "teach", "learn"]):
+    # Study
+    if any(phrase in command_lower for phrase in ["study", "explain", "teach me", "what is", "what are", "how does", "how do", "define", "tell me about", "learn about"]):
         return "study"
 
-    if any(word in command for word in ["research", "search", "find", "look up"]):
+    # Research
+    if any(phrase in command_lower for phrase in ["research", "look up", "search for", "find information"]):
         return "research"
 
-    if any(word in command for word in ["code", "program", "debug", "fix", "write code"]):
+    # Code
+    if any(phrase in command_lower for phrase in ["write code", "help me code", "debug", "fix my code", "program"]):
         return "code"
 
     return "general"

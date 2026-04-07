@@ -1,8 +1,12 @@
 import pyttsx3
 import json
 import os
+import re
+import threading
 
 VOICE_SETTINGS_FILE = "memory/voice_settings.json"
+_engine = None
+_speaking_thread = None
 
 def load_settings():
     if os.path.exists(VOICE_SETTINGS_FILE):
@@ -33,17 +37,70 @@ def get_voice_preference():
     settings = load_settings()
     return settings["voice_index"], settings["speed"]
 
-def speak(text):
+def clean_text(text):
+    text = re.sub(r'\*+', '', text)
+    text = re.sub(r'#+', '', text)
+    text = re.sub(r'`+', '', text)
+    text = re.sub(r'\-\-+', '', text)
+    text = re.sub(r'\[|\]|\(|\)', '', text)
+    text = re.sub(r'>\s*', '', text)
+    text = re.sub(r'\|', '', text)
+    text = re.sub(r'_{2,}', '', text)
+    text = re.sub(r'\n+', '. ', text)
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
+def split_sentences(text):
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    return [s.strip() for s in sentences if s.strip()]
+
+def stop_speaking():
+    global _engine
+    try:
+        if _engine:
+            _engine.stop()
+            print("AURA: Stopped.")
+    except:
+        pass
+
+def _speak_worker(text, settings):
+    global _engine
+    try:
+        _engine = pyttsx3.init()
+        voices = _engine.getProperty('voices')
+        _engine.setProperty('voice', voices[settings["voice_index"]].id)
+        _engine.setProperty('rate', settings["speed"])
+        _engine.setProperty('volume', 1.0)
+        _engine.say(text)
+        _engine.runAndWait()
+    except:
+        pass
+    finally:
+        _engine = None
+
+def speak(text, read_full=False):
+    global _speaking_thread
+
     print(f"AURA: {text}")
+
     try:
         settings = load_settings()
-        engine = pyttsx3.init()
-        voices = engine.getProperty('voices')
-        engine.setProperty('voice', voices[settings["voice_index"]].id)
-        engine.setProperty('rate', settings["speed"])
-        engine.setProperty('volume', 1.0)
-        engine.say(text)
-        engine.runAndWait()
-        engine.stop()
+        clean = clean_text(text)
+        sentences = split_sentences(clean)
+
+        if read_full:
+            speak_text = clean
+        else:
+            speak_text = " ".join(sentences[:3])
+
+        stop_speaking()
+
+        _speaking_thread = threading.Thread(
+            target=_speak_worker,
+            args=(speak_text, settings),
+            daemon=True
+        )
+        _speaking_thread.start()
+
     except Exception as e:
         print(f"Voice error: {e}")
