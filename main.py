@@ -51,7 +51,14 @@ def start_goku():
 
             # Process command
             intent, response = process_command(user_input)
-            speak(response, read_full=read_full)
+
+            # Only speak short responses automatically
+            if len(response) > 500:
+                first_sentence = response.split('.')[0] + '.'
+                speak(first_sentence)
+                print("(Say 'read full' or click Read Full to hear complete response)")
+            else:
+                speak(response, read_full=read_full)
 
             if intent == "shutdown":
                 break

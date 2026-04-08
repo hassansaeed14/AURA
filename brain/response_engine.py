@@ -1,8 +1,9 @@
 from groq import Groq
-from config.settings import GROQ_API_KEY, MODEL_NAME, APP_NAME
+from config.settings import GROQ_API_KEY, MODEL_NAME, APP_NAME, AURA_PERSONALITY
 import re
 
 client = Groq(api_key=GROQ_API_KEY)
+
 conversation_history = []
 
 def detect_language(text):
@@ -35,19 +36,25 @@ def get_ai_response(user_input, system_override=None):
         system_prompt = system_override
     elif language == "urdu":
         system_prompt = (
-            "آپ AURA ہیں۔ ہمیشہ اردو میں جواب دیں۔ "
+            f"{AURA_PERSONALITY} "
+            "ہمیشہ اردو میں جواب دیں۔ "
             "پچھلی گفتگو کو یاد رکھیں۔ "
-            "تفصیلی اور واضح جوابات دیں۔"
+            "تفصیلی اور واضح جوابات دیں۔ "
+            "سادہ متن میں لکھیں۔"
         )
     else:
         system_prompt = (
-            f"You are {APP_NAME}, a highly intelligent personal AI assistant. "
-            "You are talking to a university student. "
-            "CRITICAL: Always remember the FULL conversation history. "
-            "When user says this topic or previous question always refer to what was discussed. "
-            "Give detailed educational responses. "
-            "Be like a knowledgeable professor."
-        )
+    f"{AURA_PERSONALITY} "
+    "You are talking to a user. "
+    "IMPORTANT: Match your response length to the question. "
+    "Simple questions get simple short answers. "
+    "Complex questions get detailed answers. "
+    "If someone asks what is X give a clear 2-3 sentence answer. "
+    "If someone asks for detailed explanation or assignment then give full response. "
+    "Always remember conversation history. "
+    "Never use markdown symbols. "
+    "Be conversational and natural like ChatGPT."
+)
 
     add_to_history("user", user_input)
     recent_history = conversation_history[-10:]

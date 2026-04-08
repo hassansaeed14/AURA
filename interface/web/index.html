@@ -40,27 +40,26 @@
             transition: background 0.3s, color 0.3s;
         }
 
-        /* Sidebar */
         .sidebar {
             width: 260px;
             background: var(--bg2);
             border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
-            padding: 20px 0;
             flex-shrink: 0;
             transition: background 0.3s;
+            overflow-y: auto;
         }
 
         .logo {
             text-align: center;
-            padding: 10px 20px 25px;
+            padding: 20px 20px 20px;
             border-bottom: 1px solid var(--border);
         }
 
         .orb {
-            width: 50px;
-            height: 50px;
+            width: 55px;
+            height: 55px;
             border-radius: 50%;
             background: radial-gradient(circle at 35% 35%, #c4b5fd, #7c3aed, #1a1a3e);
             margin: 0 auto 10px;
@@ -123,11 +122,6 @@
             color: var(--text);
         }
 
-        .user-details p {
-            font-size: 0.72rem;
-            color: var(--text-muted);
-        }
-
         .plan-badge {
             background: linear-gradient(135deg, #7c3aed, #5b21b6);
             color: white;
@@ -181,50 +175,32 @@
             font-size: 1rem;
         }
 
-        .agent-selector {
+        /* Capabilities section */
+        .capabilities {
             padding: 15px 20px;
             border-top: 1px solid var(--border);
         }
 
-        .agent-selector p {
+        .capabilities p {
             color: var(--text-dim);
             font-size: 0.65rem;
             letter-spacing: 2px;
             margin-bottom: 10px;
         }
 
-        .agents {
-            display: flex;
-            flex-direction: column;
+        .capability-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 6px;
         }
 
-        .agent-btn {
-            padding: 8px 12px;
+        .capability-item {
+            padding: 8px 10px;
             border-radius: 8px;
             border: 1px solid var(--border);
-            background: transparent;
+            font-size: 0.75rem;
             color: var(--text-muted);
-            cursor: pointer;
-            font-size: 0.82rem;
-            transition: all 0.2s;
-            text-align: left;
-            font-family: 'Segoe UI', sans-serif;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .agent-btn:hover {
-            background: #7c3aed22;
-            color: var(--purple-light);
-            border-color: var(--purple);
-        }
-
-        .agent-btn.active {
-            background: #7c3aed33;
-            color: var(--purple-light);
-            border-color: var(--purple);
+            text-align: center;
         }
 
         .main {
@@ -350,6 +326,7 @@
             border: 1px solid var(--border);
             align-self: flex-start;
             border-bottom-left-radius: 4px;
+            max-width: 80%;
         }
 
         .aura-label {
@@ -372,11 +349,10 @@
         }
 
         .msg-content {
-    color: var(--text);
-    line-height: 1.8;
-    white-space: pre-wrap;
+            color: var(--text);
+            line-height: 1.8;
+            white-space: pre-wrap;
         }
-
 
         .msg-actions {
             display: flex;
@@ -617,12 +593,36 @@
             font-size: 0.9rem;
         }
 
-        /* Scrollbar */
+        /* Suggestion chips */
+        .suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 0 25px 15px;
+        }
+
+        .chip {
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: var(--card);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.78rem;
+            transition: all 0.2s;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .chip:hover {
+            background: #7c3aed22;
+            color: var(--purple-light);
+            border-color: var(--purple);
+        }
+
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #4f27a8; border-radius: 4px; }
 
-        /* Mobile */
         @media (max-width: 768px) {
             .sidebar { display: none; }
             .message { max-width: 90%; }
@@ -671,21 +671,28 @@
             </div>
         </nav>
 
-        <div class="agent-selector">
-            <p>ACTIVE AGENT</p>
-            <div class="agents">
-                <button class="agent-btn active" onclick="setAgent('general', this)">
-                    🤖 General AURA
-                </button>
-                <button class="agent-btn" onclick="setAgent('study', this)">
-                    📚 Study Agent
-                </button>
-                <button class="agent-btn" onclick="setAgent('research', this)">
-                    🔍 Research Agent
-                </button>
-                <button class="agent-btn" onclick="setAgent('code', this)">
-                    💻 Coding Agent
-                </button>
+        <!-- Capabilities display only -->
+        <div class="capabilities">
+            <p>AURA CAN HELP WITH</p>
+            <div class="capability-grid">
+                <div class="capability-item">📚 Study</div>
+                <div class="capability-item">🔍 Research</div>
+                <div class="capability-item">💻 Coding</div>
+                <div class="capability-item">🌤️ Weather</div>
+                <div class="capability-item">📰 News</div>
+                <div class="capability-item">🧮 Math</div>
+                <div class="capability-item">🌍 Translate</div>
+                <div class="capability-item">📧 Email</div>
+                <div class="capability-item">✍️ Writing</div>
+                <div class="capability-item">🎯 Quiz</div>
+                <div class="capability-item">😄 Jokes</div>
+                <div class="capability-item">💭 Quotes</div>
+                <div class="capability-item">🔐 Password</div>
+                <div class="capability-item">📋 Tasks</div>
+                <div class="capability-item">📄 Resume</div>
+                <div class="capability-item">💱 Currency</div>
+                <div class="capability-item">📖 Dictionary</div>
+                <div class="capability-item">📸 Screenshot</div>
             </div>
         </div>
     </div>
@@ -715,7 +722,7 @@
         <div class="chat-area" id="chatPanel">
             <div class="message aura-message">
                 <div class="aura-label">AURA</div>
-                <div class="msg-content">Hello! I am AURA, your personal AI assistant. How can I help you today?</div>
+                <div class="msg-content">Hello! I am AURA, your personal AI assistant. I can help you with studying, research, coding, weather, news, translation, math, writing, quizzes, jokes, tasks, resume building and much more. Just ask me anything!</div>
             </div>
         </div>
 
@@ -772,8 +779,8 @@
                     <span class="setting-label">Llama 3.3 70B</span>
                 </div>
                 <div class="setting-row">
-                    <span class="setting-label">Memory System</span>
-                    <span class="setting-label">Vector + JSON</span>
+                    <span class="setting-label">Total Agents</span>
+                    <span class="setting-label">25+</span>
                 </div>
                 <div class="setting-row">
                     <span class="setting-label">Developer</span>
@@ -783,7 +790,23 @@
                     <span class="setting-label">University</span>
                     <span class="setting-label">Hazara University</span>
                 </div>
+                <div class="setting-row">
+                    <span class="setting-label">Company</span>
+                    <span class="setting-label">AURA AI</span>
+                </div>
             </div>
+        </div>
+
+        <!-- Suggestion chips -->
+        <div class="suggestions" id="suggestions">
+            <span class="chip" onclick="sendChip('What is machine learning?')">📚 Study ML</span>
+            <span class="chip" onclick="sendChip('What is the weather in Islamabad?')">🌤️ Weather</span>
+            <span class="chip" onclick="sendChip('Tell me a joke')">😄 Joke</span>
+            <span class="chip" onclick="sendChip('Generate a strong password')">🔐 Password</span>
+            <span class="chip" onclick="sendChip('Latest news Pakistan')">📰 News</span>
+            <span class="chip" onclick="sendChip('Give me a motivation quote')">💭 Quote</span>
+            <span class="chip" onclick="sendChip('Convert 100 USD to PKR')">💱 Currency</span>
+            <span class="chip" onclick="sendChip('Write a professional email to my professor')">📧 Email</span>
         </div>
 
         <!-- Input area -->
@@ -801,7 +824,7 @@
                 <input
                     type="text"
                     id="userInput"
-                    placeholder="Ask AURA anything..."
+                    placeholder="Ask AURA anything — it auto-detects what you need..."
                     onkeypress="if(event.key==='Enter') sendMessage()"
                 />
                 <button class="send-btn" onclick="sendMessage()">Send</button>
@@ -810,7 +833,6 @@
     </div>
 
     <script>
-        let currentAgent = 'general'
         let currentLanguage = 'auto'
         let isRecording = false
         let recognition = null
@@ -839,11 +861,8 @@
                 document.body.classList.remove('light')
             } else {
                 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-                if (!prefersDark) {
-                    document.body.classList.add('light')
-                } else {
-                    document.body.classList.remove('light')
-                }
+                if (!prefersDark) document.body.classList.add('light')
+                else document.body.classList.remove('light')
             }
         }
 
@@ -857,31 +876,17 @@
         function showPanel(panel, el) {
             document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'))
             if (el) el.classList.add('active')
-
             document.getElementById('chatPanel').style.display = panel === 'chat' ? 'flex' : 'none'
             document.getElementById('historyPanel').style.display = panel === 'history' ? 'flex' : 'none'
             document.getElementById('settingsPanel').style.display = panel === 'settings' ? 'flex' : 'none'
             document.getElementById('inputArea').style.display = panel === 'chat' ? 'block' : 'none'
-
-            const titles = {
-                chat: '💬 AURA Chat',
-                history: '📋 Chat History',
-                settings: '⚙️ Settings'
-            }
+            document.getElementById('suggestions').style.display = panel === 'chat' ? 'flex' : 'none'
+            const titles = { chat: '💬 AURA Chat', history: '📋 Chat History', settings: '⚙️ Settings' }
             document.getElementById('topbarTitle').textContent = titles[panel]
-
             if (panel === 'history') loadHistory()
         }
 
-        function setAgent(agent, el) {
-            currentAgent = agent
-            document.querySelectorAll('.agent-btn').forEach(b => b.classList.remove('active'))
-            el.classList.add('active')
-        }
-
-        function setLanguage(lang) {
-            currentLanguage = lang
-        }
+        function setLanguage(lang) { currentLanguage = lang }
 
         function clearChat() {
             document.getElementById('chatPanel').innerHTML = `
@@ -896,17 +901,18 @@
             window.location.href = '/login'
         }
 
-        // Voice input
+        function sendChip(text) {
+            document.getElementById('userInput').value = text
+            sendMessage()
+        }
+
         function toggleVoice() {
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
                 alert('Voice not supported. Please use Chrome browser.')
                 return
             }
-            if (isRecording) {
-                stopRecording()
-            } else {
-                startRecording()
-            }
+            if (isRecording) stopRecording()
+            else startRecording()
         }
 
         function startRecording() {
@@ -947,7 +953,6 @@
             document.getElementById('micBtn').textContent = '🎤 Speak'
         }
 
-        // Voice output — only first 2 sentences automatically
         function speakText(text) {
             if ('speechSynthesis' in window) {
                 window.speechSynthesis.cancel()
@@ -959,13 +964,10 @@
                 utterance.rate = 1.0
                 window.speechSynthesis.speak(utterance)
                 document.getElementById('orb').classList.add('talking')
-                utterance.onend = () => {
-                    document.getElementById('orb').classList.remove('talking')
-                }
+                utterance.onend = () => document.getElementById('orb').classList.remove('talking')
             }
         }
 
-        // Read full response on demand
         function readFullResponse(text) {
             if ('speechSynthesis' in window) {
                 window.speechSynthesis.cancel()
@@ -975,9 +977,7 @@
                 utterance.rate = 1.0
                 window.speechSynthesis.speak(utterance)
                 document.getElementById('orb').classList.add('talking')
-                utterance.onend = () => {
-                    document.getElementById('orb').classList.remove('talking')
-                }
+                utterance.onend = () => document.getElementById('orb').classList.remove('talking')
             }
         }
 
@@ -991,28 +991,23 @@
 
         function copyText(text) {
             navigator.clipboard.writeText(text).then(() => {
-                document.getElementById('voiceStatus').textContent = 'Copied to clipboard!'
+                document.getElementById('voiceStatus').textContent = 'Copied!'
                 setTimeout(() => {
                     document.getElementById('voiceStatus').textContent = 'Click mic to speak to AURA'
                 }, 2000)
             })
         }
 
-        // Send message
         async function sendMessage() {
             const input = document.getElementById('userInput')
             const chat = document.getElementById('chatPanel')
-            let text = input.value.trim()
+            const text = input.value.trim()
             if (!text) return
 
-            const displayText = text
+            // Hide suggestions after first message
+            document.getElementById('suggestions').style.display = 'none'
 
-            // Add agent prefix if specific agent selected
-            if (currentAgent !== 'general') {
-                text = currentAgent + ' ' + text
-            }
-
-            chat.innerHTML += `<div class="message user-message">${displayText}</div>`
+            chat.innerHTML += `<div class="message user-message">${text}</div>`
             input.value = ''
 
             chat.innerHTML += `
@@ -1036,13 +1031,16 @@
                 document.getElementById('orb').classList.remove('talking')
 
                 const agentTags = {
-                    study: 'STUDY',
-                    research: 'RESEARCH',
-                    code: 'CODING',
-                    memory: 'MEMORY',
-                    voice: 'VOICE',
-                    time: 'TIME',
-                    date: 'DATE'
+                    study: '📚 STUDY', research: '🔍 RESEARCH', code: '💻 CODING',
+                    weather: '🌤️ WEATHER', news: '📰 NEWS', math: '🧮 MATH',
+                    translation: '🌍 TRANSLATE', email: '📧 EMAIL', content: '✍️ CONTENT',
+                    summarize: '📝 SUMMARY', grammar: '✅ GRAMMAR', quiz: '🎯 QUIZ',
+                    joke: '😄 JOKE', quote: '💭 QUOTE', password: '🔐 PASSWORD',
+                    task: '📋 TASK', reminder: '⏰ REMINDER', resume: '📄 RESUME',
+                    currency: '💱 CURRENCY', dictionary: '📖 DICTIONARY',
+                    youtube: '▶️ YOUTUBE', web_search: '🌐 SEARCH',
+                    file: '📁 FILE', screenshot: '📸 SCREENSHOT',
+                    memory: '🧠 MEMORY', time: '⏰ TIME', date: '📅 DATE'
                 }
 
                 const tag = agentTags[data.intent] ?
@@ -1053,22 +1051,15 @@
                 chat.innerHTML += `
                     <div class="message aura-message" id="${msgId}">
                         <div class="aura-label">AURA ${tag}</div>
-                        <div class="msg-content">${data.response}</div><div class="msg-content">${data.response.replace(/\n/g, '<br>')}</div>
+                        <div class="msg-content">${data.response.replace(/\n/g, '<br>')}</div>
                         <div class="msg-actions">
-                            <button class="msg-btn" onclick="readFullResponse(document.querySelector('#${msgId} .msg-content').textContent)">
-                                🔊 Read Full
-                            </button>
-                            <button class="msg-btn" onclick="stopAudio()">
-                                🛑 Stop
-                            </button>
-                            <button class="msg-btn" onclick="copyText(document.querySelector('#${msgId} .msg-content').textContent)">
-                                📋 Copy
-                            </button>
+                            <button class="msg-btn" onclick="readFullResponse(document.querySelector('#${msgId} .msg-content').textContent)">🔊 Read</button>
+                            <button class="msg-btn" onclick="stopAudio()">🛑 Stop</button>
+                            <button class="msg-btn" onclick="copyText(document.querySelector('#${msgId} .msg-content').textContent)">📋 Copy</button>
                         </div>
                     </div>`
 
                 chat.scrollTop = chat.scrollHeight
-                
 
             } catch (e) {
                 document.getElementById('typing').remove()
@@ -1089,7 +1080,7 @@
                 const data = await res.json()
                 container.innerHTML = ''
                 if (data.length === 0) {
-                    container.innerHTML = '<p class="empty-msg">No chat history yet. Start a conversation!</p>'
+                    container.innerHTML = '<p class="empty-msg">No chat history yet.</p>'
                     return
                 }
                 data.reverse().forEach(item => {

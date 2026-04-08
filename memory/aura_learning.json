@@ -1,0 +1,119 @@
+{
+    "user_preferences": {},
+    "frequent_topics": {
+        "general": 22
+    },
+    "interaction_patterns": [
+        {
+            "time": "2026-04-08 12:29",
+            "intent": "general",
+            "input_length": 5
+        },
+        {
+            "time": "2026-04-08 12:34",
+            "intent": "general",
+            "input_length": 13
+        },
+        {
+            "time": "2026-04-08 12:34",
+            "intent": "general",
+            "input_length": 16
+        },
+        {
+            "time": "2026-04-08 12:35",
+            "intent": "general",
+            "input_length": 13
+        },
+        {
+            "time": "2026-04-08 12:40",
+            "intent": "general",
+            "input_length": 14
+        },
+        {
+            "time": "2026-04-08 12:41",
+            "intent": "general",
+            "input_length": 2
+        },
+        {
+            "time": "2026-04-08 12:41",
+            "intent": "general",
+            "input_length": 13
+        },
+        {
+            "time": "2026-04-08 12:46",
+            "intent": "general",
+            "input_length": 9
+        },
+        {
+            "time": "2026-04-08 12:46",
+            "intent": "general",
+            "input_length": 7
+        },
+        {
+            "time": "2026-04-08 12:47",
+            "intent": "general",
+            "input_length": 7
+        },
+        {
+            "time": "2026-04-08 14:00",
+            "intent": "general",
+            "input_length": 25
+        },
+        {
+            "time": "2026-04-08 14:02",
+            "intent": "general",
+            "input_length": 22
+        },
+        {
+            "time": "2026-04-08 14:02",
+            "intent": "general",
+            "input_length": 37
+        },
+        {
+            "time": "2026-04-08 14:03",
+            "intent": "general",
+            "input_length": 44
+        },
+        {
+            "time": "2026-04-08 14:05",
+            "intent": "general",
+            "input_length": 89
+        },
+        {
+            "time": "2026-04-08 14:06",
+            "intent": "general",
+            "input_length": 10
+        },
+        {
+            "time": "2026-04-08 14:07",
+            "intent": "general",
+            "input_length": 37
+        },
+        {
+            "time": "2026-04-08 14:07",
+            "intent": "general",
+            "input_length": 42
+        },
+        {
+            "time": "2026-04-08 14:08",
+            "intent": "general",
+            "input_length": 10
+        },
+        {
+            "time": "2026-04-08 14:08",
+            "intent": "general",
+            "input_length": 23
+        },
+        {
+            "time": "2026-04-08 14:09",
+            "intent": "general",
+            "input_length": 2
+        },
+        {
+            "time": "2026-04-08 14:09",
+            "intent": "general",
+            "input_length": 43
+        }
+    ],
+    "learned_facts": []
+}
