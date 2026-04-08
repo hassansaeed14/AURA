@@ -1,52 +1,81 @@
+import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
+from memory.vector_memory import store_memory
+
 
 client = Groq(api_key=GROQ_API_KEY)
 
-def write_cover_letter(name, position, company, experience, skills):
-    print(f"\nAURA Cover Letter Agent: {position} at {company}")
 
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
+def clean(text):
+    if not text:
+        return "I couldn't generate the cover letter right now."
+
+    text = str(text)
+    text = re.sub(r"\*{1,3}(.*?)\*{1,3}", r"\1", text)
+    text = re.sub(r"#{1,6}\s*", "", text)
+    text = re.sub(r"`{3}[\w]*\n?", "", text)
+    text = re.sub(r"`(.+?)`", r"\1", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def write_cover_letter(name, position, company, experience, skills):
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are AURA Cover Letter Agent, an expert career coach. "
+                        "Write a strong, professional and personalized cover letter in plain text.\n\n"
+                        "Structure:\n"
+                        "NAME\n"
+                        "DATE\n\n"
+                        "Hiring Manager\n"
+                        "Company\n\n"
+                        "Dear Hiring Manager\n\n"
+                        "OPENING PARAGRAPH\n"
+                        "BODY PARAGRAPH 1\n"
+                        "BODY PARAGRAPH 2\n"
+                        "BODY PARAGRAPH 3\n"
+                        "CLOSING PARAGRAPH\n\n"
+                        "Sincerely\n"
+                        "NAME\n\n"
+                        "Make it compelling, realistic, and tailored to the company. "
+                        "Do not use markdown symbols like *, #, or backticks."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Write a cover letter:\n"
+                        f"Name: {name}\n"
+                        f"Position: {position}\n"
+                        f"Company: {company}\n"
+                        f"Experience: {experience}\n"
+                        f"Skills: {skills}"
+                    )
+                }
+            ],
+            max_tokens=1000,
+            temperature=0.5
+        )
+
+        result = response.choices[0].message.content if response.choices else ""
+        cleaned = clean(result)
+
+        store_memory(
+            f"Cover letter created for {position} at {company}",
             {
-                "role": "system",
-                "content": (
-                    "You are AURA Cover Letter Agent, an expert career coach. "
-                    "Write a compelling cover letter. "
-                    "Format:\n"
-                    "[Your Name]\n"
-                    "[Date]\n\n"
-                    "Hiring Manager\n"
-                    "[Company Name]\n\n"
-                    "Dear Hiring Manager,\n\n"
-                    "OPENING PARAGRAPH:\n"
-                    "[Hook + position applying for + why interested]\n\n"
-                    "BODY PARAGRAPH 1:\n"
-                    "[Relevant experience and achievements]\n\n"
-                    "BODY PARAGRAPH 2:\n"
-                    "[Skills that match job requirements]\n\n"
-                    "BODY PARAGRAPH 3:\n"
-                    "[Why this company specifically]\n\n"
-                    "CLOSING PARAGRAPH:\n"
-                    "[Call to action + thank you]\n\n"
-                    "Sincerely,\n"
-                    "[Name]\n\n"
-                    "No markdown symbols. Make it compelling and professional."
-                )
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"Write a cover letter for:\n"
-                    f"Name: {name}\n"
-                    f"Position: {position}\n"
-                    f"Company: {company}\n"
-                    f"Experience: {experience}\n"
-                    f"Skills: {skills}"
-                )
+                "type": "cover_letter",
+                "position": position,
+                "company": company
             }
-        ],
-        max_tokens=1000
-    )
-    return response.choices[0].message.content
+        )
+
+        return cleaned
+
+    except Exception as e:
+        return f"Cover Letter error: {str(e)}"

@@ -1,82 +1,94 @@
+import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
+from memory.vector_memory import store_memory
+
 
 client = Groq(api_key=GROQ_API_KEY)
 
-def write_email(subject, context, tone="professional", email_type="general"):
-    print(f"\nAURA Email Writer: {email_type} email about {subject}")
 
-    email_formats = {
-        "general": (
-            "Subject: [Email subject]\n\n"
-            "Dear [Recipient],\n\n"
-            "Opening paragraph: [Purpose of email]\n\n"
-            "Main body: [Detailed information]\n\n"
-            "Closing paragraph: [Call to action or next steps]\n\n"
-            "Kind regards,\n[Your name]"
-        ),
-        "job": (
-            "Subject: Application for [Position]\n\n"
-            "Dear Hiring Manager,\n\n"
-            "Introduction: [Who you are and position applying for]\n\n"
-            "Why you are interested: [Your motivation]\n\n"
-            "Your qualifications: [Relevant skills and experience]\n\n"
-            "Closing: [Request for interview]\n\n"
-            "Sincerely,\n[Your name]"
-        ),
-        "complaint": (
-            "Subject: Formal Complaint Regarding [Issue]\n\n"
-            "Dear [Recipient],\n\n"
-            "I am writing to formally complain about: [Issue]\n\n"
-            "Details of the issue: [What happened]\n\n"
-            "Impact: [How it affected you]\n\n"
-            "Resolution requested: [What you want done]\n\n"
-            "I look forward to your prompt response.\n\n"
-            "Regards,\n[Your name]"
-        ),
-        "follow_up": (
-            "Subject: Following Up on [Previous Discussion]\n\n"
-            "Dear [Recipient],\n\n"
-            "I hope this email finds you well.\n\n"
-            "I am following up on: [Previous discussion]\n\n"
-            "Current status: [What you need to know]\n\n"
-            "Next steps: [What should happen next]\n\n"
-            "Please let me know if you need any additional information.\n\n"
-            "Best regards,\n[Your name]"
-        ),
-        "apology": (
-            "Subject: Sincere Apology for [Incident]\n\n"
-            "Dear [Recipient],\n\n"
-            "I am writing to sincerely apologize for: [What happened]\n\n"
-            "What went wrong: [Explanation]\n\n"
-            "Impact acknowledgment: [How it affected them]\n\n"
-            "How I will fix it: [Your plan]\n\n"
-            "Prevention: [How you will prevent it happening again]\n\n"
-            "Once again, I sincerely apologize.\n\n"
-            "Regards,\n[Your name]"
-        )
-    }
+def clean(text):
+    if not text:
+        return "I couldn't generate the email right now."
 
-    format_template = email_formats.get(email_type, email_formats["general"])
+    text = str(text)
+    text = re.sub(r"\*{1,3}(.*?)\*{1,3}", r"\1", text)
+    text = re.sub(r"#{1,6}\s*", "", text)
+    text = re.sub(r"`{3}[\w]*\n?", "", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    f"You are AURA Email Writer Agent, an expert business writer. "
-                    f"Write a {tone} {email_type} email. "
-                    f"Use this format:\n{format_template}\n"
-                    f"Make it clear, concise and professional. "
-                    f"No markdown symbols."
-                )
-            },
-            {
-                "role": "user",
-                "content": f"Write a {email_type} email about: {subject}. Context: {context}"
-            }
-        ],
-        max_tokens=1000
+
+def detect_email_type(text):
+    text = text.lower()
+
+    if any(word in text for word in ["apply", "job", "position", "cv", "resume"]):
+        return "job"
+
+    if any(word in text for word in ["complaint", "issue", "problem", "bad service"]):
+        return "complaint"
+
+    if any(word in text for word in ["follow up", "following up", "update"]):
+        return "follow_up"
+
+    if any(word in text for word in ["sorry", "apologize", "apology"]):
+        return "apology"
+
+    return "general"
+
+
+def build_email_prompt(email_type, tone):
+    return (
+        "You are AURA Email Writer Agent, an expert business communicator. "
+        f"Write a {tone} {email_type} email in plain text.\n\n"
+        "Structure:\n\n"
+        "Subject: [Clear subject]\n\n"
+        "Dear [Recipient],\n\n"
+        "[Opening paragraph]\n\n"
+        "[Main body]\n\n"
+        "[Closing paragraph]\n\n"
+        "[Sign-off]\n\n"
+        "Make it natural, clear, and realistic. "
+        "Do not use markdown symbols like *, #, or backticks."
     )
-    return response.choices[0].message.content
+
+
+def write_email(subject, context="", tone="professional", email_type=None):
+    try:
+        if not email_type:
+            email_type = detect_email_type(subject + " " + context)
+
+        system_prompt = build_email_prompt(email_type, tone)
+
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": f"Write an email about: {subject}. Context: {context}"
+                }
+            ],
+            max_tokens=1000,
+            temperature=0.5
+        )
+
+        result = response.choices[0].message.content if response.choices else ""
+        cleaned = clean(result)
+
+        store_memory(
+            f"Email written: {subject}",
+            {
+                "type": "email",
+                "email_type": email_type,
+                "tone": tone
+            }
+        )
+
+        return cleaned
+
+    except Exception as e:
+        return f"Email Agent error: {str(e)}"

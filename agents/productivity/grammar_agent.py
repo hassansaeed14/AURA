@@ -1,89 +1,155 @@
+import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
+from memory.vector_memory import store_memory
+
 
 client = Groq(api_key=GROQ_API_KEY)
 
-def check_grammar(text):
-    print(f"\nAURA Grammar Agent: checking text")
 
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
+def clean(text):
+    if not text:
+        return "I couldn't process the writing request right now."
+
+    text = str(text)
+    text = re.sub(r"\*{1,3}(.*?)\*{1,3}", r"\1", text)
+    text = re.sub(r"#{1,6}\s*", "", text)
+    text = re.sub(r"`{3}[\w]*\n?", "", text)
+    text = re.sub(r"`(.+?)`", r"\1", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def check_grammar(text):
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are AURA Grammar Agent, an expert English teacher and editor. "
+                        "Check grammar, spelling, punctuation, and clarity in plain text.\n\n"
+                        "Use this structure:\n"
+                        "GRAMMAR CHECK REPORT\n\n"
+                        "ORIGINAL TEXT\n"
+                        "CORRECTED TEXT\n"
+                        "ERRORS FOUND\n"
+                        "STYLE SUGGESTIONS\n"
+                        "OVERALL SCORE\n"
+                        "FEEDBACK\n\n"
+                        "Do not use markdown symbols like *, #, or backticks."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"Check grammar of this text: {text}"
+                }
+            ],
+            max_tokens=1000,
+            temperature=0.2
+        )
+
+        result = response.choices[0].message.content if response.choices else ""
+        cleaned = clean(result)
+
+        store_memory(
+            f"Grammar checked: {text[:120]}",
             {
-                "role": "system",
-                "content": (
-                    "You are AURA Grammar Agent, an expert English teacher. "
-                    "Check grammar, spelling and style. "
-                    "Format:\n"
-                    "GRAMMAR CHECK REPORT\n\n"
-                    "ORIGINAL TEXT:\n[original text]\n\n"
-                    "CORRECTED TEXT:\n[corrected version]\n\n"
-                    "ERRORS FOUND:\n"
-                    "1. Error: [what was wrong]\n"
-                    "   Correction: [what it should be]\n"
-                    "   Rule: [grammar rule]\n\n"
-                    "STYLE SUGGESTIONS:\n"
-                    "1. [Suggestion to improve writing]\n"
-                    "2. [Suggestion]\n\n"
-                    "OVERALL SCORE: [X/10]\n"
-                    "FEEDBACK: [General feedback on writing quality]"
-                )
-            },
-            {"role": "user", "content": f"Check grammar of: {text}"}
-        ],
-        max_tokens=1000
-    )
-    return response.choices[0].message.content
+                "type": "grammar_check"
+            }
+        )
+
+        return cleaned
+
+    except Exception as e:
+        return f"Grammar Agent error: {str(e)}"
+
 
 def improve_writing(text, style="professional"):
-    print(f"\nAURA Grammar Agent: improving writing")
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are AURA Grammar Agent, an expert writing editor. "
+                        f"Improve the writing to be more {style} in plain text.\n\n"
+                        "Use this structure:\n"
+                        "WRITING IMPROVEMENT\n\n"
+                        "ORIGINAL\n"
+                        f"IMPROVED ({style})\n"
+                        "CHANGES MADE\n"
+                        "TIPS FOR BETTER WRITING\n\n"
+                        "Do not use markdown symbols like *, #, or backticks."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"Improve this text in {style} style: {text}"
+                }
+            ],
+            max_tokens=1000,
+            temperature=0.3
+        )
 
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
+        result = response.choices[0].message.content if response.choices else ""
+        cleaned = clean(result)
+
+        store_memory(
+            f"Writing improved: {text[:120]}",
             {
-                "role": "system",
-                "content": (
-                    f"You are AURA Grammar Agent. "
-                    f"Improve the writing to be more {style}. "
-                    f"Format:\n"
-                    f"WRITING IMPROVEMENT\n\n"
-                    f"ORIGINAL:\n[original text]\n\n"
-                    f"IMPROVED ({style}):\n[improved version]\n\n"
-                    f"CHANGES MADE:\n"
-                    f"1. [Change and why]\n"
-                    f"2. [Change and why]\n"
-                    f"3. [Change and why]\n\n"
-                    f"TIPS FOR BETTER WRITING:\n"
-                    f"1. [Tip]\n"
-                    f"2. [Tip]"
-                )
-            },
-            {"role": "user", "content": f"Improve this text in {style} style: {text}"}
-        ],
-        max_tokens=1000
-    )
-    return response.choices[0].message.content
+                "type": "writing_improvement",
+                "style": style
+            }
+        )
+
+        return cleaned
+
+    except Exception as e:
+        return f"Writing Improvement error: {str(e)}"
+
 
 def paraphrase(text):
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are AURA Grammar Agent, an expert paraphrasing assistant. "
+                        "Paraphrase the text in 3 different ways in plain text.\n\n"
+                        "Use this structure:\n"
+                        "PARAPHRASE OPTIONS\n\n"
+                        "ORIGINAL\n"
+                        "VERSION 1 (Formal)\n"
+                        "VERSION 2 (Simple)\n"
+                        "VERSION 3 (Creative)\n\n"
+                        "Do not use markdown symbols like *, #, or backticks."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"Paraphrase this text: {text}"
+                }
+            ],
+            max_tokens=850,
+            temperature=0.5
+        )
+
+        result = response.choices[0].message.content if response.choices else ""
+        cleaned = clean(result)
+
+        store_memory(
+            f"Paraphrased: {text[:120]}",
             {
-                "role": "system",
-                "content": (
-                    "You are AURA Grammar Agent. "
-                    "Paraphrase the text in 3 different ways. "
-                    "Format:\n"
-                    "PARAPHRASE OPTIONS\n\n"
-                    "ORIGINAL:\n[original]\n\n"
-                    "VERSION 1 (Formal):\n[formal version]\n\n"
-                    "VERSION 2 (Simple):\n[simple version]\n\n"
-                    "VERSION 3 (Creative):\n[creative version]"
-                )
-            },
-            {"role": "user", "content": f"Paraphrase: {text}"}
-        ],
-        max_tokens=800
-    )
-    return response.choices[0].message.content
+                "type": "paraphrase"
+            }
+        )
+
+        return cleaned
+
+    except Exception as e:
+        return f"Paraphrase error: {str(e)}"

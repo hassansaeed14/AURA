@@ -1,90 +1,158 @@
+import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
+from memory.vector_memory import store_memory
+
 
 client = Groq(api_key=GROQ_API_KEY)
 
-def generate_quiz(topic, num_questions=5, difficulty="medium"):
-    print(f"\nAURA Quiz Agent: {topic}")
 
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
+def clean(text):
+    if not text:
+        return "I couldn't generate quiz content right now."
+
+    text = str(text)
+    text = re.sub(r"\*{1,3}(.*?)\*{1,3}", r"\1", text)
+    text = re.sub(r"#{1,6}\s*", "", text)
+    text = re.sub(r"`{3}[\w]*\n?", "", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def generate_quiz(topic, num_questions=5, difficulty="medium"):
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are AURA Quiz Agent, an expert educator. "
+                        f"Generate a {difficulty} difficulty quiz in plain text.\n\n"
+                        "Structure:\n"
+                        "QUIZ TITLE\n"
+                        "Difficulty\n\n"
+                        "For each question:\n"
+                        "Question\n"
+                        "A)\nB)\nC)\nD)\n"
+                        "Correct Answer\n"
+                        "Explanation\n\n"
+                        "End with a summary.\n\n"
+                        "Do not use markdown symbols like *, #, or backticks."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"Generate {num_questions} {difficulty} questions about: {topic}"
+                }
+            ],
+            max_tokens=2000,
+            temperature=0.4
+        )
+
+        result = response.choices[0].message.content if response.choices else ""
+        cleaned = clean(result)
+
+        store_memory(
+            f"Quiz generated: {topic}",
             {
-                "role": "system",
-                "content": (
-                    f"You are AURA Quiz Agent, an expert educator. "
-                    f"Generate a {difficulty} difficulty quiz. "
-                    f"Format:\n"
-                    f"QUIZ: {topic}\n"
-                    f"Difficulty: {difficulty.upper()}\n\n"
-                    f"Question 1:\n"
-                    f"[Question text]\n"
-                    f"A) [Option]\n"
-                    f"B) [Option]\n"
-                    f"C) [Option]\n"
-                    f"D) [Option]\n"
-                    f"Correct Answer: [Letter]\n"
-                    f"Explanation: [Why this is correct]\n\n"
-                    f"[Repeat for all questions]\n\n"
-                    f"QUIZ SUMMARY:\n"
-                    f"Total Questions: {num_questions}\n"
-                    f"Topic: {topic}\n"
-                    f"Good luck!"
-                )
-            },
-            {
-                "role": "user",
-                "content": f"Generate {num_questions} {difficulty} quiz questions about: {topic}"
+                "type": "quiz",
+                "difficulty": difficulty,
+                "questions": num_questions
             }
-        ],
-        max_tokens=2000
-    )
-    return response.choices[0].message.content
+        )
+
+        return cleaned
+
+    except Exception as e:
+        return f"Quiz Agent error: {str(e)}"
+
 
 def check_answer(question, user_answer, correct_answer):
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are AURA Quiz Agent. "
+                        "Check the answer and explain clearly in plain text.\n\n"
+                        "Structure:\n"
+                        "ANSWER CHECK\n"
+                        "Your Answer\n"
+                        "Correct Answer\n"
+                        "Result\n"
+                        "Explanation\n\n"
+                        "Do not use markdown symbols."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Question: {question}\n"
+                        f"User Answer: {user_answer}\n"
+                        f"Correct Answer: {correct_answer}"
+                    )
+                }
+            ],
+            max_tokens=500,
+            temperature=0.2
+        )
+
+        result = response.choices[0].message.content if response.choices else ""
+        cleaned = clean(result)
+
+        store_memory(
+            "Answer checked",
             {
-                "role": "system",
-                "content": (
-                    "You are AURA Quiz Agent. "
-                    "Check if the answer is correct and explain. "
-                    "Format:\n"
-                    "ANSWER CHECK\n\n"
-                    "Your Answer: [user answer]\n"
-                    "Correct Answer: [correct answer]\n"
-                    "Result: CORRECT / INCORRECT\n\n"
-                    "EXPLANATION:\n[Detailed explanation of the correct answer]"
-                )
-            },
-            {
-                "role": "user",
-                "content": f"Question: {question}\nUser answered: {user_answer}\nCorrect answer: {correct_answer}"
+                "type": "quiz_check"
             }
-        ],
-        max_tokens=400
-    )
-    return response.choices[0].message.content
+        )
+
+        return cleaned
+
+    except Exception as e:
+        return f"Answer check error: {str(e)}"
+
 
 def generate_flashcards(topic, num_cards=10):
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are AURA Quiz Agent, an expert teacher. "
+                        "Generate clear flashcards in plain text.\n\n"
+                        "Structure:\n"
+                        "CARD 1\nFRONT\nBACK\n\n"
+                        "Repeat for all cards.\n\n"
+                        "Do not use markdown symbols."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"Generate {num_cards} flashcards about: {topic}"
+                }
+            ],
+            max_tokens=1500,
+            temperature=0.4
+        )
+
+        result = response.choices[0].message.content if response.choices else ""
+        cleaned = clean(result)
+
+        store_memory(
+            f"Flashcards generated: {topic}",
             {
-                "role": "system",
-                "content": (
-                    "You are AURA Quiz Agent. "
-                    f"Generate {num_cards} flashcards for studying. "
-                    "Format each card as:\n"
-                    "CARD [N]:\n"
-                    "FRONT: [Question or term]\n"
-                    "BACK: [Answer or definition]\n\n"
-                    "Make them educational and clear."
-                )
-            },
-            {"role": "user", "content": f"Generate flashcards for: {topic}"}
-        ],
-        max_tokens=1500
-    )
-    return response.choices[0].message.content
+                "type": "flashcards",
+                "count": num_cards
+            }
+        )
+
+        return cleaned
+
+    except Exception as e:
+        return f"Flashcard error: {str(e)}"

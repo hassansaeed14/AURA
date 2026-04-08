@@ -1,76 +1,133 @@
 import requests
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
+from memory.vector_memory import store_memory
+
 
 client = Groq(api_key=GROQ_API_KEY)
 
-def convert_currency(amount, from_currency, to_currency):
-    print(f"\nAURA Currency Agent: {amount} {from_currency} to {to_currency}")
 
+def convert_currency(amount, from_currency, to_currency):
     try:
-        # Free currency API
-        url = f"https://api.exchangerate-api.com/v4/latest/{from_currency.upper()}"
+        amount = float(amount)
+        from_currency = from_currency.upper()
+        to_currency = to_currency.upper()
+
+        url = f"https://api.exchangerate-api.com/v4/latest/{from_currency}"
         response = requests.get(url, timeout=10)
+        response.raise_for_status()
         data = response.json()
 
-        if 'rates' in data:
-            rate = data['rates'].get(to_currency.upper())
-            if rate:
-                result = float(amount) * rate
-                return (
-                    f"Currency Conversion\n\n"
-                    f"{amount} {from_currency.upper()} = {result:.2f} {to_currency.upper()}\n\n"
-                    f"Exchange Rate: 1 {from_currency.upper()} = {rate:.4f} {to_currency.upper()}\n"
-                    f"Last Updated: {data.get('date', 'Today')}"
-                )
+        rates = data.get("rates", {})
+        rate = rates.get(to_currency)
 
-    except:
+        if rate:
+            result = amount * rate
+
+            output = (
+                "CURRENCY CONVERSION\n\n"
+                f"{amount} {from_currency} = {result:.2f} {to_currency}\n\n"
+                f"Exchange Rate: 1 {from_currency} = {rate:.4f} {to_currency}\n"
+                f"Last Updated: {data.get('date', 'N/A')}"
+            )
+
+            store_memory(
+                f"Currency conversion: {amount} {from_currency} to {to_currency}",
+                {
+                    "type": "currency",
+                    "from": from_currency,
+                    "to": to_currency
+                }
+            )
+
+            return output
+
+    except requests.exceptions.RequestException:
+        pass
+    except Exception:
         pass
 
-    # Fallback to AI
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are AURA Currency Agent. "
-                    "Provide currency conversion information. "
-                    "Give approximate rates and explain the conversion. "
-                    "No markdown symbols."
-                )
-            },
-            {
-                "role": "user",
-                "content": f"Convert {amount} {from_currency} to {to_currency}"
-            }
-        ],
-        max_tokens=300
-    )
-    return response.choices[0].message.content
+    # Fallback AI
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are AURA Currency Agent. "
+                        "Provide approximate currency conversion clearly in plain text. "
+                        "Do not use markdown symbols."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"Convert {amount} {from_currency} to {to_currency}"
+                }
+            ],
+            max_tokens=300,
+            temperature=0.3
+        )
+
+        return response.choices[0].message.content
+
+    except Exception as e:
+        return f"Currency conversion failed: {str(e)}"
+
 
 def get_crypto_price(crypto):
-    print(f"\nAURA Currency Agent: {crypto} price")
     try:
-        url = f"https://api.coingecko.com/api/v3/simple/price?ids={crypto.lower()}&vs_currencies=usd,pkr"
-        response = requests.get(url, timeout=10)
+        crypto = crypto.lower()
+
+        url = "https://api.coingecko.com/api/v3/simple/price"
+        response = requests.get(
+            url,
+            params={"ids": crypto, "vs_currencies": "usd,pkr"},
+            timeout=10
+        )
+        response.raise_for_status()
+
         data = response.json()
 
-        if data:
-            coin_data = list(data.values())[0]
-            usd = coin_data.get('usd', 'N/A')
-            pkr = coin_data.get('pkr', 'N/A')
-            return (
-                f"Crypto Price: {crypto.upper()}\n\n"
+        if crypto in data:
+            usd = data[crypto].get("usd")
+            pkr = data[crypto].get("pkr")
+
+            output = (
+                f"CRYPTO PRICE: {crypto.upper()}\n\n"
                 f"USD: ${usd:,.2f}\n"
                 f"PKR: Rs {pkr:,.2f}\n\n"
-                f"Data from CoinGecko"
+                "Source: CoinGecko"
             )
-    except:
+
+            store_memory(
+                f"Crypto checked: {crypto}",
+                {
+                    "type": "crypto"
+                }
+            )
+
+            return output
+
+    except requests.exceptions.RequestException:
+        pass
+    except Exception:
         pass
 
-    return client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[{"role": "user", "content": f"What is current price of {crypto}?"}],
-        max_tokens=200
-    ).choices[0].message.content
+    # Fallback AI
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"What is the current price of {crypto}?"
+                }
+            ],
+            max_tokens=200
+        )
+
+        return response.choices[0].message.content
+
+    except Exception as e:
+        return f"Crypto price fetch failed: {str(e)}"

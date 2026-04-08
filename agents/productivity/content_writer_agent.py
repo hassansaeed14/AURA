@@ -1,96 +1,182 @@
+import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
+from memory.vector_memory import store_memory
+
 
 client = Groq(api_key=GROQ_API_KEY)
 
-def write_content(topic, content_type="blog", tone="professional", word_count=500):
-    print(f"\nAURA Content Writer: {content_type} about {topic}")
 
-    content_formats = {
-        "blog": (
-            "BLOG POST TITLE: [Engaging title]\n\n"
-            "INTRODUCTION:\n[Hook the reader]\n\n"
-            "MAIN BODY:\n"
-            "Section 1: [Heading]\n[Content]\n\n"
-            "Section 2: [Heading]\n[Content]\n\n"
-            "Section 3: [Heading]\n[Content]\n\n"
-            "CONCLUSION:\n[Summary and call to action]\n\n"
-            "TAGS: [relevant tags]"
-        ),
-        "article": (
-            "ARTICLE TITLE: [Title]\n\n"
-            "ABSTRACT:\n[Brief summary]\n\n"
-            "1. INTRODUCTION\n[Introduction]\n\n"
-            "2. MAIN CONTENT\n[Detailed content]\n\n"
-            "3. ANALYSIS\n[Analysis]\n\n"
-            "4. CONCLUSION\n[Conclusion]\n\n"
-            "REFERENCES: [if applicable]"
-        ),
-        "social": (
-            "SOCIAL MEDIA POST:\n\n"
-            "CAPTION:\n[Engaging caption]\n\n"
-            "HASHTAGS:\n[Relevant hashtags]\n\n"
-            "CALL TO ACTION:\n[What should audience do]"
-        ),
-        "essay": (
-            "ESSAY TITLE: [Title]\n\n"
-            "THESIS STATEMENT:\n[Main argument]\n\n"
-            "INTRODUCTION:\n[Background and thesis]\n\n"
-            "BODY PARAGRAPH 1:\n[First argument]\n\n"
-            "BODY PARAGRAPH 2:\n[Second argument]\n\n"
-            "BODY PARAGRAPH 3:\n[Third argument]\n\n"
-            "CONCLUSION:\n[Restate thesis and summarize]\n\n"
-            "WORD COUNT: approximately {word_count} words"
+def clean(text):
+    if not text:
+        return "I couldn't generate the content right now."
+
+    text = str(text)
+    text = re.sub(r"\*{1,3}(.*?)\*{1,3}", r"\1", text)
+    text = re.sub(r"#{1,6}\s*", "", text)
+    text = re.sub(r"`{3}[\w]*\n?", "", text)
+    text = re.sub(r"`(.+?)`", r"\1", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def detect_content_type(text):
+    text = text.lower()
+
+    if any(word in text for word in ["blog", "blog post"]):
+        return "blog"
+    if any(word in text for word in ["article"]):
+        return "article"
+    if any(word in text for word in ["social post", "instagram post", "facebook post", "linkedin post", "tweet", "x post"]):
+        return "social"
+    if any(word in text for word in ["essay"]):
+        return "essay"
+
+    return "blog"
+
+
+def build_content_prompt(content_type, tone, word_count):
+    if content_type == "article":
+        return (
+            "You are AURA Content Writer Agent, an expert writer and editor. "
+            f"Write a {tone} article in plain text of about {word_count} words.\n\n"
+            "Structure:\n"
+            "ARTICLE TITLE\n"
+            "ABSTRACT\n"
+            "1. INTRODUCTION\n"
+            "2. MAIN CONTENT\n"
+            "3. ANALYSIS\n"
+            "4. CONCLUSION\n\n"
+            "Make it clear, polished, and realistic. "
+            "Do not use markdown symbols like *, #, or backticks."
         )
-    }
 
-    format_template = content_formats.get(content_type, content_formats["blog"])
+    if content_type == "social":
+        return (
+            "You are AURA Content Writer Agent, an expert social media writer. "
+            f"Write a {tone} social media post in plain text.\n\n"
+            "Structure:\n"
+            "POST CAPTION\n"
+            "HASHTAGS\n"
+            "CALL TO ACTION\n\n"
+            "Make it engaging, short, platform-friendly, and realistic. "
+            "Do not use markdown symbols like *, #, or backticks."
+        )
 
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    f"You are AURA Content Writer Agent, an expert writer. "
-                    f"Write {content_type} content with a {tone} tone. "
-                    f"Write approximately {word_count} words. "
-                    f"Use this format:\n{format_template}\n"
-                    f"No markdown symbols like * or #. Use plain text."
-                )
-            },
-            {
-                "role": "user",
-                "content": f"Write a {content_type} about: {topic}"
-            }
-        ],
-        max_tokens=2000
+    if content_type == "essay":
+        return (
+            "You are AURA Content Writer Agent, an expert academic writer. "
+            f"Write a {tone} essay in plain text of about {word_count} words.\n\n"
+            "Structure:\n"
+            "ESSAY TITLE\n"
+            "THESIS STATEMENT\n"
+            "INTRODUCTION\n"
+            "BODY PARAGRAPH 1\n"
+            "BODY PARAGRAPH 2\n"
+            "BODY PARAGRAPH 3\n"
+            "CONCLUSION\n\n"
+            "Make it coherent, formal, and clear. "
+            "Do not use markdown symbols like *, #, or backticks."
+        )
+
+    return (
+        "You are AURA Content Writer Agent, an expert blog writer. "
+        f"Write a {tone} blog post in plain text of about {word_count} words.\n\n"
+        "Structure:\n"
+        "BLOG POST TITLE\n"
+        "INTRODUCTION\n"
+        "SECTION 1\n"
+        "SECTION 2\n"
+        "SECTION 3\n"
+        "CONCLUSION\n"
+        "TAGS\n\n"
+        "Make it engaging, readable, and useful. "
+        "Do not use markdown symbols like *, #, or backticks."
     )
-    return response.choices[0].message.content
 
-def write_social_post(topic, platform="instagram"):
-    print(f"\nAURA Content Writer: {platform} post about {topic}")
 
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
+def write_content(topic, content_type="blog", tone="professional", word_count=500):
+    try:
+        if not content_type:
+            content_type = detect_content_type(topic)
+
+        system_prompt = build_content_prompt(content_type, tone, word_count)
+
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": f"Write {content_type} content about: {topic}"
+                }
+            ],
+            max_tokens=2000,
+            temperature=0.6
+        )
+
+        result = response.choices[0].message.content if response.choices else ""
+        cleaned = clean(result)
+
+        store_memory(
+            f"Content written: {topic}",
             {
-                "role": "system",
-                "content": (
-                    f"You are AURA Social Media Expert. "
-                    f"Write an engaging {platform} post. "
-                    f"Format:\n"
-                    f"POST CAPTION:\n[Engaging caption optimized for {platform}]\n\n"
-                    f"HASHTAGS:\n[10-15 relevant hashtags]\n\n"
-                    f"BEST TIME TO POST:\n[When to post for maximum engagement]\n\n"
-                    f"ENGAGEMENT TIP:\n[How to boost engagement]"
-                )
-            },
-            {
-                "role": "user",
-                "content": f"Write a {platform} post about: {topic}"
+                "type": "content",
+                "content_type": content_type,
+                "tone": tone,
+                "word_count": word_count
             }
-        ],
-        max_tokens=800
-    )
-    return response.choices[0].message.content
+        )
+
+        return cleaned
+
+    except Exception as e:
+        return f"Content Writer error: {str(e)}"
+
+
+def write_social_post(topic, platform="instagram", tone="engaging"):
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are AURA Social Media Expert. "
+                        f"Write an engaging {tone} {platform} post in plain text.\n\n"
+                        "Structure:\n"
+                        "POST CAPTION\n"
+                        "HASHTAGS\n"
+                        "BEST TIME TO POST\n"
+                        "ENGAGEMENT TIP\n\n"
+                        "Do not use markdown symbols like *, #, or backticks."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"Write a {platform} post about: {topic}"
+                }
+            ],
+            max_tokens=900,
+            temperature=0.7
+        )
+
+        result = response.choices[0].message.content if response.choices else ""
+        cleaned = clean(result)
+
+        store_memory(
+            f"Social post written: {topic}",
+            {
+                "type": "social_content",
+                "platform": platform,
+                "tone": tone
+            }
+        )
+
+        return cleaned
+
+    except Exception as e:
+        return f"Social Content error: {str(e)}"

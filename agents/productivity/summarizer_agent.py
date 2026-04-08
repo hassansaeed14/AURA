@@ -1,90 +1,148 @@
+import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
+from memory.vector_memory import store_memory
+
 
 client = Groq(api_key=GROQ_API_KEY)
 
-def summarize_text(text, summary_type="brief"):
-    print(f"\nAURA Summarizer Agent: {summary_type} summary")
 
-    formats = {
-        "brief": (
-            "BRIEF SUMMARY\n\n"
-            "MAIN POINT:\n[One sentence summary]\n\n"
-            "KEY POINTS:\n"
-            "1. [Point]\n"
-            "2. [Point]\n"
-            "3. [Point]\n\n"
-            "CONCLUSION:\n[What to take away]"
-        ),
-        "detailed": (
+def clean(text):
+    if not text:
+        return "I couldn't generate a summary right now."
+
+    text = str(text)
+    text = re.sub(r"\*{1,3}(.*?)\*{1,3}", r"\1", text)
+    text = re.sub(r"#{1,6}\s*", "", text)
+    text = re.sub(r"`{3}[\w]*\n?", "", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def detect_summary_type(text):
+    text = text.lower()
+
+    if any(word in text for word in ["bullet", "points", "list"]):
+        return "bullet"
+
+    if any(word in text for word in ["detailed", "full", "in depth"]):
+        return "detailed"
+
+    return "brief"
+
+
+def build_summary_prompt(summary_type):
+    if summary_type == "detailed":
+        return (
+            "You are AURA Summarizer Agent. "
+            "Summarize clearly in plain text using this structure:\n\n"
             "DETAILED SUMMARY\n\n"
-            "OVERVIEW:\n[2-3 sentence overview]\n\n"
-            "MAIN TOPICS:\n"
-            "Topic 1: [Title]\n[Explanation]\n\n"
-            "Topic 2: [Title]\n[Explanation]\n\n"
-            "Topic 3: [Title]\n[Explanation]\n\n"
-            "KEY INSIGHTS:\n[Important insights]\n\n"
-            "CONCLUSION:\n[Final takeaway]"
-        ),
-        "bullet": (
-            "BULLET POINT SUMMARY\n\n"
-            "Main Idea: [Core concept]\n\n"
-            "Key Points:\n"
-            "- [Point 1]\n"
-            "- [Point 2]\n"
-            "- [Point 3]\n"
-            "- [Point 4]\n"
-            "- [Point 5]\n\n"
-            "Action Items:\n"
-            "- [What to do with this information]"
+            "OVERVIEW\n"
+            "MAIN TOPICS\n"
+            "KEY INSIGHTS\n"
+            "CONCLUSION\n\n"
+            "Do not use markdown symbols like *, #, or backticks."
         )
-    }
 
-    format_template = formats.get(summary_type, formats["brief"])
+    if summary_type == "bullet":
+        return (
+            "You are AURA Summarizer Agent. "
+            "Summarize clearly in bullet-style plain text:\n\n"
+            "Main Idea\n"
+            "Key Points\n"
+            "Action Items\n\n"
+            "Keep it concise. No markdown symbols."
+        )
 
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    f"You are AURA Summarizer Agent, an expert at condensing information. "
-                    f"Summarize the given text clearly and accurately. "
-                    f"Use this format:\n{format_template}\n"
-                    f"No markdown symbols. Plain text only."
-                )
-            },
-            {
-                "role": "user",
-                "content": f"Summarize this text ({summary_type}): {text}"
-            }
-        ],
-        max_tokens=1000
+    return (
+        "You are AURA Summarizer Agent. "
+        "Summarize clearly in plain text using this structure:\n\n"
+        "BRIEF SUMMARY\n"
+        "MAIN POINT\n"
+        "KEY POINTS\n"
+        "CONCLUSION\n\n"
+        "Keep it short and clear. No markdown symbols."
     )
-    return response.choices[0].message.content
+
+
+def summarize_text(text, summary_type=None):
+    try:
+        if not summary_type:
+            summary_type = detect_summary_type(text)
+
+        system_prompt = build_summary_prompt(summary_type)
+
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": f"Summarize this:\n{text}"
+                }
+            ],
+            max_tokens=1000,
+            temperature=0.3
+        )
+
+        result = response.choices[0].message.content if response.choices else ""
+        cleaned = clean(result)
+
+        store_memory(
+            f"Summarized text",
+            {
+                "type": "summary",
+                "mode": summary_type
+            }
+        )
+
+        return cleaned
+
+    except Exception as e:
+        return f"Summarizer error: {str(e)}"
+
 
 def summarize_topic(topic):
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are AURA Summarizer Agent. "
+                        "Explain and summarize a topic clearly in plain text:\n\n"
+                        "TOPIC SUMMARY\n"
+                        "WHAT IT IS\n"
+                        "KEY FACTS\n"
+                        "WHY IT MATTERS\n"
+                        "QUICK TAKEAWAY\n\n"
+                        "No markdown symbols."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"Summarize this topic: {topic}"
+                }
+            ],
+            max_tokens=900,
+            temperature=0.3
+        )
+
+        result = response.choices[0].message.content if response.choices else ""
+        cleaned = clean(result)
+
+        store_memory(
+            f"Summarized topic: {topic}",
             {
-                "role": "system",
-                "content": (
-                    "You are AURA Summarizer Agent. "
-                    "Give a comprehensive summary of the topic. "
-                    "Format:\n"
-                    "TOPIC SUMMARY: [topic]\n\n"
-                    "WHAT IT IS:\n[Brief explanation]\n\n"
-                    "KEY FACTS:\n"
-                    "1. [Fact]\n"
-                    "2. [Fact]\n"
-                    "3. [Fact]\n\n"
-                    "WHY IT MATTERS:\n[Importance]\n\n"
-                    "QUICK TAKEAWAY:\n[One sentence summary]"
-                )
-            },
-            {"role": "user", "content": f"Summarize this topic: {topic}"}
-        ],
-        max_tokens=800
-    )
-    return response.choices[0].message.content
+                "type": "topic_summary"
+            }
+        )
+
+        return cleaned
+
+    except Exception as e:
+        return f"Topic summarizer error: {str(e)}"

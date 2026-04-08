@@ -1,93 +1,136 @@
-import random
+import secrets
 import string
-from groq import Groq
-from config.settings import GROQ_API_KEY, MODEL_NAME
+from memory.vector_memory import store_memory
 
-client = Groq(api_key=GROQ_API_KEY)
+
+SYMBOLS = "!@#$%^&*"
+
 
 def generate_password(length=12, include_symbols=True, include_numbers=True):
-    print(f"\nAURA Password Agent: generating {length} char password")
+    try:
+        length = max(6, int(length))
 
-    chars = string.ascii_letters
-    if include_numbers:
-        chars += string.digits
-    if include_symbols:
-        chars += "!@#$%^&*"
+        chars = string.ascii_letters
+        if include_numbers:
+            chars += string.digits
+        if include_symbols:
+            chars += SYMBOLS
 
-    password = ''.join(random.choice(chars) for _ in range(length))
+        # 🔐 Use cryptographically secure generator
+        password = ''.join(secrets.choice(chars) for _ in range(length))
 
-    # Ensure at least one of each type
-    if include_numbers:
-        password = password[:length-2] + random.choice(string.digits) + password[length-1:]
-    if include_symbols:
-        password = password[:length-1] + random.choice("!@#$%^&*")
+        # Ensure at least one of each type
+        password_list = list(password)
 
-    strength = "STRONG" if length >= 12 and include_symbols else "MEDIUM" if length >= 8 else "WEAK"
+        if include_numbers:
+            password_list[0] = secrets.choice(string.digits)
+        if include_symbols:
+            password_list[1] = secrets.choice(SYMBOLS)
+        password_list[2] = secrets.choice(string.ascii_uppercase)
+        password_list[3] = secrets.choice(string.ascii_lowercase)
 
-    return (
-        f"PASSWORD GENERATED\n\n"
-        f"Password: {password}\n"
-        f"Length: {length} characters\n"
-        f"Strength: {strength}\n\n"
-        f"SECURITY TIPS:\n"
-        f"1. Never share your password with anyone\n"
-        f"2. Use different passwords for each account\n"
-        f"3. Store it in a password manager\n"
-        f"4. Change it every 3-6 months"
-    )
+        password = ''.join(password_list)
+
+        # Strength calculation
+        if length >= 14 and include_symbols and include_numbers:
+            strength = "VERY STRONG"
+        elif length >= 12:
+            strength = "STRONG"
+        elif length >= 8:
+            strength = "MEDIUM"
+        else:
+            strength = "WEAK"
+
+        store_memory(
+            "Password generated",
+            {
+                "type": "password",
+                "length": length,
+                "strength": strength
+            }
+        )
+
+        return (
+            "PASSWORD GENERATED\n\n"
+            f"Password: {password}\n"
+            f"Length: {length} characters\n"
+            f"Strength: {strength}\n\n"
+            "SECURITY TIPS:\n"
+            "1. Never share your password\n"
+            "2. Use a password manager\n"
+            "3. Use unique passwords for each account\n"
+            "4. Enable 2FA wherever possible"
+        )
+
+    except Exception as e:
+        return f"Password generation error: {str(e)}"
+
 
 def check_password_strength(password):
-    score = 0
-    feedback = []
+    try:
+        score = 0
+        feedback = []
 
-    if len(password) >= 12:
-        score += 2
-    elif len(password) >= 8:
-        score += 1
-    else:
-        feedback.append("Password is too short. Use at least 12 characters.")
+        if len(password) >= 12:
+            score += 2
+        elif len(password) >= 8:
+            score += 1
+        else:
+            feedback.append("Use at least 12 characters.")
 
-    if any(c.isupper() for c in password):
-        score += 1
-    else:
-        feedback.append("Add uppercase letters.")
+        if any(c.isupper() for c in password):
+            score += 1
+        else:
+            feedback.append("Add uppercase letters.")
 
-    if any(c.islower() for c in password):
-        score += 1
-    else:
-        feedback.append("Add lowercase letters.")
+        if any(c.islower() for c in password):
+            score += 1
+        else:
+            feedback.append("Add lowercase letters.")
 
-    if any(c.isdigit() for c in password):
-        score += 1
-    else:
-        feedback.append("Add numbers.")
+        if any(c.isdigit() for c in password):
+            score += 1
+        else:
+            feedback.append("Add numbers.")
 
-    if any(c in "!@#$%^&*" for c in password):
-        score += 2
-    else:
-        feedback.append("Add special characters like !@#$%^&*")
+        if any(c in SYMBOLS for c in password):
+            score += 2
+        else:
+            feedback.append("Add special characters like !@#$%^&*")
 
-    if score >= 6:
-        strength = "VERY STRONG"
-    elif score >= 4:
-        strength = "STRONG"
-    elif score >= 3:
-        strength = "MEDIUM"
-    else:
-        strength = "WEAK"
+        if score >= 6:
+            strength = "VERY STRONG"
+        elif score >= 4:
+            strength = "STRONG"
+        elif score >= 3:
+            strength = "MEDIUM"
+        else:
+            strength = "WEAK"
 
-    result = (
-        f"PASSWORD STRENGTH CHECK\n\n"
-        f"Password: {'*' * len(password)}\n"
-        f"Strength: {strength}\n"
-        f"Score: {score}/7\n\n"
-    )
+        store_memory(
+            "Password strength checked",
+            {
+                "type": "password_check",
+                "strength": strength,
+                "length": len(password)
+            }
+        )
 
-    if feedback:
-        result += "IMPROVEMENTS NEEDED:\n"
-        for i, tip in enumerate(feedback, 1):
-            result += f"{i}. {tip}\n"
-    else:
-        result += "Your password is excellent!"
+        result = (
+            "PASSWORD STRENGTH CHECK\n\n"
+            f"Password: {'*' * len(password)}\n"
+            f"Strength: {strength}\n"
+            f"Score: {score}/7\n\n"
+        )
 
-    return result
+        if feedback:
+            result += "IMPROVEMENTS:\n"
+            for i, tip in enumerate(feedback, 1):
+                result += f"{i}. {tip}\n"
+        else:
+            result += "Your password is excellent."
+
+        return result
+
+    except Exception as e:
+        return f"Password check error: {str(e)}"
