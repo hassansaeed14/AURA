@@ -9,3 +9,34 @@ security/whitelist.json
 security/confirmation_codes.json
 security/rate_limits.json
 security/sessions.json
+
+# Temp folders
+tmp*/
+temp*/
+
+# Screenshot artifacts
+screenshot_*.png
+
+# Dev logs
+dev_log.txt
+
+# Audit files
+audit_source_inventory.json
+
+# Memory data (private)
+memory/*.json
+memory/*.db
+memory/*.sqlite3
+memory/vector_store/
+
+# Security data (private)
+security/*.json
+security/*.hash
+security/.secret.key
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
