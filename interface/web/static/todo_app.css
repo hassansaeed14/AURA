@@ -1,0 +1,12 @@
+/* Complete styling with dark theme */
+body {
+    background-color: #333;
+    color: #fff;
+}
+header, footer {
+    background-color: #444;
+    padding: 10px;
+}
+h1 {
+    font-size: 24px;
+}
