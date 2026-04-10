@@ -132,7 +132,7 @@
         "preferences": {}
     },
     "topic_frequency": {
-        "general": 29,
+        "general": 30,
         "news": 1,
         "memory": 12,
         "greeting": 7,
@@ -676,10 +676,17 @@
             "input": "give me explanation",
             "response": "I couldn't generate a useful response right now.",
             "length_type": "short"
+        },
+        {
+            "time": "2026-04-10 23:29",
+            "intent": "general",
+            "input": "what is AI",
+            "response": "I couldn't generate a useful response right now.",
+            "length_type": "short"
         }
     ],
     "behavior_stats": {
-        "short_queries": 52,
+        "short_queries": 53,
         "medium_queries": 19,
         "long_queries": 5
     },
@@ -983,10 +990,14 @@
         [
             "general",
             "general"
+        ],
+        [
+            "general",
+            "general"
         ]
     ],
     "intent_weights": {
-        "general": 58,
+        "general": 60,
         "news": 2,
         "memory": 24,
         "greeting": 14,
@@ -998,5 +1009,5 @@
         "currency": 26,
         "study": 2
     },
-    "last_seen": "2026-04-10 23:10"
+    "last_seen": "2026-04-10 23:29"
 }

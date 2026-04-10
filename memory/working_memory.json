@@ -1,6 +1,6 @@
 {
   "default": {
-    "active_topic": "give me explanation",
+    "active_topic": "what is AI",
     "active_file": null,
     "active_url": null,
     "last_agent": "general",
@@ -31,10 +31,10 @@
       "**If you are the person in charge of the lifeboat, do you leave the unconscious doctor behind to ensure the safety of the ten healthy passengers, or do you remove one healthy person to room for the doctor? What is the primary ethical principle guiding your choice?**",
       "If a tree falls in a forest and no one is around to hear it, does it a sound?",
       "Jarvis",
-      "what is AI",
       "Facebook",
-      "give me explanation"
+      "give me explanation",
+      "what is AI"
     ],
-    "updated_at": "2026-04-10 23:10:44"
+    "updated_at": "2026-04-10 23:29:30"
   }
 }

@@ -266,6 +266,11 @@
             "time": "2026-04-10 23:10",
             "command": "give me explanation",
             "confidence": 0.0
+        },
+        {
+            "time": "2026-04-10 23:29",
+            "command": "what is AI",
+            "confidence": 0.0
         }
     ],
     "agent_errors": [],
@@ -887,6 +892,15 @@
         },
         {
             "time": "2026-04-10 23:10",
+            "requested_action": "general",
+            "actual_action": "general",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 23:29",
             "requested_action": "general",
             "actual_action": "general",
             "success": true,
