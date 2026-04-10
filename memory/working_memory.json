@@ -1,0 +1,19 @@
+{
+  "default": {
+    "active_topic": "task buy milk",
+    "active_file": null,
+    "active_url": null,
+    "last_agent": "task",
+    "last_task": null,
+    "last_translation": null,
+    "current_goal": null,
+    "current_mode": "smart",
+    "unresolved_follow_up": null,
+    "recent_references": [
+      "and AI agents",
+      "what time is it",
+      "task buy milk"
+    ],
+    "updated_at": "2026-04-10 13:50:25"
+  }
+}

@@ -1,0 +1,13 @@
+from __future__ import annotations
+
+from datetime import timedelta
+
+
+PIN_RETRY_LIMIT = 5
+PIN_LOCKOUT_MINUTES = 15
+SESSION_APPROVAL_MINUTES = 30
+LOCK_DEFAULT_MINUTES = 30
+
+PIN_LOCKOUT_DELTA = timedelta(minutes=PIN_LOCKOUT_MINUTES)
+SESSION_APPROVAL_DELTA = timedelta(minutes=SESSION_APPROVAL_MINUTES)
+LOCK_DEFAULT_DELTA = timedelta(minutes=LOCK_DEFAULT_MINUTES)

@@ -1,106 +1,103 @@
-import pyttsx3
-import json
-import os
-import re
-import threading
+from __future__ import annotations
 
-VOICE_SETTINGS_FILE = "memory/voice_settings.json"
-_engine = None
-_speaking_thread = None
+from typing import Any, Dict, List
 
-def load_settings():
-    if os.path.exists(VOICE_SETTINGS_FILE):
-        with open(VOICE_SETTINGS_FILE, "r") as f:
-            return json.load(f)
-    return {"voice_index": 0, "speed": 170}
+from voice.voice_config import load_voice_settings
 
-def save_settings(settings):
-    with open(VOICE_SETTINGS_FILE, "w") as f:
-        json.dump(settings, f)
+try:
+    import pyttsx3  # type: ignore
+except Exception:  # pragma: no cover
+    pyttsx3 = None
 
-def set_voice_preference(voice=None, speed=None):
-    settings = load_settings()
-    if voice == "male":
-        settings["voice_index"] = 1
-    elif voice == "female":
-        settings["voice_index"] = 0
-    if speed == "slow":
-        settings["speed"] = 130
-    elif speed == "normal":
-        settings["speed"] = 170
-    elif speed == "fast":
-        settings["speed"] = 210
-    save_settings(settings)
-    print(f"Saved — Voice index: {settings['voice_index']} | Speed: {settings['speed']}")
 
-def get_voice_preference():
-    settings = load_settings()
-    return settings["voice_index"], settings["speed"]
+def tts_available() -> bool:
+    return _build_engine() is not None
 
-def clean_text(text):
-    text = re.sub(r'\*+', '', text)
-    text = re.sub(r'#+', '', text)
-    text = re.sub(r'`+', '', text)
-    text = re.sub(r'\-\-+', '', text)
-    text = re.sub(r'\[|\]|\(|\)', '', text)
-    text = re.sub(r'>\s*', '', text)
-    text = re.sub(r'\|', '', text)
-    text = re.sub(r'_{2,}', '', text)
-    text = re.sub(r'\n+', '. ', text)
-    text = re.sub(r'\s+', ' ', text)
-    return text.strip()
 
-def split_sentences(text):
-    sentences = re.split(r'(?<=[.!?])\s+', text)
-    return [s.strip() for s in sentences if s.strip()]
-
-def stop_speaking():
-    global _engine
+def _build_engine():
+    if pyttsx3 is None:
+        return None
     try:
-        if _engine:
-            _engine.stop()
-            print("AURA: Stopped.")
-    except:
-        pass
+        return pyttsx3.init()
+    except Exception:
+        return None
 
-def _speak_worker(text, settings):
-    global _engine
-    try:
-        _engine = pyttsx3.init()
-        voices = _engine.getProperty('voices')
-        _engine.setProperty('voice', voices[settings["voice_index"]].id)
-        _engine.setProperty('rate', settings["speed"])
-        _engine.setProperty('volume', 1.0)
-        _engine.say(text)
-        _engine.runAndWait()
-    except:
-        pass
-    finally:
-        _engine = None
 
-def speak(text, read_full=False):
-    global _speaking_thread
+def _pick_voice(engine, voice_gender: str):
+    requested = str(voice_gender or "").strip().lower()
+    voices = engine.getProperty("voices")
+    if not voices:
+        return None
+    if requested in {"female", "male"}:
+        for voice in voices:
+            label = f"{getattr(voice, 'name', '')} {getattr(voice, 'id', '')}".lower()
+            if requested in label:
+                return voice
+    return voices[0]
 
-    print(f"AURA: {text}")
 
-    try:
-        settings = load_settings()
-        clean = clean_text(text)
-        sentences = split_sentences(clean)
-
-        if read_full:
-            speak_text = clean
-        else:
-            speak_text = " ".join(sentences[:3])
-
-        stop_speaking()
-
-        _speaking_thread = threading.Thread(
-            target=_speak_worker,
-            args=(speak_text, settings),
-            daemon=True
+def list_voices() -> List[Dict[str, Any]]:
+    engine = _build_engine()
+    if engine is None:
+        return []
+    voices = []
+    for voice in engine.getProperty("voices"):
+        voices.append(
+            {
+                "id": getattr(voice, "id", ""),
+                "name": getattr(voice, "name", ""),
+                "languages": [str(item) for item in getattr(voice, "languages", [])],
+            }
         )
-        _speaking_thread.start()
+    return voices
 
-    except Exception as e:
-        print(f"Voice error: {e}")
+
+def speak_text(text: str, *, blocking: bool = True) -> Dict[str, Any]:
+    if not tts_available():
+        return {"success": False, "status": "unavailable", "message": "Local text-to-speech backend is not available."}
+
+    engine = _build_engine()
+    settings = load_voice_settings()
+    if engine is None:
+        return {"success": False, "status": "engine_error", "message": "Could not initialize TTS engine."}
+
+    try:
+        base_rate = engine.getProperty("rate")
+        engine.setProperty("rate", int(base_rate * float(settings.rate)))
+        engine.setProperty("volume", max(0.0, min(1.0, float(settings.volume))))
+        selected_voice = _pick_voice(engine, settings.voice_gender)
+        if selected_voice is not None:
+            engine.setProperty("voice", getattr(selected_voice, "id", ""))
+        payload = str(text or "").strip()
+        if not payload:
+            return {"success": False, "status": "empty_text", "message": "Speech text is empty."}
+        engine.say(payload)
+        if blocking:
+            engine.runAndWait()
+        return {
+            "success": True,
+            "status": "spoken",
+            "message": "Speech completed.",
+            "persona": settings.persona,
+            "voice_id": getattr(selected_voice, "id", "") if selected_voice is not None else "",
+        }
+    except Exception as error:
+        return {"success": False, "status": "tts_error", "message": str(error)}
+
+
+def stop_speaking() -> Dict[str, Any]:
+    if not tts_available():
+        return {"success": False, "status": "unavailable", "message": "Local text-to-speech backend is not available."}
+    engine = _build_engine()
+    if engine is None:
+        return {"success": False, "status": "engine_error", "message": "Could not initialize TTS engine."}
+    try:
+        engine.stop()
+        return {"success": True, "status": "stopped", "message": "Speech playback stopped."}
+    except Exception as error:
+        return {"success": False, "status": "tts_error", "message": str(error)}
+
+
+def speak(text: str, read_full: bool = False) -> bool:
+    del read_full
+    return bool(speak_text(text).get("success"))

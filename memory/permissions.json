@@ -1,0 +1,11 @@
+{
+    "policy_mode": "balanced",
+    "action_rules": {
+        "safe": "allow",
+        "private": "ask",
+        "sensitive": "session",
+        "critical": "pin"
+    },
+    "trusted_sessions": {},
+    "custom_rules": {}
+}

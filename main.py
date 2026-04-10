@@ -30,6 +30,20 @@ def print_banner():
     print("  'bye'         — exit\n")
 
 
+def print_banner():
+    print(f"\n{'=' * 40}")
+    print(f"  Welcome to {APP_NAME} v{VERSION}")
+    print("  Your Personal AI Assistant")
+    print(f"{'=' * 40}\n")
+
+    print("Commands:")
+    print("  'voice mode'  - talk to AURA")
+    print("  'text mode'   - type to AURA")
+    print("  'stop'        - stop speaking")
+    print("  'read full'   - hear the complete last response")
+    print("  'bye'         - exit\n")
+
+
 def get_user_input(voice_mode=False):
     if voice_mode:
         print("Listening...")

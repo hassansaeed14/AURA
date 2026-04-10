@@ -3,6 +3,15 @@ from datetime import datetime
 
 from brain.intent_engine import detect_intent_with_confidence
 from brain.response_engine import generate_response
+from brain.understanding_engine import clean_user_input, split_multi_intent
+from brain.decision_engine import (
+    should_fallback_to_general,
+    should_use_agent,
+    should_plan,
+    should_add_low_confidence_note,
+    should_treat_as_multi_command,
+    format_multi_response
+)
 
 from memory.vector_memory import store_memory
 from memory.knowledge_base import (
@@ -15,24 +24,7 @@ from agents.memory.learning_agent import (
     learn_from_interaction,
     get_user_insights,
     get_personalized_greeting,
-    build_context,
-    predict_next_intent
-)
-
-from agents.core.self_improvement_agent import (
-    log_failure,
-    log_low_confidence,
-    log_agent_error
-)
-
-from brain.understanding_engine import clean_user_input, split_multi_intent
-from brain.decision_engine import (
-    should_fallback_to_general,
-    should_use_agent,
-    should_plan,
-    should_add_low_confidence_note,
-    should_treat_as_multi_command,
-    format_multi_response
+    build_context
 )
 
 from agents.core.self_improvement_agent import (
@@ -42,6 +34,8 @@ from agents.core.self_improvement_agent import (
 )
 
 from agents.core.reasoning_agent import reason, compare
+from agents.core.language_agent import detect_language, respond_in_language
+
 from agents.productivity.fitness_agent import get_workout_plan
 from agents.productivity.study_agent import study
 from agents.productivity.research_agent import research
@@ -65,15 +59,22 @@ from agents.integration.quote_agent import get_quote
 
 from agents.system.file_agent import analyze_file, list_files
 from agents.system.screenshot_agent import take_screenshot
-from agents.core.language_agent import detect_language, respond_in_language
 
 from agents.autonomous.planner_agent import create_plan
 from agents.autonomous.executor import execute_plan
+from agents.cognitive.cognitive_core import cognitive_process
+
+# ✅ NEW TRUST ENGINE
+from security.trust_engine import build_permission_response
 
 
 PLANNING_INTENTS = {"research", "study", "task"}
 GREETING_INPUTS = {"hi", "hello", "hey", "hey aura", "hi aura", "hello aura"}
 
+
+# -----------------------------
+# Utility Functions
+# -----------------------------
 
 def extract_currency_request(command: str):
     amount_match = re.search(r"(\d+(\.\d+)?)", command)
@@ -122,12 +123,14 @@ def route_quiz_command(command: str):
     return generate_quiz(command)
 
 
+# -----------------------------
+# Agent Router
+# -----------------------------
+
 AGENT_ROUTER = {
     "weather": lambda cmd: get_weather(cmd),
     "news": lambda cmd: get_news(cmd),
-    "math": lambda cmd: solve_math(
-        cmd.replace("calculate", "").replace("solve", "").strip()
-    ),
+    "math": lambda cmd: solve_math(cmd),
     "fitness": lambda cmd: get_workout_plan(cmd),
     "translation": lambda cmd: translate(cmd, extract_translation_target(cmd)),
     "research": lambda cmd: research(cmd),
@@ -152,176 +155,36 @@ AGENT_ROUTER = {
 }
 
 
+# -----------------------------
+# Memory Handling (FIXED VERSION)
+# -----------------------------
+
 def handle_personal_memory(command: str):
     cmd = command.lower().strip()
 
-    if "my name is" in cmd:
-        name = cmd.replace("my name is", "").strip()
+    normalized = re.sub(r"^(hi|hey|hello)\s+", "", cmd).strip()
+    normalized = re.sub(r"^(no\s+i\s+mean\s+|i\s+mean\s+)", "", normalized).strip()
+
+    name_match = re.search(r"\bmy name is\s+([a-zA-Z ]{1,40})$", normalized)
+    if name_match:
+        name = name_match.group(1).strip().title()
         store_user_name(name)
-        return "memory", f"Nice to meet you {name}! I will remember your name."
+        return "memory", f"Nice to meet you {name}!"
 
-    if "what is my name" in cmd:
+    if "what is my name" in normalized:
         name = get_user_name()
-        if name:
-            return "memory", f"Your name is {name}."
-        return "memory", "I don't know your name yet."
-
-    if "my age is" in cmd:
-        age = cmd.replace("my age is", "").strip()
-        store_user_age(age)
-        return "memory", f"I will remember that you are {age} years old."
-
-    if "how old am i" in cmd:
-        age = get_user_age()
-        if age:
-            return "memory", f"You are {age} years old."
-        return "memory", "I don't know your age yet."
-
-    if "i live in" in cmd:
-        city = cmd.replace("i live in", "").strip()
-        store_user_city(city)
-        return "memory", f"I will remember that you live in {city}."
-
-    if "where do i live" in cmd:
-        city = get_user_city()
-        if city:
-            return "memory", f"You live in {city}."
-        return "memory", "I don't know where you live."
+        return "memory", f"Your name is {name}." if name else "I don't know your name yet."
 
     return None
 
 
-def handle_special_intents(intent: str, raw_command: str):
-    if intent == "insights":
-        return "insights", get_user_insights()
-
-    if intent == "compare":
-        return "compare", compare(raw_command)
-
-    if intent == "time":
-        return "time", f"The current time is {datetime.now().strftime('%I:%M %p')}."
-
-    if intent == "date":
-        return "date", f"Today's date is {datetime.now().strftime('%A, %d %B %Y')}."
-
-    if intent == "identity":
-        return (
-            "identity",
-            "I am AURA — Autonomous Universal Responsive Assistant. "
-            "I am your AI assistant for productivity, learning, coding, research, and more."
-        )
-
-    return None
-
-
-def preprocess_command(command: str):
-    raw_command = clean_user_input(command)
-    command_lower = raw_command.lower()
-    return raw_command, command_lower
-
-def build_enhanced_input(raw_command: str, confidence: float):
-    try:
-        enhanced_input = build_context(raw_command)
-    except Exception:
-        enhanced_input = raw_command
-
-    try:
-        reasoning = reason(raw_command)
-        if reasoning:
-            enhanced_input += f"\n\nReasoning:\n{reasoning}"
-    except Exception:
-        pass
-
-    if should_add_low_confidence_note(confidence):
-        enhanced_input += (
-            "\n\nIntent confidence is low. "
-            "Respond carefully, infer user meaning safely, and handle imperfect wording gracefully."
-        )
-
-    return enhanced_input
-
-
-def run_agent_or_fallback(intent: str, raw_command: str, enhanced_input: str, confidence: float):
-    if should_use_agent(intent, confidence, AGENT_ROUTER):
-        try:
-            return str(AGENT_ROUTER[intent](raw_command))
-        except Exception as e:
-            log_agent_error(intent, str(e))
-            return f"Agent error: {str(e)}"
-
-    try:
-        return generate_response(enhanced_input)
-    except Exception as e:
-        log_failure(raw_command, str(e))
-        return "I ran into a problem while processing that request."
-
-
-def append_prediction_hint(response: str, intent: str, debug=False):
-    if not debug:
-        return response
-
-    try:
-        predicted = predict_next_intent()
-        if predicted and predicted != intent:
-            response += f"\n\nNext likely: {predicted}"
-    except Exception:
-        pass
-
-    return response
-
-
-def append_plan_if_needed(response: str, intent: str, raw_command: str, confidence: float):
-    if not should_plan(intent, confidence):
-        return response
-
-    try:
-        plan = create_plan(raw_command)
-        if isinstance(plan, list) and len(plan) > 1:
-            results = execute_plan(plan)
-            if results:
-                response += "\n\nPlan:\n" + "\n".join(str(r) for r in results)
-    except Exception:
-        pass
-
-    return response
-
-
-def finalize_response(raw_command: str, response: str, intent: str, language: str):
-    store_and_learn(raw_command, response, intent)
-    return respond_in_language(response, language)
-
-def split_multi_command(command: str):
-    command = command.strip()
-
-    if not command:
-        return []
-
-    separators = [
-        " and then ",
-        " then ",
-        " also ",
-        " and ",
-        "&"
-    ]
-
-    parts = [command]
-
-    for sep in separators:
-        new_parts = []
-        for part in parts:
-            split_parts = [p.strip() for p in part.split(sep) if p.strip()]
-            new_parts.extend(split_parts)
-        parts = new_parts
-
-    cleaned = []
-    for part in parts:
-        if part and part not in cleaned:
-            cleaned.append(part)
-
-    return cleaned[:3]
+# -----------------------------
+# Core Processing
+# -----------------------------
 
 def process_single_command(command: str):
-    raw_command, command_lower = preprocess_command(command)
+    raw_command = clean_user_input(command)
+    command_lower = raw_command.lower()
 
     if not raw_command:
         return "general", "Please type something."
@@ -340,103 +203,36 @@ def process_single_command(command: str):
 
     intent, confidence = detect_intent_with_confidence(raw_command)
 
+    # 🔐 TRUST CHECK
+    permission = build_permission_response(intent)
+
+    if not permission["success"]:
+        return "permission", permission["permission"]["reason"]
+
     if confidence < 0.40:
         log_low_confidence(raw_command, confidence)
 
     if should_fallback_to_general(confidence):
         intent = "general"
 
-    special_response = handle_special_intents(intent, raw_command)
-    if special_response:
-        final_response = finalize_response(
-            raw_command,
-            special_response[1],
-            special_response[0],
-            language
-        )
-        return special_response[0], final_response
+    enhanced_input = raw_command
 
-    enhanced_input = build_enhanced_input(raw_command, confidence)
-    response = run_agent_or_fallback(intent, raw_command, enhanced_input, confidence)
-    response = append_plan_if_needed(response, intent, raw_command, confidence)
-    final_response = finalize_response(raw_command, response, intent, language)
+    if should_use_agent(intent, confidence, AGENT_ROUTER):
+        try:
+            response = str(AGENT_ROUTER[intent](raw_command))
+        except Exception as e:
+            log_agent_error(intent, str(e))
+            response = "Agent failed."
+    else:
+        response = generate_response(enhanced_input)
 
-    return intent, final_response
+    store_and_learn(raw_command, response, intent)
 
-
-def format_multi_command_response(results):
-    if not results:
-        return "I couldn't understand the request clearly."
-
-    if len(results) == 1:
-        return results[0]
-
-    formatted = []
-    for i, result in enumerate(results, 1):
-        formatted.append(f"Response {i}:\n{result}")
-
-    return "\n\n".join(formatted)
-
-def smart_split_multi_command(command: str):
-    command = command.strip()
-    if not command:
-        return []
-
-    separators = [
-        " and then ",
-        " then ",
-        " also ",
-        " plus ",
-        " as well as ",
-        "&"
-    ]
-
-    parts = [command]
-
-    for sep in separators:
-        new_parts = []
-        for part in parts:
-            split_parts = [p.strip(" ,.?") for p in part.split(sep) if p.strip(" ,.?")]
-            new_parts.extend(split_parts)
-        parts = new_parts
-
-    expanded = []
-    for i, part in enumerate(parts):
-        fixed = part.strip()
-
-        if i > 0:
-            if fixed.startswith("what's "):
-                fixed = "what is " + fixed[7:]
-            elif fixed.startswith("whats "):
-                fixed = "what is " + fixed[6:]
-            elif fixed.startswith("give me "):
-                fixed = fixed
-            elif fixed.startswith("tell me "):
-                fixed = fixed
-            elif fixed.startswith("translate "):
-                fixed = fixed
-
-        if fixed and fixed not in expanded:
-            expanded.append(fixed)
-
-    return expanded[:3]
-
-def format_multi_command_response(results):
-    if not results:
-        return "I couldn't understand the request clearly."
-
-    if len(results) == 1:
-        return results[0]
-
-    formatted = []
-    for i, result in enumerate(results, 1):
-        formatted.append(f"Response {i}:\n{result}")
-
-    return "\n\n".join(formatted)
+    return intent, respond_in_language(response, language)
 
 
 def process_command(command: str):
-    raw_command, _ = preprocess_command(command)
+    raw_command = clean_user_input(command)
 
     if not raw_command:
         return "general", "Please type something."
@@ -447,11 +243,17 @@ def process_command(command: str):
         return process_single_command(raw_command)
 
     results = []
-    intents = []
 
     for sub_command in sub_commands:
-        intent, response = process_single_command(sub_command)
-        intents.append(intent)
+        _, response = process_single_command(sub_command)
         results.append(response)
 
     return "multi_command", format_multi_response(results)
+
+
+from brain.runtime_core import (  # noqa: E402
+    process_command,
+    process_command_detailed,
+    process_single_command,
+    process_single_command_detailed,
+)

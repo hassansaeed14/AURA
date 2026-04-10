@@ -3,1457 +3,808 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AURA — AI Operating System</title>
+<title>AURA NEXUS — Neural OS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&family=Fira+Code:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-/* ============================================================
-   AURA OPERATING INTERFACE — v2.0
-   Designer: Hassan Saeed / AURA AI
-   Architecture: Multi-view | Multi-mode | JARVIS-class UI
-   ============================================================ */
+/* AURA NEXUS v6.0 — Hassan Saeed / AURA AI / Hazara University */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root{
+  --bg:     #010110;
+  --bg1:    #03031a;
+  --bg2:    #05052a;
+  --bg3:    #080835;
+  --bg4:    #0c0c42;
+  --glass:  rgba(5,5,28,0.78);
+  --glass2: rgba(3,3,18,0.92);
 
-:root {
-  /* Core Palette */
-  --ink:        #04040f;
-  --ink2:       #080818;
-  --ink3:       #0d0d22;
-  --surface:    #10102a;
-  --surface2:   #14143a;
-  --rim:        rgba(108,53,222,0.18);
-  --rim2:       rgba(0,212,255,0.12);
+  --v:      #7B3FE4;
+  --v1:     #6829d4;
+  --vhi:    #A78BFA;
+  --vsoft:  #DDD6FE;
+  --vglow:  rgba(123,63,228,0.5);
+  --vdim:   rgba(123,63,228,0.16);
+  --vtr:    rgba(123,63,228,0.06);
 
-  /* AURA Identity */
-  --violet:     #6C35DE;
-  --violet-g:   #8B5CF6;
-  --violet-hi:  #A78BFA;
-  --violet-dim: rgba(108,53,222,0.35);
+  --c:      #2DD4BF;
+  --chi:    #5EEAD4;
+  --cglow:  rgba(45,212,191,0.4);
+  --cdim:   rgba(45,212,191,0.12);
 
-  /* Intelligence Accents */
-  --cyan:       #00D4FF;
-  --cyan-dim:   rgba(0,212,255,0.15);
-  --cyan-g:     #38BDF8;
+  --w:      #FFFFFF;
+  --ok:     #10B981;
+  --ok-lo:  rgba(16,185,129,0.12);
+  --warn:   #F59E0B;
+  --warn-lo:rgba(245,158,11,0.12);
+  --err:    #EF4444;
+  --err-lo: rgba(239,68,68,0.12);
 
-  /* Semantic */
-  --ok:         #22D3A0;
-  --warn:       #F59E0B;
-  --err:        #F43F5E;
+  --t0: #FFFFFF;
+  --t1: #EEF0FF;
+  --t2: #7C7FA8;
+  --t3: #3A3C5E;
+  --t4: #1C1D38;
 
-  /* Text hierarchy */
-  --t1:  #EEEEFF;
-  --t2:  #9D9DBF;
-  --t3:  #5A5A80;
-  --t4:  #2E2E50;
+  --b:   rgba(123,63,228,0.22);
+  --bhi: rgba(123,63,228,0.55);
+  --bc:  rgba(45,212,191,0.22);
+  --bw:  rgba(255,255,255,0.08);
 
-  /* Fonts */
-  --f-display: 'Syne', sans-serif;
-  --f-body:    'DM Sans', sans-serif;
-  --f-mono:    'JetBrains Mono', monospace;
+  --fd: 'Orbitron', sans-serif;
+  --fb: 'Plus Jakarta Sans', sans-serif;
+  --fm: 'Fira Code', monospace;
 
-  /* Layout */
-  --sidebar-w:     220px;
-  --sidebar-w-sm:  64px;
-  --rpanel-w:      280px;
-  --topbar-h:      58px;
+  --sb-w: 220px;
+  --sb-ico: 56px;
+  --rp-w: 260px;
+  --tb-h: 52px;
+  --st-h: 26px;
 
-  /* Transitions */
-  --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --t-fast: 0.18s;
-  --t-mid:  0.32s;
-  --t-slow: 0.55s;
-
-  /* Scroll */
-  --scroll-c: var(--violet-dim);
+  --ease: cubic-bezier(0.22,1,0.36,1);
+  --spring: cubic-bezier(0.34,1.56,0.64,1);
+  --sharp: cubic-bezier(0.4,0,0.2,1);
 }
 
-/* ── High Contrast Mode ── */
-body.hc {
-  --rim: rgba(255,255,255,0.25);
-  --t1:  #ffffff;
-  --t2:  #dddddd;
-  --t3:  #aaaaaa;
-  --surface: #111122;
-  --surface2: #1a1a33;
+body.light{
+  --bg:#f0f0fa; --bg1:#e8e8f5; --bg2:#e0e0f0; --bg3:#d8d8ec; --bg4:#d0d0e8;
+  --glass:rgba(240,240,250,0.85); --glass2:rgba(235,235,248,0.95);
+  --t1:#0a0a28; --t2:#444470; --t3:#9090b0; --t4:#d0d0e0;
+  --b:rgba(123,63,228,0.18); --bw:rgba(0,0,0,0.06);
+}
+body.hc{--t1:#fff;--t2:#ddd;--t3:#bbb;--b:rgba(255,255,255,0.3)}
+body.big{font-size:115%}
+
+html,body{height:100%;overflow:hidden;cursor:none}
+body{
+  background:var(--bg);color:var(--t1);
+  font-family:var(--fb);font-size:14px;
+  display:flex;flex-direction:column;
+  transition:background .4s,color .4s;
 }
 
-/* ── Light Mode ── */
-body.light-mode {
-  --ink:     #f0f0fc;
-  --ink2:    #e8e8f8;
-  --ink3:    #e0e0f0;
-  --surface: #ffffff;
-  --surface2:#f5f5ff;
-  --rim:     rgba(108,53,222,0.15);
-  --t1:      #0d0d30;
-  --t2:      #444466;
-  --t3:      #8888aa;
-  --t4:      #ccccdd;
+/* CUSTOM CURSOR */
+#cur{
+  position:fixed;width:20px;height:20px;
+  border:1px solid var(--vhi);
+  pointer-events:none;z-index:99999;
+  transform:translate(-50%,-50%);
+  transition:width .15s,height .15s,border-color .15s;
+}
+#cur::before{content:'';position:absolute;top:50%;left:50%;width:3px;height:3px;background:var(--vhi);border-radius:50%;transform:translate(-50%,-50%)}
+#cur::after{
+  content:'';position:absolute;
+  top:-4px;left:-4px;right:-4px;bottom:-4px;
+  border:1px solid rgba(123,63,228,0.2);
+  border-radius:50%;
+  animation:cur-spin 3s linear infinite;
+}
+@keyframes cur-spin{to{transform:rotate(360deg)}}
+#cur-dot{
+  position:fixed;width:5px;height:5px;border-radius:50%;
+  background:var(--vhi);pointer-events:none;z-index:99998;
+  transform:translate(-50%,-50%);
+  box-shadow:0 0 6px var(--vglow);
+  transition:transform .08s,width .15s,height .15s;
+}
+body:has(button:hover) #cur,
+body:has(a:hover) #cur{width:28px;height:28px;border-color:var(--chi)}
+body:has(input:focus) #cur{border-color:var(--c)}
+
+/* AURORA CANVAS */
+#aurora{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  opacity:0.6;
 }
 
-/* ── Large Text Mode ── */
-body.large-text { font-size: 115%; }
-
-html, body { height: 100%; overflow: hidden; }
-
-body {
-  background: var(--ink);
-  color: var(--t1);
-  font-family: var(--f-body);
-  font-size: 14px;
-  display: flex;
-  transition: background var(--t-mid) var(--ease), color var(--t-mid) var(--ease);
+/* HEX GRID */
+.hex-grid{
+  position:fixed;inset:0;z-index:1;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97'%3E%3Cpath d='M28 2L54 17v30L28 62 2 47V17z' fill='none' stroke='rgba(123,63,228,0.05)' stroke-width='0.8'/%3E%3Cpath d='M28 62l26 15v30L28 122 2 107V77z' fill='none' stroke='rgba(123,63,228,0.05)' stroke-width='0.8'/%3E%3C/svg%3E");
+  background-size:56px 97px;
 }
 
-/* ============================================================
-   SCROLLBARS
-   ============================================================ */
-::-webkit-scrollbar { width: 3px; height: 3px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--violet-dim); border-radius: 2px; }
-
-/* ============================================================
-   LEFT SIDEBAR
-   ============================================================ */
-.sidebar {
-  width: var(--sidebar-w);
-  min-width: var(--sidebar-w);
-  background: var(--ink2);
-  border-right: 1px solid var(--rim);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  transition: width var(--t-mid) var(--ease), min-width var(--t-mid) var(--ease),
-              background var(--t-mid);
-  z-index: 100;
-  position: relative;
-}
-.sidebar.collapsed {
-  width: var(--sidebar-w-sm);
-  min-width: var(--sidebar-w-sm);
+/* VIGNETTE */
+.vignette{
+  position:fixed;inset:0;z-index:2;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(1,1,16,0.7) 100%);
 }
 
-/* ── Logo ── */
-.s-logo {
-  padding: 22px 16px 18px;
-  border-bottom: 1px solid var(--rim);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  cursor: pointer;
-  flex-shrink: 0;
+/* BOOT SCREEN */
+#boot{
+  position:fixed;inset:0;z-index:10000;
+  background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:20px;
+  transition:opacity 0.8s ease, visibility 0.8s ease;
 }
-.orb-mini {
-  width: 32px; height: 32px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 33% 33%, #c4b5fd 0%, #7c3aed 55%, #1a0a3e 100%);
-  flex-shrink: 0;
-  position: relative;
-  transition: box-shadow var(--t-mid);
-  box-shadow: 0 0 16px rgba(124,58,237,0.6);
+#boot.hidden{opacity:0;visibility:hidden;pointer-events:none}
+.boot-orb{
+  width:80px;height:80px;border-radius:50%;position:relative;
+  background:conic-gradient(from 0deg,#6d28d9,#7b3fe4,#2dd4bf,#a78bfa,#6d28d9);
+  animation:boot-spin 2s linear infinite;
+  box-shadow:0 0 40px var(--vglow),0 0 80px rgba(123,63,228,0.15);
 }
-.orb-mini::after {
-  content:'';
-  position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  border: 1px solid rgba(167,139,250,0.3);
-  animation: orbit-ring 4s linear infinite;
+.boot-orb::before{
+  content:'';position:absolute;inset:5px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#ddd6fe,#7c3aed 50%,#0a0020);
 }
-@keyframes orbit-ring {
-  0%   { transform: rotate(0deg) scaleX(1); opacity:0.3; }
-  50%  { transform: rotate(180deg) scaleX(0.8); opacity:0.7; }
-  100% { transform: rotate(360deg) scaleX(1); opacity:0.3; }
+@keyframes boot-spin{to{transform:rotate(360deg)}}
+.boot-name{
+  font-family:var(--fd);font-size:2.4rem;font-weight:900;
+  letter-spacing:16px;
+  background:linear-gradient(120deg,var(--vsoft),var(--vhi),var(--chi));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
 }
-.s-logo-text { overflow: hidden; }
-.s-logo-text h1 {
-  font-family: var(--f-display);
-  font-size: 1.15rem;
-  font-weight: 800;
-  letter-spacing: 6px;
-  background: linear-gradient(135deg, #c4b5fd, #7c3aed);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  white-space: nowrap;
+.boot-line{
+  font-family:var(--fm);font-size:.65rem;color:var(--t3);
+  letter-spacing:2px;min-height:1.2em;
 }
-.s-logo-text p {
-  font-size: 0.52rem;
-  color: var(--t3);
-  letter-spacing: 1.5px;
-  white-space: nowrap;
-  margin-top: 2px;
+.boot-bar-wrap{
+  width:200px;height:2px;background:var(--bg4);overflow:hidden;
+}
+.boot-bar{
+  height:100%;width:0;
+  background:linear-gradient(90deg,var(--v),var(--c));
+  animation:boot-load 2s ease-in-out forwards;
+}
+@keyframes boot-load{0%{width:0}30%{width:35%}60%{width:72%}85%{width:92%}100%{width:100%}}
+.boot-ver{
+  font-family:var(--fm);font-size:.5rem;color:var(--t4);
+  letter-spacing:2px;margin-top:8px;
 }
 
-/* ── Mode Badge ── */
-.mode-badge {
-  margin: 10px 12px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: var(--violet-dim);
-  border: 1px solid rgba(108,53,222,0.3);
-  font-size: 0.65rem;
-  letter-spacing: 1.5px;
-  color: var(--violet-hi);
-  font-family: var(--f-mono);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  transition: all var(--t-fast);
-  overflow: hidden;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.mode-badge:hover { background: rgba(108,53,222,0.4); }
-.mode-dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--ok);
-  animation: blink 2s infinite;
-  flex-shrink: 0;
-}
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+/* SCROLLBARS */
+::-webkit-scrollbar{width:2px;height:2px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--vdim);border-radius:1px}
 
-/* ── Nav ── */
-.s-nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px 0; }
-.s-section {
-  font-size: 0.6rem;
-  letter-spacing: 2px;
-  color: var(--t3);
-  padding: 12px 20px 5px;
-  font-family: var(--f-mono);
-  white-space: nowrap;
-  overflow: hidden;
-}
-.sidebar.collapsed .s-section { opacity: 0; }
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 18px;
-  cursor: pointer;
-  color: var(--t2);
-  font-size: 0.85rem;
-  transition: all var(--t-fast);
-  border-left: 2px solid transparent;
-  position: relative;
-  white-space: nowrap;
-}
-.nav-item:hover { color: var(--t1); background: rgba(108,53,222,0.08); }
-.nav-item.active {
-  color: var(--violet-hi);
-  background: rgba(108,53,222,0.14);
-  border-left-color: var(--violet);
-}
-.nav-icon {
-  font-size: 1rem;
-  width: 22px;
-  text-align: center;
-  flex-shrink: 0;
-}
-.nav-label { overflow: hidden; }
-.nav-badge {
-  margin-left: auto;
-  background: var(--violet);
-  color: white;
-  font-size: 0.6rem;
-  padding: 1px 6px;
-  border-radius: 8px;
-  flex-shrink: 0;
-}
-.sidebar.collapsed .nav-label,
-.sidebar.collapsed .nav-badge,
-.sidebar.collapsed .s-section { display: none; }
+/* LAYOUT SHELL */
+.shell{flex:1;display:flex;overflow:hidden;position:relative;z-index:10}
 
-/* ── User Card ── */
-.s-user {
-  border-top: 1px solid var(--rim);
-  padding: 14px 16px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-  overflow: hidden;
+/* SIDEBAR */
+.sidebar{
+  width:var(--sb-ico);min-width:var(--sb-ico);
+  background:var(--glass2);
+  border-right:1px solid var(--b);
+  display:flex;flex-direction:column;
+  transition:width .3s var(--ease),min-width .3s var(--ease);
+  z-index:200;position:relative;flex-shrink:0;
+  backdrop-filter:blur(28px);
+  overflow:hidden;
 }
-.avatar {
-  width: 32px; height: 32px; border-radius: 50%;
-  background: linear-gradient(135deg, var(--violet), #3b1994);
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 0.82rem;
-  flex-shrink: 0;
-  font-family: var(--f-display);
+.sidebar::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--v) 40%,var(--c) 60%,transparent);
+  opacity:.8;
 }
-.u-info { overflow: hidden; }
-.u-name { font-size: 0.82rem; font-weight: 500; color: var(--t1); white-space: nowrap; }
-.u-plan {
-  font-size: 0.58rem; letter-spacing: 1.5px;
-  background: linear-gradient(90deg, var(--violet), #5b21b6);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  font-family: var(--f-mono);
-}
-.sidebar.collapsed .u-info { display: none; }
+.sidebar.expanded{width:var(--sb-w);min-width:var(--sb-w)}
 
-/* ============================================================
-   MAIN AREA
-   ============================================================ */
-.main-wrap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  position: relative;
+/* Logo */
+.s-logo{
+  padding:14px 0;
+  display:flex;align-items:center;gap:12px;
+  cursor:pointer;flex-shrink:0;
+  border-bottom:1px solid var(--b);
+  overflow:hidden;
+  position:relative;min-height:62px;
 }
+.s-logo::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,var(--vtr),transparent 60%);
+  pointer-events:none;
+}
+.logo-orb-wrap{
+  width:56px;min-width:56px;height:34px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.logo-orb{
+  width:34px;height:34px;border-radius:50%;position:relative;flex-shrink:0;
+  animation:orb-idle 4s ease-in-out infinite;
+}
+.lo-c{
+  position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(from 0deg,#6d28d9,#7b3fe4,#2dd4bf,#a78bfa,#6d28d9);
+  animation:orb-rot 6s linear infinite;
+  box-shadow:0 0 16px var(--vglow);
+}
+.lo-i{position:absolute;inset:3px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ddd6fe 0%,#7c3aed 45%,#0a0020 100%)}
+.lo-s{position:absolute;inset:6px;border-radius:50%;background:radial-gradient(circle at 35% 28%,rgba(255,255,255,.28) 0%,transparent 55%)}
+.lo-r1{position:absolute;inset:-4px;border-radius:50%;border:1px solid rgba(167,139,250,.3);animation:ring-cw 5s linear infinite}
+.lo-r2{position:absolute;inset:-9px;border-radius:50%;border:1px dashed rgba(45,212,191,.15);animation:ring-ccw 9s linear infinite}
+.lo-ping{position:absolute;inset:-2px;border-radius:50%;border:1px solid rgba(123,63,228,.7);animation:ping 3s ease-out infinite}
+@keyframes orb-idle{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+@keyframes orb-rot{to{transform:rotate(360deg)}}
+@keyframes ring-cw{to{transform:rotate(360deg)}}
+@keyframes ring-ccw{to{transform:rotate(-360deg)}}
+@keyframes ping{0%{transform:scale(1);opacity:.8}100%{transform:scale(2);opacity:0}}
 
-/* ── Topbar ── */
-.topbar {
-  height: var(--topbar-h);
-  min-height: var(--topbar-h);
-  background: var(--ink2);
-  border-bottom: 1px solid var(--rim);
-  display: flex;
-  align-items: center;
-  padding: 0 20px 0 16px;
-  gap: 12px;
-  z-index: 50;
-  flex-shrink: 0;
-}
-.tb-toggle {
-  width: 32px; height: 32px;
-  border-radius: 8px;
-  border: 1px solid var(--rim);
-  background: transparent;
-  color: var(--t2);
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1rem;
-  transition: all var(--t-fast);
-  flex-shrink: 0;
-}
-.tb-toggle:hover { color: var(--t1); border-color: var(--violet-dim); }
-.tb-title {
-  font-family: var(--f-display);
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--violet-hi);
-  letter-spacing: 1px;
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tb-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
+.logo-txt{overflow:hidden;white-space:nowrap;opacity:0;transform:translateX(-8px);transition:opacity .25s,transform .25s}
+.sidebar.expanded .logo-txt{opacity:1;transform:translateX(0)}
+.logo-name{font-family:var(--fd);font-size:1.15rem;font-weight:800;letter-spacing:10px;line-height:1;background:linear-gradient(110deg,var(--vsoft),var(--vhi),var(--chi));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.logo-sub{font-family:var(--fm);font-size:.44rem;color:var(--t3);letter-spacing:2px;margin-top:4px;text-transform:uppercase}
 
-/* Orb Status Indicator in topbar */
-.orb-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.7rem;
-  color: var(--t3);
-  font-family: var(--f-mono);
-  padding: 4px 10px;
-  border: 1px solid var(--rim);
-  border-radius: 20px;
-  background: var(--ink3);
+/* Mode pill */
+.s-pill{
+  margin:8px;padding:6px 8px;
+  background:var(--vtr);border:1px solid var(--b);border-left:2px solid var(--v);
+  font-family:var(--fm);font-size:.56rem;color:var(--vhi);letter-spacing:2px;
+  display:flex;align-items:center;gap:8px;cursor:pointer;
+  transition:all .18s;overflow:hidden;white-space:nowrap;flex-shrink:0;
+  position:relative;
 }
-.orb-dot-sm {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--ok);
-  transition: background var(--t-fast);
+.s-pill::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(123,63,228,.1),transparent);
+  transform:translateX(-100%);animation:pill-sweep 4s ease-in-out infinite;
 }
-.orb-dot-sm.thinking { background: var(--warn); animation: blink 0.8s infinite; }
-.orb-dot-sm.speaking { background: var(--cyan); animation: blink 0.5s infinite; }
-.orb-dot-sm.listening { background: var(--err); animation: blink 0.7s infinite; }
-.orb-dot-sm.executing { background: var(--violet-hi); animation: blink 0.6s infinite; }
+@keyframes pill-sweep{0%,60%{transform:translateX(-100%)}100%{transform:translateX(200%)};}
+.s-pill:hover{background:var(--vdim);border-color:var(--bhi)}
+.s-pill-ico{font-size:.7rem;flex-shrink:0}
+.s-pill-txt{overflow:hidden;opacity:0;transition:opacity .25s}
+.sidebar.expanded .s-pill-txt{opacity:1}
+.live-d{width:5px;height:5px;border-radius:50%;background:var(--ok);box-shadow:0 0 5px var(--ok);animation:live-p 2.2s ease infinite;flex-shrink:0}
+@keyframes live-p{0%,100%{opacity:1;box-shadow:0 0 5px var(--ok)}50%{opacity:.3;box-shadow:none}}
 
-.tb-btn {
-  padding: 6px 14px;
-  border-radius: 20px;
-  border: 1px solid var(--rim);
-  background: transparent;
-  color: var(--t2);
-  cursor: pointer;
-  font-size: 0.75rem;
-  font-family: var(--f-body);
-  transition: all var(--t-fast);
-}
-.tb-btn:hover { color: var(--t1); border-color: var(--violet-dim); background: rgba(108,53,222,0.08); }
+/* Nav */
+.s-nav{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 0}
+.nav-grp{font-family:var(--fm);font-size:.46rem;letter-spacing:3px;color:var(--t4);padding:12px 0 3px 18px;text-transform:uppercase;white-space:nowrap;overflow:hidden}
+.grp-txt{opacity:0;transition:opacity .2s}.sidebar.expanded .grp-txt{opacity:1}
 
-select.tb-select {
-  padding: 6px 10px;
-  border-radius: 20px;
-  border: 1px solid var(--rim);
-  background: var(--ink3);
-  color: var(--t2);
-  font-size: 0.75rem;
-  font-family: var(--f-body);
-  outline: none;
-  cursor: pointer;
+.nav-item{
+  display:flex;align-items:center;gap:0;
+  cursor:pointer;color:var(--t3);
+  font-size:.78rem;font-weight:500;font-family:var(--fb);
+  transition:all .16s;border-left:2px solid transparent;
+  position:relative;overflow:hidden;min-height:40px;
 }
+.nav-item::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,var(--vdim),transparent);opacity:0;transition:opacity .2s}
+.nav-item:hover{color:var(--t1)}.nav-item:hover::before{opacity:1}
+.nav-item.active{color:var(--vhi);border-left-color:var(--v);background:linear-gradient(90deg,var(--vdim),transparent)}
+.nav-item.active::after{content:'';position:absolute;right:0;top:20%;height:60%;width:2px;background:linear-gradient(180deg,var(--c),var(--v));border-radius:2px 0 0 2px}
+.nav-ico{width:56px;min-width:56px;text-align:center;font-size:.92rem;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.nav-lbl{flex:1;white-space:nowrap;overflow:hidden;opacity:0;transform:translateX(-6px);transition:opacity .22s,transform .22s}
+.sidebar.expanded .nav-lbl{opacity:1;transform:translateX(0)}
+.nav-ct{background:var(--v);color:#fff;font-family:var(--fm);font-size:.5rem;padding:1px 6px;margin-right:10px;opacity:0;transition:opacity .2s;white-space:nowrap}
+.sidebar.expanded .nav-ct{opacity:1}
+.sidebar.expanded .nav-item{gap:0}
 
-/* ── Content + Right Panel ── */
-.content-wrap {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
-  position: relative;
-}
+/* User */
+.s-user{border-top:1px solid var(--b);padding:11px 0;display:flex;align-items:center;gap:0;flex-shrink:0;overflow:hidden}
+.avatar-wrap{width:56px;min-width:56px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.avatar{width:28px;height:28px;background:linear-gradient(135deg,var(--v),#2d1080);border:1px solid var(--bhi);display:flex;align-items:center;justify-content:center;font-family:var(--fd);font-weight:700;font-size:.75rem;box-shadow:0 0 10px var(--vdim)}
+.u-info{overflow:hidden;white-space:nowrap;opacity:0;transition:opacity .22s}
+.sidebar.expanded .u-info{opacity:1}
+.u-name{font-size:.76rem;font-weight:600;color:var(--t1);font-family:var(--fb)}
+.u-plan{font-size:.48rem;letter-spacing:2px;color:var(--vhi);font-family:var(--fm);margin-top:2px}
 
-/* ============================================================
-   VIEWS
-   ============================================================ */
-.view {
-  display: none;
-  flex: 1;
-  overflow: hidden;
-  flex-direction: column;
-  animation: fadeUp 0.3s var(--ease);
-}
-.view.active { display: flex; }
+/* MAIN WRAPPER */
+.main-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;min-width:0}
 
-@keyframes fadeUp {
-  from { opacity:0; transform: translateY(10px); }
-  to   { opacity:1; transform: translateY(0); }
+/* TOPBAR */
+.topbar{
+  height:var(--tb-h);min-height:var(--tb-h);
+  background:rgba(1,1,16,.92);border-bottom:1px solid var(--b);
+  display:flex;align-items:center;padding:0 16px 0 10px;gap:10px;
+  z-index:50;flex-shrink:0;backdrop-filter:blur(20px);
+  position:relative;
 }
+.topbar::after{content:'';position:absolute;bottom:-1px;left:10%;right:10%;height:1px;background:linear-gradient(90deg,transparent,var(--vdim),var(--cdim),transparent)}
 
-/* ============================================================
-   VIEW: CHAT
-   ============================================================ */
-.chat-area {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scroll-c) transparent;
+.tb-expand{
+  width:28px;height:28px;border:1px solid var(--b);background:transparent;
+  color:var(--t3);cursor:none;display:flex;align-items:center;justify-content:center;
+  font-size:.85rem;transition:all .16s;flex-shrink:0;
 }
+.tb-expand:hover{color:var(--t1);border-color:var(--bhi);background:var(--vtr)}
+
+/* Small orb in topbar */
+.tb-orb-wrap{position:relative;width:22px;height:22px;flex-shrink:0}
+.tb-orb{
+  width:22px;height:22px;border-radius:50%;
+  background:conic-gradient(from 0deg,#6d28d9,#7b3fe4,#2dd4bf,#a78bfa,#6d28d9);
+  animation:orb-rot 4s linear infinite;
+  box-shadow:0 0 8px var(--vglow);
+}
+.tb-orb::after{content:'';position:absolute;inset:2px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ddd6fe,#7c3aed 50%,#0a0020)}
+.tb-orb-ring{position:absolute;inset:-3px;border-radius:50%;border:1px solid rgba(167,139,250,.3);animation:ring-cw 5s linear infinite}
+
+.tb-title{font-family:var(--fd);font-size:.72rem;font-weight:600;color:var(--vhi);letter-spacing:3px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase}
+.tb-title em{color:var(--t3);font-style:normal;font-weight:400;margin-right:4px}
+
+/* Clock */
+.tb-clock{font-family:var(--fm);font-size:.65rem;color:var(--t2);letter-spacing:1.5px;white-space:nowrap;padding:4px 10px;border:1px solid var(--b);background:rgba(1,1,16,.5)}
+
+.tb-right{display:flex;align-items:center;gap:7px;flex-shrink:0}
+
+.state-chip{display:flex;align-items:center;gap:5px;font-family:var(--fm);font-size:.58rem;color:var(--t3);padding:4px 10px;border:1px solid var(--b);background:rgba(1,1,16,.6);letter-spacing:1.5px}
+.sp-dot{width:4px;height:4px;border-radius:50%;background:var(--ok);box-shadow:0 0 4px var(--ok);transition:all .2s}
+.sp-dot.thinking{background:var(--warn);box-shadow:0 0 4px var(--warn);animation:live-p .8s infinite}
+.sp-dot.speaking{background:var(--c);box-shadow:0 0 4px var(--c);animation:live-p .5s infinite}
+.sp-dot.listening{background:var(--err);box-shadow:0 0 4px var(--err);animation:live-p .7s infinite}
+.sp-dot.executing{background:var(--vhi);box-shadow:0 0 4px var(--vhi);animation:live-p .6s infinite}
+
+.tb-btn{padding:4px 11px;border:1px solid var(--b);background:transparent;color:var(--t3);cursor:none;font-size:.6rem;font-family:var(--fm);letter-spacing:1px;text-transform:uppercase;transition:all .16s}
+.tb-btn:hover{color:var(--t1);border-color:var(--bhi);background:var(--vtr)}
+.tb-sel{padding:4px 8px;border:1px solid var(--b);background:rgba(1,1,16,.7);color:var(--t2);font-size:.6rem;font-family:var(--fm);outline:none;cursor:none}
+
+/* CONTENT */
+.content-wrap{flex:1;display:flex;overflow:hidden;position:relative}
+.view{display:none;flex:1;overflow:hidden;flex-direction:column;animation:view-in .3s var(--ease);min-width:0}
+.view.active{display:flex}
+@keyframes view-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* STATUS BAR */
+.status-bar{
+  height:var(--st-h);min-height:var(--st-h);
+  background:rgba(123,63,228,.12);border-top:1px solid var(--b);
+  display:flex;align-items:center;padding:0 14px;gap:0;
+  font-family:var(--fm);font-size:.52rem;color:var(--t3);
+  letter-spacing:1px;flex-shrink:0;
+  backdrop-filter:blur(20px);
+}
+.st-seg{
+  padding:0 12px;border-right:1px solid var(--b);
+  display:flex;align-items:center;gap:5px;white-space:nowrap;
+}
+.st-seg:first-child{
+  background:linear-gradient(90deg,var(--v),var(--v1));
+  color:#fff;font-weight:600;letter-spacing:2px;
+  border-right:none;margin-right:1px;
+  padding:0 12px;
+}
+.st-dot{width:4px;height:4px;border-radius:50%;flex-shrink:0}
+.st-ok{background:var(--ok);box-shadow:0 0 4px var(--ok)}
+.st-warn{background:var(--warn)}
+.st-flex{flex:1}
+.st-r{padding:0 12px;border-left:1px solid var(--b);border-right:none;display:flex;align-items:center;gap:5px}
+
+/* ─── CHAT VIEW ─── */
+.chat-area{flex:1;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:16px}
+
+/* Welcome */
+.welcome{
+  padding:26px 20px 22px;text-align:center;position:relative;overflow:hidden;
+  border:1px solid var(--b);margin-bottom:4px;
+  background:linear-gradient(180deg,rgba(123,63,228,.04),transparent);
+}
+.wc-tl{position:absolute;top:0;left:0;width:16px;height:16px;border-top:1px solid var(--vhi);border-left:1px solid var(--vhi)}
+.wc-tr{position:absolute;top:0;right:0;width:16px;height:16px;border-top:1px solid var(--chi);border-right:1px solid var(--chi)}
+.wc-bl{position:absolute;bottom:0;left:0;width:16px;height:16px;border-bottom:1px solid var(--chi);border-left:1px solid var(--chi)}
+.wc-br{position:absolute;bottom:0;right:0;width:16px;height:16px;border-bottom:1px solid var(--vhi);border-right:1px solid var(--vhi)}
+
+.w-orb{width:76px;height:76px;position:relative;margin:0 auto 14px}
+.wo-glow{position:absolute;inset:-18px;border-radius:50%;background:radial-gradient(circle,var(--vdim),transparent 70%);animation:orb-idle 3.5s ease-in-out infinite}
+.wo-r3{position:absolute;inset:-20px;border-radius:50%;border:1px solid rgba(45,212,191,.06);animation:ring-cw 18s linear infinite}
+.wo-r2{position:absolute;inset:-12px;border-radius:50%;border:1px dashed rgba(123,63,228,.16);animation:ring-ccw 10s linear infinite}
+.wo-r1{position:absolute;inset:-6px;border-radius:50%;border:1px solid rgba(167,139,250,.32);animation:ring-cw 6s linear infinite}
+.wo-p1{position:absolute;inset:-2px;border-radius:50%;border:1px solid rgba(123,63,228,.7);animation:ping 3s ease-out infinite}
+.wo-p2{position:absolute;inset:-2px;border-radius:50%;border:1px solid rgba(45,212,191,.5);animation:ping 3s ease-out 1.5s infinite}
+.wo-core{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,#6d28d9,#7b3fe4,#2dd4bf,#a78bfa,#6d28d9);animation:orb-rot 5s linear infinite;box-shadow:0 0 30px var(--vglow)}
+.wo-inner{position:absolute;inset:5px;border-radius:50%;background:radial-gradient(circle at 33% 28%,#ede9fe 0%,#7c3aed 40%,#1e0872 70%,#010110 100%)}
+.wo-shine{position:absolute;inset:9px;border-radius:50%;background:radial-gradient(circle at 35% 25%,rgba(255,255,255,.3) 0%,transparent 55%)}
+
+.w-title{font-family:var(--fd);font-size:1.9rem;font-weight:900;letter-spacing:14px;background:linear-gradient(110deg,var(--vsoft) 0%,var(--vhi) 35%,var(--chi) 70%,var(--vsoft) 100%);background-size:200%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:grad-flow 5s ease infinite}
+@keyframes grad-flow{0%,100%{background-position:0%}50%{background-position:100%}}
+.w-sub{font-family:var(--fm);font-size:.56rem;color:var(--t3);letter-spacing:2.5px;margin-top:8px;line-height:2;text-transform:uppercase}
+.w-badges{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:12px;flex-wrap:wrap}
+.w-badge{padding:3px 9px;border:1px solid var(--b);background:var(--vtr);font-family:var(--fm);font-size:.52rem;color:var(--t3);letter-spacing:1.5px;text-transform:uppercase;display:flex;align-items:center;gap:4px}
+.w-badge i{width:4px;height:4px;border-radius:50%;background:var(--vhi);box-shadow:0 0 4px var(--vhi);animation:live-p 2s ease infinite;animation-delay:var(--d,0s)}
 
 /* Messages */
-.msg {
-  display: flex;
-  flex-direction: column;
-  max-width: 78%;
-  animation: msgIn 0.28s var(--ease);
-}
-@keyframes msgIn {
-  from { opacity:0; transform: translateY(12px); }
-  to   { opacity:1; transform: translateY(0); }
-}
-.msg.user { align-self: flex-end; }
-.msg.aura { align-self: flex-start; max-width: 82%; }
+.msg{display:flex;flex-direction:column;max-width:78%;animation:msg-in .26s var(--ease)}
+@keyframes msg-in{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+.msg.user{align-self:flex-end}
+.msg.aura{align-self:flex-start;max-width:86%}
 
-.msg-bubble {
-  padding: 12px 18px;
-  border-radius: 18px;
-  line-height: 1.75;
-  font-size: 0.9rem;
-}
-.msg.user .msg-bubble {
-  background: linear-gradient(135deg, #5b21b6, #3b0fa0);
-  border-bottom-right-radius: 4px;
-  color: #ede9fe;
-  box-shadow: 0 4px 20px rgba(108,53,222,0.25);
-}
-.msg.aura .msg-bubble {
-  background: var(--surface);
-  border: 1px solid var(--rim);
-  border-bottom-left-radius: 4px;
-  color: var(--t1);
-}
+.msg-meta{display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap}
+.msg-who{font-family:var(--fm);font-size:.54rem;letter-spacing:2.5px;color:var(--t3);text-transform:uppercase}
+.tag{display:inline-flex;align-items:center;gap:3px;padding:1px 8px;font-family:var(--fm);font-size:.52rem;letter-spacing:1.5px;text-transform:uppercase;border:1px solid}
+.t-ag{background:var(--vdim);color:var(--vhi);border-color:var(--b)}
+.t-cf{background:var(--cdim);color:var(--chi);border-color:var(--bc)}
+.t-ok{background:var(--ok-lo);color:var(--ok);border-color:rgba(16,185,129,.2)}
+.t-er{background:var(--err-lo);color:var(--err);border-color:rgba(239,68,68,.2)}
 
-.msg-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 5px;
-  flex-wrap: wrap;
+.msg.user .msg-bubble{
+  padding:12px 17px;
+  background:linear-gradient(145deg,rgba(100,40,212,.85),rgba(60,18,160,.92));
+  border:1px solid rgba(167,139,250,.22);border-bottom-right-radius:2px;
+  color:#ede9ff;font-size:.87rem;line-height:1.88;
+  box-shadow:0 4px 24px rgba(100,40,212,.25),inset 0 1px 0 rgba(255,255,255,.05);
+  position:relative;overflow:hidden;
 }
-.msg-label {
-  font-size: 0.65rem;
-  letter-spacing: 2px;
-  font-family: var(--f-mono);
-  color: var(--t3);
-  font-weight: 500;
-}
-.tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 0.6rem;
-  letter-spacing: 0.8px;
-  font-family: var(--f-mono);
-}
-.tag-agent  { background: rgba(108,53,222,0.2); color: var(--violet-hi); border: 1px solid rgba(108,53,222,0.3); }
-.tag-conf   { background: rgba(0,212,255,0.1);  color: var(--cyan);      border: 1px solid rgba(0,212,255,0.2); }
-.tag-ok     { background: rgba(34,211,160,0.1); color: var(--ok);        border: 1px solid rgba(34,211,160,0.2); }
+.msg.user .msg-bubble::after{content:'';position:absolute;inset:0;background:linear-gradient(145deg,rgba(255,255,255,.06),transparent 50%);pointer-events:none}
 
-.msg-actions {
-  display: flex;
-  gap: 5px;
-  margin-top: 8px;
+.msg.aura .msg-bubble{
+  padding:13px 17px;
+  background:var(--glass);border:1px solid var(--b);
+  border-left:2px solid var(--v);border-bottom-left-radius:2px;
+  color:var(--t1);font-size:.87rem;line-height:1.88;
+  position:relative;backdrop-filter:blur(16px);
 }
-.act-btn {
-  padding: 3px 10px;
-  border-radius: 10px;
-  border: 1px solid var(--rim);
-  background: transparent;
-  color: var(--t3);
-  font-size: 0.68rem;
-  font-family: var(--f-body);
-  cursor: pointer;
-  transition: all var(--t-fast);
-}
-.act-btn:hover { color: var(--violet-hi); border-color: var(--violet-dim); }
+/* HUD corners on AURA bubble */
+.msg.aura .msg-bubble::before{content:'';position:absolute;top:0;left:0;width:14px;height:14px;border-top:1px solid var(--vhi);border-left:1px solid var(--vhi);pointer-events:none}
+.msg.aura .msg-bubble::after{content:'';position:absolute;bottom:0;right:0;width:14px;height:14px;border-bottom:1px solid var(--vhi);border-right:1px solid var(--vhi);pointer-events:none}
 
-/* Plan blocks in messages */
-.plan-block {
-  margin-top: 10px;
-  border: 1px solid rgba(0,212,255,0.2);
-  border-radius: 10px;
-  overflow: hidden;
-  background: rgba(0,212,255,0.03);
-}
-.plan-block-head {
-  padding: 7px 12px;
-  background: rgba(0,212,255,0.07);
-  font-size: 0.68rem;
-  font-family: var(--f-mono);
-  color: var(--cyan);
-  letter-spacing: 1px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-}
-.plan-block-body {
-  padding: 10px 12px;
-  font-size: 0.82rem;
-  color: var(--t2);
-  line-height: 1.7;
-}
-.plan-step {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  padding: 4px 0;
-}
-.plan-step-num {
-  width: 18px; height: 18px; border-radius: 50%;
-  background: var(--violet-dim);
-  color: var(--violet-hi);
-  font-size: 0.6rem;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  font-family: var(--f-mono);
-  margin-top: 2px;
-}
+.msg-actions{display:flex;gap:4px;margin-top:6px}
+.act-btn{padding:3px 9px;border:1px solid var(--b);background:transparent;color:var(--t3);font-size:.56rem;font-family:var(--fm);cursor:none;transition:all .15s;letter-spacing:1px;text-transform:uppercase}
+.act-btn:hover{color:var(--vhi);border-color:var(--bhi);background:var(--vtr)}
 
-/* Typing Indicator */
-.typing-ind {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 12px 18px;
-  background: var(--surface);
-  border: 1px solid var(--rim);
-  border-radius: 18px;
-  border-bottom-left-radius: 4px;
-  align-self: flex-start;
-  animation: msgIn 0.28s var(--ease);
-}
-.t-dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--violet);
-  animation: tdot 1.4s infinite;
-}
-.t-dot:nth-child(2) { animation-delay: 0.2s; }
-.t-dot:nth-child(3) { animation-delay: 0.4s; }
-@keyframes tdot {
-  0%,100% { transform:translateY(0); opacity:0.4; }
-  50%     { transform:translateY(-6px); opacity:1; }
-}
+/* Plan block */
+.plan-block{margin-top:12px;border:1px solid var(--bc);background:var(--cdim);overflow:hidden}
+.plan-head{padding:6px 12px;background:rgba(45,212,191,.05);font-family:var(--fm);font-size:.56rem;color:var(--chi);letter-spacing:2px;display:flex;align-items:center;gap:6px;cursor:none;text-transform:uppercase}
+.plan-body{padding:10px 12px;font-size:.79rem;color:var(--t2);line-height:1.75}
+.plan-step{display:flex;gap:8px;align-items:flex-start;padding:3px 0}
+.ps-n{width:16px;height:16px;background:var(--vdim);color:var(--vhi);font-family:var(--fm);font-size:.52rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
 
-/* Suggestion Chips */
-.chips-row {
-  padding: 0 28px 12px;
-  display: flex;
-  gap: 7px;
-  flex-wrap: wrap;
-}
-.chip {
-  padding: 6px 14px;
-  border-radius: 20px;
-  border: 1px solid var(--rim);
-  background: var(--surface);
-  color: var(--t2);
-  font-size: 0.75rem;
-  cursor: pointer;
-  font-family: var(--f-body);
-  transition: all var(--t-fast);
-  white-space: nowrap;
-}
-.chip:hover { color: var(--violet-hi); border-color: var(--violet-dim); background: rgba(108,53,222,0.1); }
+/* Typing */
+.typing-ind{display:flex;align-items:center;gap:5px;padding:11px 17px;background:var(--glass);border:1px solid var(--b);border-left:2px solid var(--v);align-self:flex-start;animation:msg-in .26s var(--ease);backdrop-filter:blur(16px)}
+.td{width:4px;height:4px;border-radius:50%;background:var(--v);animation:tdot 1.4s infinite}
+.td:nth-child(2){animation-delay:.2s}.td:nth-child(3){animation-delay:.4s}
+@keyframes tdot{0%,100%{transform:translateY(0);opacity:.3}50%{transform:translateY(-5px);opacity:1}}
 
-/* ── Input Area ── */
-.input-area {
-  padding: 14px 22px 18px;
-  border-top: 1px solid var(--rim);
-  background: var(--ink2);
-  flex-shrink: 0;
-}
-.voice-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.v-btn {
-  padding: 6px 14px;
-  border-radius: 20px;
-  border: 1px solid var(--rim);
-  background: transparent;
-  color: var(--t2);
-  cursor: pointer;
-  font-size: 0.77rem;
-  font-family: var(--f-body);
-  display: flex; align-items: center; gap: 5px;
-  transition: all var(--t-fast);
-}
-.v-btn:hover { color: var(--t1); border-color: var(--violet-dim); background: rgba(108,53,222,0.08); }
-.v-btn.rec {
-  background: rgba(244,63,94,0.1);
-  color: var(--err);
-  border-color: rgba(244,63,94,0.4);
-  animation: recordPulse 1s infinite;
-}
-@keyframes recordPulse { 0%,100%{box-shadow:none} 50%{box-shadow:0 0 0 6px rgba(244,63,94,0.08)} }
-.v-status { font-size: 0.72rem; color: var(--t3); font-family: var(--f-mono); }
+/* Chips */
+.chips-row{padding:0 22px 11px;display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:4px 11px;border:1px solid var(--b);background:rgba(5,5,28,.7);color:var(--t2);font-size:.69rem;cursor:none;font-family:var(--fb);font-weight:500;transition:all .15s;white-space:nowrap;backdrop-filter:blur(8px)}
+.chip:hover{color:var(--vhi);border-color:var(--bhi);background:var(--vtr)}
 
-.input-row { display: flex; gap: 10px; }
+/* Input */
+.input-area{padding:12px 20px 14px;border-top:1px solid var(--b);background:rgba(1,1,16,.9);flex-shrink:0;position:relative;backdrop-filter:blur(20px)}
+.input-area::before{content:'';position:absolute;top:-1px;left:15%;right:15%;height:1px;background:linear-gradient(90deg,transparent,var(--vdim),transparent)}
 
-.main-input {
-  flex: 1;
-  padding: 12px 20px;
-  background: var(--surface);
-  border: 1px solid var(--rim);
-  border-radius: 28px;
-  color: var(--t1);
-  font-size: 0.9rem;
-  font-family: var(--f-body);
-  outline: none;
-  transition: border-color var(--t-fast), box-shadow var(--t-fast);
-}
-.main-input:focus { border-color: var(--violet-dim); box-shadow: 0 0 0 3px rgba(108,53,222,0.1); }
-.main-input::placeholder { color: var(--t3); }
+.voice-bar{display:flex;align-items:center;gap:7px;margin-bottom:8px}
+.v-btn{padding:4px 12px;border:1px solid var(--b);background:transparent;color:var(--t2);cursor:none;font-size:.58rem;font-family:var(--fm);display:flex;align-items:center;gap:5px;letter-spacing:1.5px;text-transform:uppercase;transition:all .15s}
+.v-btn:hover{color:var(--t1);border-color:var(--bhi)}
+.v-btn.rec{color:var(--err);border-color:rgba(239,68,68,.4);background:var(--err-lo);animation:rec-p 1s infinite}
+@keyframes rec-p{0%,100%{box-shadow:none}50%{box-shadow:0 0 0 4px rgba(239,68,68,.06)}}
+.v-status{font-size:.58rem;color:var(--t3);font-family:var(--fm);flex:1;letter-spacing:1px}
 
-.send-btn {
-  padding: 12px 24px;
-  background: linear-gradient(135deg, var(--violet), #4a1d96);
-  border: none;
-  border-radius: 28px;
-  color: white;
-  font-size: 0.88rem;
-  font-weight: 600;
-  font-family: var(--f-display);
-  cursor: pointer;
-  letter-spacing: 0.5px;
-  transition: all var(--t-fast);
-}
-.send-btn:hover { transform: scale(1.03); box-shadow: 0 0 20px rgba(108,53,222,0.4); }
+.input-row{display:flex;gap:8px}
+.main-input{flex:1;padding:11px 17px;background:rgba(5,5,28,.85);border:1px solid var(--b);border-left:2px solid rgba(123,63,228,.35);color:var(--t1);font-size:.86rem;font-family:var(--fb);outline:none;transition:border-color .18s,box-shadow .18s;backdrop-filter:blur(8px)}
+.main-input:focus{border-color:var(--v);border-left-color:var(--v);box-shadow:0 0 0 3px rgba(123,63,228,.07),0 0 20px rgba(123,63,228,.04)}
+.main-input::placeholder{color:var(--t3)}
 
-/* ============================================================
-   VIEW: MEMORY
-   ============================================================ */
-.panel-view {
-  padding: 24px 28px;
-  overflow-y: auto;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  scrollbar-width: thin;
-}
+.send-btn{padding:11px 22px;background:linear-gradient(135deg,var(--v),var(--v1));border:none;color:#fff;font-family:var(--fd);font-size:.72rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:none;position:relative;overflow:hidden;transition:all .18s}
+.send-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.12),transparent);opacity:0;transition:opacity .18s}
+.send-btn:hover::before{opacity:1}
+.send-btn:hover{transform:translateY(-1px);box-shadow:0 8px 28px var(--vglow)}
+.send-btn:active{transform:translateY(0)}
 
-.view-header {
-  margin-bottom: 4px;
-}
-.view-header h2 {
-  font-family: var(--f-display);
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: var(--t1);
-}
-.view-header p {
-  font-size: 0.8rem;
-  color: var(--t3);
-  margin-top: 3px;
-}
+/* ─── PANEL VIEW ─── */
+.panel-view{flex:1;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:14px}
+.view-hdr{margin-bottom:2px}
+.view-hdr h2{font-family:var(--fd);font-size:.88rem;font-weight:700;color:var(--t1);letter-spacing:2.5px;text-transform:uppercase}
+.view-hdr p{font-family:var(--fm);font-size:.54rem;color:var(--t3);letter-spacing:1.5px;margin-top:3px;text-transform:uppercase}
 
-.cards-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 16px;
-}
+/* Cards */
+.card{background:var(--glass);border:1px solid var(--b);padding:16px;position:relative;overflow:hidden;backdrop-filter:blur(14px);transition:border-color .18s,box-shadow .18s}
+.card::before{content:'';position:absolute;top:0;left:0;width:10px;height:10px;border-top:1px solid var(--vhi);border-left:1px solid var(--vhi);pointer-events:none;z-index:2}
+.card::after{content:'';position:absolute;bottom:0;right:0;width:10px;height:10px;border-bottom:1px solid var(--vhi);border-right:1px solid var(--vhi);pointer-events:none;z-index:2}
+.card:hover{border-color:var(--bhi);box-shadow:0 4px 24px rgba(123,63,228,.08)}
 
-.card {
-  background: var(--surface);
-  border: 1px solid var(--rim);
-  border-radius: 14px;
-  padding: 18px;
-  transition: border-color var(--t-fast), box-shadow var(--t-fast);
-}
-.card:hover { border-color: var(--violet-dim); box-shadow: 0 4px 24px rgba(108,53,222,0.1); }
-.card-holo {
-  border-color: rgba(0,212,255,0.2);
-  background: linear-gradient(135deg, rgba(0,212,255,0.04), rgba(108,53,222,0.04));
-  position: relative;
-  overflow: hidden;
-}
-.card-holo::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, transparent 40%, rgba(0,212,255,0.04) 100%);
-  pointer-events: none;
-}
-.card-holo:hover { border-color: rgba(0,212,255,0.4); box-shadow: 0 4px 28px rgba(0,212,255,0.08); }
+.card-holo{border-color:var(--bc);background:rgba(45,212,191,.025)}
+.card-holo::before{border-color:var(--chi)}.card-holo::after{border-color:var(--chi)}
+.card-holo:hover{border-color:rgba(45,212,191,.4);box-shadow:0 4px 24px var(--cdim)}
 
-.card-title {
-  font-size: 0.65rem;
-  font-family: var(--f-mono);
-  letter-spacing: 2px;
-  color: var(--t3);
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.card-title::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--rim);
-}
-.card-val {
-  font-size: 1.5rem;
-  font-weight: 700;
-  font-family: var(--f-display);
-  color: var(--t1);
-  margin-bottom: 4px;
-}
-.card-sub { font-size: 0.78rem; color: var(--t3); }
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
 
-.mem-list { display: flex; flex-direction: column; gap: 8px; }
-.mem-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--ink3);
-  border: 1px solid rgba(108,53,222,0.1);
-  font-size: 0.82rem;
-}
-.mem-icon { font-size: 0.9rem; flex-shrink: 0; }
-.mem-key { color: var(--t3); font-family: var(--f-mono); font-size: 0.68rem; flex-shrink: 0; min-width: 80px; }
-.mem-val { color: var(--t1); flex: 1; }
+.ct{font-family:var(--fm);font-size:.52rem;letter-spacing:3px;color:var(--t3);text-transform:uppercase;margin-bottom:13px;display:flex;align-items:center;gap:8px;position:relative;z-index:1}
+.ct::after{content:'';flex:1;height:1px;background:var(--b)}
 
-.intent-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.intent-name { font-size: 0.8rem; color: var(--t2); min-width: 100px; }
-.bar-track {
-  flex: 1;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--ink3);
-  overflow: hidden;
-}
-.bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--violet), var(--violet-g));
-  border-radius: 3px;
-  transition: width 0.6s var(--ease);
-}
-.intent-pct { font-size: 0.72rem; color: var(--t3); font-family: var(--f-mono); min-width: 30px; text-align: right; }
+.dr{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(123,63,228,.05);font-size:.81rem;position:relative;z-index:1}
+.dr:last-child{border-bottom:none;padding-bottom:0}
+.dk{color:var(--t3);font-family:var(--fm);font-size:.62rem;letter-spacing:.5px}
+.dv{color:var(--t1);font-weight:600;font-family:var(--fd);font-size:.8rem}
 
-/* ============================================================
-   VIEW: INTELLIGENCE
-   ============================================================ */
-.intel-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-.intel-grid.full { grid-template-columns: 1fr; }
+.sb{padding:2px 9px;font-family:var(--fm);font-size:.54rem;text-transform:uppercase;letter-spacing:1px;border:1px solid}
+.sb-ok  {background:var(--ok-lo);  color:var(--ok);  border-color:rgba(16,185,129,.2)}
+.sb-warn{background:var(--warn-lo);color:var(--warn);border-color:rgba(245,158,11,.2)}
+.sb-err {background:var(--err-lo); color:var(--err);border-color:rgba(239,68,68,.2)}
+.sb-inf {background:var(--vdim);   color:var(--vhi); border-color:var(--b)}
+.sb-ion {background:var(--cdim);   color:var(--chi); border-color:var(--bc)}
 
-.confidence-ring {
-  width: 80px; height: 80px;
-  border-radius: 50%;
-  background: conic-gradient(var(--violet) calc(var(--pct,75) * 1%), var(--ink3) 0);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  margin: 0 auto 14px;
-}
-.confidence-ring::before {
-  content: attr(data-pct) '%';
-  position: absolute;
-  font-family: var(--f-mono);
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--t1);
-}
-.confidence-inner {
-  width: 64px; height: 64px;
-  border-radius: 50%;
-  background: var(--surface);
-}
+.mi{display:flex;align-items:center;gap:10px;padding:7px 10px;border-left:2px solid var(--vdim);background:rgba(3,3,18,.7);border-top:1px solid rgba(123,63,228,.04);font-size:.79rem;margin-bottom:5px;position:relative;z-index:1}
+.mi:last-child{margin-bottom:0}
+.mi-ico{font-size:.82rem;flex-shrink:0}
+.mi-k{color:var(--t3);font-family:var(--fm);font-size:.58rem;letter-spacing:.5px;flex-shrink:0;min-width:62px;text-transform:uppercase}
+.mi-v{color:var(--t1);flex:1;font-family:var(--fb);font-size:.8rem}
 
-.status-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--rim);
-  font-size: 0.84rem;
-}
-.status-item:last-child { border-bottom: none; }
-.status-key { color: var(--t3); font-family: var(--f-mono); font-size: 0.72rem; letter-spacing: 0.5px; }
-.status-val { color: var(--t1); font-weight: 500; }
-.status-tag {
-  padding: 2px 8px;
-  border-radius: 8px;
-  font-size: 0.65rem;
-  font-family: var(--f-mono);
-}
-.s-ok  { background: rgba(34,211,160,0.15); color: var(--ok); }
-.s-warn{ background: rgba(245,158,11,0.15);  color: var(--warn); }
-.s-err { background: rgba(244,63,94,0.15);   color: var(--err); }
-.s-info{ background: rgba(108,53,222,0.15);  color: var(--violet-hi); }
+.ib{display:flex;align-items:center;gap:10px;margin-bottom:7px;position:relative;z-index:1}
+.ib:last-child{margin-bottom:0}
+.ib-n{font-family:var(--fm);font-size:.68rem;color:var(--t2);min-width:75px;letter-spacing:.3px}
+.bt{flex:1;height:3px;background:rgba(123,63,228,.08);overflow:hidden}
+.bf{height:100%;background:linear-gradient(90deg,var(--v),var(--c));transition:width .9s var(--ease)}
+.ib-p{font-family:var(--fm);font-size:.62rem;color:var(--t3);min-width:28px;text-align:right}
 
-.log-entry {
-  display: flex;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--ink3);
-  border-left: 3px solid var(--rim);
-  font-size: 0.8rem;
-  align-items: flex-start;
-}
-.log-entry.log-ok  { border-left-color: var(--ok); }
-.log-entry.log-warn{ border-left-color: var(--warn); }
-.log-entry.log-err { border-left-color: var(--err); }
-.log-time { font-family: var(--f-mono); font-size: 0.65rem; color: var(--t3); flex-shrink: 0; padding-top: 1px; }
-.log-msg  { color: var(--t2); line-height: 1.5; }
+.cr{width:90px;height:90px;margin:0 auto 12px;position:relative;display:flex;align-items:center;justify-content:center}
+.cr-v{font-family:var(--fm);font-size:.92rem;font-weight:600;color:var(--t1);z-index:1}
 
-/* ============================================================
-   VIEW: AUTONOMY
-   ============================================================ */
-.exec-timeline { display: flex; flex-direction: column; gap: 0; }
-.exec-step {
-  display: flex;
-  gap: 14px;
-  position: relative;
-  padding-bottom: 0;
-}
-.exec-step:not(:last-child) .step-connector { flex: 1; }
-.step-left { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
-.step-circle {
-  width: 32px; height: 32px;
-  border-radius: 50%;
-  border: 2px solid var(--rim);
-  background: var(--surface);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.75rem;
-  font-family: var(--f-mono);
-  color: var(--t3);
-  transition: all var(--t-mid);
-  flex-shrink: 0;
-}
-.step-circle.done  { border-color: var(--ok);   background: rgba(34,211,160,0.1); color: var(--ok); }
-.step-circle.active{ border-color: var(--cyan);  background: rgba(0,212,255,0.1);  color: var(--cyan); animation: stepPulse 1.5s infinite; }
-.step-circle.fail  { border-color: var(--err);   background: rgba(244,63,94,0.1);  color: var(--err); }
-@keyframes stepPulse { 0%,100%{box-shadow:none} 50%{box-shadow:0 0 0 6px rgba(0,212,255,0.1)} }
-.step-line {
-  width: 2px;
-  flex: 1;
-  min-height: 20px;
-  background: var(--rim);
-  margin: 4px 0;
-}
-.step-line.done { background: var(--ok); opacity: 0.4; }
-.step-body {
-  flex: 1;
-  padding-bottom: 20px;
-}
-.step-title { font-size: 0.86rem; font-weight: 500; color: var(--t1); margin-bottom: 4px; }
-.step-detail { font-size: 0.77rem; color: var(--t3); line-height: 1.5; }
-.step-tool {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 6px;
-  padding: 3px 10px;
-  border-radius: 8px;
-  background: rgba(0,212,255,0.08);
-  border: 1px solid rgba(0,212,255,0.2);
-  font-size: 0.65rem;
-  font-family: var(--f-mono);
-  color: var(--cyan);
-}
+.le{display:flex;gap:10px;padding:7px 10px;background:rgba(3,3,18,.7);border-left:2px solid var(--b);font-size:.76rem;align-items:flex-start;margin-bottom:5px}
+.le:last-child{margin-bottom:0}
+.le.ok{border-left-color:var(--ok)}.le.warn{border-left-color:var(--warn)}.le.err{border-left-color:var(--err)}
+.le-t{font-family:var(--fm);font-size:.56rem;color:var(--t3);flex-shrink:0;padding-top:1px;min-width:26px}
+.le-m{color:var(--t2);line-height:1.55}
 
-.exec-progress {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--ink3);
-  margin: 16px 0;
-  overflow: hidden;
-}
-.exec-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--violet), var(--cyan));
-  border-radius: 2px;
-  transition: width 0.8s var(--ease);
-}
+/* Exec */
+.exec-step{display:flex;gap:12px}
+.es-l{display:flex;flex-direction:column;align-items:center;flex-shrink:0}
+.es-c{width:26px;height:26px;border:1px solid var(--b);background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:.62rem;font-family:var(--fm);color:var(--t3);transition:all .3s;flex-shrink:0}
+.es-c.done{border-color:var(--ok);background:var(--ok-lo);color:var(--ok)}
+.es-c.live{border-color:var(--c);background:var(--cdim);color:var(--c);animation:step-p 1.5s infinite}
+.es-c.fail{border-color:var(--err);background:var(--err-lo);color:var(--err)}
+@keyframes step-p{0%,100%{box-shadow:none}50%{box-shadow:0 0 0 5px rgba(45,212,191,.07)}}
+.es-line{width:1px;flex:1;min-height:16px;background:var(--b);margin:4px 0}
+.es-line.done{background:var(--ok);opacity:.3}
+.es-body{flex:1;padding-bottom:16px}
+.es-title{font-size:.8rem;font-weight:600;color:var(--t1);margin-bottom:3px;font-family:var(--fd);letter-spacing:.3px}
+.es-detail{font-size:.72rem;color:var(--t3);line-height:1.5}
+.es-tag{display:inline-flex;align-items:center;gap:4px;margin-top:5px;padding:2px 8px;background:var(--cdim);border:1px solid var(--bc);font-size:.54rem;font-family:var(--fm);color:var(--chi);letter-spacing:1px;text-transform:uppercase}
 
-/* ============================================================
-   VIEW: TASKS
-   ============================================================ */
-.tasks-add {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
-}
-.tasks-add input {
-  flex: 1;
-  padding: 10px 16px;
-  background: var(--surface);
-  border: 1px solid var(--rim);
-  border-radius: 10px;
-  color: var(--t1);
-  font-size: 0.87rem;
-  font-family: var(--f-body);
-  outline: none;
-  transition: border-color var(--t-fast);
-}
-.tasks-add input:focus { border-color: var(--violet-dim); }
-.tasks-add input::placeholder { color: var(--t3); }
-.add-btn {
-  padding: 10px 20px;
-  background: var(--violet-dim);
-  border: 1px solid rgba(108,53,222,0.3);
-  border-radius: 10px;
-  color: var(--violet-hi);
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-family: var(--f-body);
-  transition: all var(--t-fast);
-}
-.add-btn:hover { background: rgba(108,53,222,0.4); }
+.ep{height:2px;background:var(--bg4);overflow:hidden;margin:10px 0}
+.ep-f{height:100%;background:linear-gradient(90deg,var(--v),var(--c));transition:width .9s var(--ease)}
 
-.task-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: var(--surface);
-  border: 1px solid var(--rim);
-  border-radius: 12px;
-  margin-bottom: 8px;
-  transition: all var(--t-fast);
-}
-.task-card:hover { border-color: var(--violet-dim); }
-.task-card.done { opacity: 0.55; }
-.task-check {
-  width: 20px; height: 20px;
-  border-radius: 50%;
-  border: 2px solid var(--rim);
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  transition: all var(--t-fast);
-  background: transparent;
-}
-.task-check:hover { border-color: var(--ok); }
-.task-check.checked { border-color: var(--ok); background: rgba(34,211,160,0.15); }
-.task-text { flex: 1; font-size: 0.87rem; color: var(--t1); }
-.task-card.done .task-text { text-decoration: line-through; color: var(--t3); }
-.task-pri {
-  font-size: 0.65rem;
-  font-family: var(--f-mono);
-  padding: 2px 7px;
-  border-radius: 6px;
-}
-.task-pri.hi  { background: rgba(244,63,94,0.1);  color: var(--err); }
-.task-pri.med { background: rgba(245,158,11,0.1);  color: var(--warn); }
-.task-pri.lo  { background: rgba(34,211,160,0.1);  color: var(--ok); }
-.task-del {
-  background: transparent;
-  border: none;
-  color: var(--t3);
-  cursor: pointer;
-  font-size: 0.85rem;
-  padding: 2px 6px;
-  border-radius: 6px;
-  transition: color var(--t-fast);
-}
-.task-del:hover { color: var(--err); }
+/* Tasks */
+.task-add{display:flex;gap:8px;margin-bottom:16px}
+.task-add input{flex:1;padding:9px 13px;background:var(--glass);border:1px solid var(--b);border-left:2px solid rgba(123,63,228,.35);color:var(--t1);font-size:.83rem;font-family:var(--fb);outline:none;transition:border-color .18s;backdrop-filter:blur(8px)}
+.task-add input:focus{border-color:var(--v);border-left-color:var(--v)}
+.task-add input::placeholder{color:var(--t3)}
+.task-add select{padding:8px 11px;background:var(--glass);border:1px solid var(--b);color:var(--t1);font-family:var(--fb);outline:none;font-size:.78rem;cursor:none}
+.add-btn{padding:9px 16px;background:var(--vdim);border:1px solid var(--bhi);color:var(--vhi);cursor:none;font-family:var(--fd);font-weight:700;font-size:.7rem;text-transform:uppercase;letter-spacing:1.5px;transition:all .15s}
+.add-btn:hover{background:rgba(123,63,228,.22)}
 
-/* ============================================================
-   VIEW: HISTORY
-   ============================================================ */
-.hist-card {
-  background: var(--surface);
-  border: 1px solid var(--rim);
-  border-radius: 14px;
-  padding: 16px 18px;
-  margin-bottom: 12px;
-  transition: all var(--t-fast);
-}
-.hist-card:hover { border-color: var(--violet-dim); }
-.hist-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-}
-.hist-time { font-size: 0.65rem; color: var(--t3); font-family: var(--f-mono); }
-.hist-user-q { color: var(--violet-hi); font-size: 0.86rem; font-weight: 500; margin-bottom: 6px; }
-.hist-aura-r { color: var(--t2); font-size: 0.83rem; line-height: 1.6; }
+.task-card{display:flex;align-items:center;gap:10px;padding:10px 13px;background:var(--glass);border:1px solid var(--b);border-left:2px solid transparent;margin-bottom:6px;transition:all .15s;backdrop-filter:blur(8px)}
+.task-card:hover{border-color:var(--bhi);border-left-color:var(--v)}
+.task-card.done{opacity:.45}
+.tc-ch{width:16px;height:16px;border:1px solid var(--b);cursor:none;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;background:transparent;font-size:.62rem;color:var(--ok)}
+.tc-ch:hover{border-color:var(--ok)}.tc-ch.on{border-color:var(--ok);background:var(--ok-lo)}
+.tc-text{flex:1;font-size:.82rem;color:var(--t1);font-family:var(--fb)}
+.task-card.done .tc-text{text-decoration:line-through;color:var(--t3)}
+.tc-pri{font-size:.54rem;font-family:var(--fm);padding:2px 7px;letter-spacing:1px;text-transform:uppercase;border:1px solid}
+.tc-pri.hi {background:var(--err-lo); color:var(--err); border-color:rgba(239,68,68,.2)}
+.tc-pri.med{background:var(--warn-lo);color:var(--warn);border-color:rgba(245,158,11,.2)}
+.tc-pri.lo {background:var(--ok-lo);  color:var(--ok);  border-color:rgba(16,185,129,.2)}
+.tc-del{background:transparent;border:none;color:var(--t4);cursor:none;font-size:.76rem;padding:2px 5px;transition:color .15s}
+.tc-del:hover{color:var(--err)}
 
-/* ============================================================
-   VIEW: SETTINGS
-   ============================================================ */
-.settings-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-}
-.s-card {
-  background: var(--surface);
-  border: 1px solid var(--rim);
-  border-radius: 14px;
-  padding: 20px;
-}
-.s-card h3 {
-  font-family: var(--f-display);
-  font-size: 0.78rem;
-  letter-spacing: 2px;
-  color: var(--violet-hi);
-  margin-bottom: 16px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--rim);
-}
-.s-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--rim);
-  gap: 12px;
-}
-.s-row:last-child { border-bottom: none; padding-bottom: 0; }
-.s-label { font-size: 0.83rem; color: var(--t2); }
-.s-sublabel { font-size: 0.7rem; color: var(--t3); margin-top: 2px; }
-.s-ctrl select,
-.s-ctrl input[type=range] {
-  padding: 5px 10px;
-  background: var(--ink3);
-  border: 1px solid var(--rim);
-  border-radius: 8px;
-  color: var(--t1);
-  font-size: 0.8rem;
-  font-family: var(--f-body);
-  outline: none;
-  cursor: pointer;
-}
+.hist-card{background:var(--glass);border:1px solid var(--b);border-left:2px solid transparent;padding:13px 16px;margin-bottom:8px;transition:all .15s;position:relative;backdrop-filter:blur(8px)}
+.hist-card::before{content:'';position:absolute;top:0;left:0;width:10px;height:10px;border-top:1px solid var(--vhi);border-left:1px solid var(--vhi)}
+.hist-card:hover{border-color:var(--bhi);border-left-color:var(--v)}
+.hist-meta{display:flex;align-items:center;gap:7px;margin-bottom:7px;flex-wrap:wrap}
+.hist-time{font-family:var(--fm);font-size:.56rem;color:var(--t3);letter-spacing:.5px}
+.hist-q{color:var(--vhi);font-size:.82rem;font-weight:600;margin-bottom:4px;font-family:var(--fd);letter-spacing:.3px}
+.hist-r{color:var(--t2);font-size:.78rem;line-height:1.65}
 
-/* Toggle Switch */
-.toggle {
-  width: 38px; height: 20px;
-  background: var(--ink3);
-  border-radius: 10px;
-  border: 1px solid var(--rim);
-  cursor: pointer;
-  position: relative;
-  transition: background var(--t-fast);
-  flex-shrink: 0;
-}
-.toggle.on { background: var(--violet); border-color: var(--violet); }
-.toggle::after {
-  content: '';
-  position: absolute;
-  width: 14px; height: 14px;
-  border-radius: 50%;
-  background: white;
-  top: 2px; left: 2px;
-  transition: left var(--t-fast);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-}
-.toggle.on::after { left: 20px; }
+/* Settings */
+.settings-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:12px}
+.s-card{background:var(--glass);border:1px solid var(--b);padding:16px;position:relative;overflow:hidden;backdrop-filter:blur(14px)}
+.s-card::before{content:'';position:absolute;top:0;left:0;width:10px;height:10px;border-top:1px solid var(--vhi);border-left:1px solid var(--vhi)}
+.s-card::after{content:'';position:absolute;bottom:0;right:0;width:10px;height:10px;border-bottom:1px solid var(--vhi);border-right:1px solid var(--vhi)}
+.s-card h3{font-family:var(--fd);font-size:.62rem;letter-spacing:3px;color:var(--vhi);margin-bottom:13px;padding-bottom:10px;border-bottom:1px solid var(--b);text-transform:uppercase;position:relative;z-index:1}
+.s-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(123,63,228,.05);gap:12px;position:relative;z-index:1}
+.s-row:last-child{border-bottom:none;padding-bottom:0}
+.s-lbl{font-size:.78rem;color:var(--t2);font-weight:500;font-family:var(--fb)}
+.s-sub{font-size:.6rem;color:var(--t3);margin-top:1px;font-family:var(--fm)}
+.s-ctrl select{padding:4px 8px;background:var(--bg3);border:1px solid var(--b);color:var(--t1);font-size:.72rem;font-family:var(--fm);outline:none;cursor:none}
 
-/* Mode Selector */
-.mode-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 4px;
-}
-.mode-opt {
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--rim);
-  background: var(--ink3);
-  cursor: pointer;
-  text-align: center;
-  transition: all var(--t-fast);
-}
-.mode-opt:hover { border-color: var(--violet-dim); }
-.mode-opt.sel { border-color: var(--violet); background: rgba(108,53,222,0.15); }
-.mode-opt-name { font-size: 0.78rem; font-weight: 600; color: var(--t1); font-family: var(--f-display); }
-.mode-opt-desc { font-size: 0.62rem; color: var(--t3); margin-top: 3px; }
+.toggle{width:34px;height:17px;background:var(--bg4);border:1px solid var(--b);cursor:none;position:relative;transition:background .2s;flex-shrink:0}
+.toggle.on{background:var(--v);border-color:var(--v)}
+.toggle::after{content:'';position:absolute;width:11px;height:11px;background:#fff;top:2px;left:2px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.5)}
+.toggle.on::after{left:19px}
 
-/* ============================================================
-   RIGHT INTELLIGENCE PANEL
-   ============================================================ */
-.r-panel {
-  width: var(--rpanel-w);
-  min-width: var(--rpanel-w);
-  background: var(--ink2);
-  border-left: 1px solid var(--rim);
-  display: none;
-  flex-direction: column;
-  overflow-y: auto;
-  padding: 18px 16px;
-  gap: 14px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scroll-c) transparent;
-  flex-shrink: 0;
-}
-.r-panel.visible { display: flex; }
+.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px;position:relative;z-index:1}
+.mode-opt{padding:10px 12px;border:1px solid var(--b);background:rgba(3,3,18,.7);cursor:none;text-align:center;transition:all .15s;position:relative}
+.mode-opt::before{content:'';position:absolute;top:0;left:0;width:7px;height:7px;border-top:1px solid transparent;border-left:1px solid transparent;transition:border-color .15s}
+.mode-opt:hover::before{border-color:var(--vhi)}.mode-opt:hover{border-color:var(--bhi)}
+.mode-opt.sel{border-color:var(--v);background:var(--vdim)}.mode-opt.sel::before{border-color:var(--vhi)}
+.mo-n{font-size:.7rem;font-weight:700;color:var(--t1);font-family:var(--fd);text-transform:uppercase;letter-spacing:.5px}
+.mo-d{font-size:.56rem;color:var(--t3);margin-top:2px;font-family:var(--fm)}
 
-/* Orb Display */
-.r-orb-wrap {
-  text-align: center;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--rim);
-  margin-bottom: 2px;
-}
-.r-orb {
-  width: 70px; height: 70px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 33% 33%, #c4b5fd 0%, #7c3aed 50%, #0d0820 100%);
-  margin: 0 auto 10px;
-  position: relative;
-  transition: box-shadow var(--t-mid);
-  box-shadow: 0 0 30px rgba(124,58,237,0.5);
-}
-.r-orb.idle    { box-shadow: 0 0 20px rgba(124,58,237,0.35); animation: orbIdle 4s ease infinite; }
-.r-orb.thinking{ box-shadow: 0 0 40px rgba(245,158,11,0.5);  animation: orbThink 0.8s ease infinite; }
-.r-orb.speaking{ box-shadow: 0 0 40px rgba(0,212,255,0.5);   animation: orbSpeak 0.4s ease infinite; }
-.r-orb.listening{ box-shadow: 0 0 40px rgba(244,63,94,0.5);  animation: orbSpeak 0.6s ease infinite; }
-.r-orb.executing{ box-shadow: 0 0 40px rgba(167,139,250,0.6); animation: orbExec 0.5s linear infinite; }
-.r-orb.success { box-shadow: 0 0 40px rgba(34,211,160,0.5);  animation: orbIdle 2s ease infinite; }
-.r-orb.error   { box-shadow: 0 0 40px rgba(244,63,94,0.5); }
+/* RIGHT PANEL */
+.r-panel{width:var(--rp-w);min-width:var(--rp-w);background:rgba(1,1,14,.94);border-left:1px solid var(--b);display:none;flex-direction:column;overflow-y:auto;padding:13px 12px;gap:11px;flex-shrink:0;position:relative;backdrop-filter:blur(28px)}
+.r-panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cglow),transparent);opacity:.5}
+.r-panel.show{display:flex}
 
-@keyframes orbIdle  { 0%,100%{transform:scale(1)}     50%{transform:scale(1.04)} }
-@keyframes orbThink { 0%,100%{transform:scale(1)}     50%{transform:scale(1.08)} }
-@keyframes orbSpeak { 0%,100%{transform:scale(1)}     50%{transform:scale(1.12)} }
-@keyframes orbExec  { 0%{transform:rotate(0deg) scale(1)} 50%{transform:rotate(180deg) scale(1.06)} 100%{transform:rotate(360deg) scale(1)} }
+/* Right panel orb */
+.rp-orb-sec{padding:13px 0 11px;text-align:center;border-bottom:1px solid var(--b);position:relative}
+.rpo{width:72px;height:72px;position:relative;margin:0 auto 10px}
+.rpo-core{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,#6d28d9,#7b3fe4,#2dd4bf,#a78bfa,#6d28d9);animation:orb-rot 5s linear infinite;box-shadow:0 0 24px var(--vglow)}
+.rpo-inner{position:absolute;inset:4px;border-radius:50%;background:radial-gradient(circle at 33% 28%,#ede9fe 0%,#7c3aed 42%,#1e0872 70%,#010110 100%)}
+.rpo-shine{position:absolute;inset:8px;border-radius:50%;background:radial-gradient(circle at 35% 25%,rgba(255,255,255,.25) 0%,transparent 55%)}
+.rpo-r1{position:absolute;inset:-5px;border-radius:50%;border:1px solid rgba(167,139,250,.3);animation:ring-cw 5s linear infinite}
+.rpo-r2{position:absolute;inset:-11px;border-radius:50%;border:1px dashed rgba(45,212,191,.14);animation:ring-ccw 9s linear infinite}
+.rpo-ping{position:absolute;inset:-2px;border-radius:50%;border:1px solid rgba(123,63,228,.7);animation:ping 3s ease-out infinite}
 
-.r-orb-ring {
-  position: absolute;
-  inset: -8px;
-  border-radius: 50%;
-  border: 1px solid rgba(167,139,250,0.25);
-  animation: ringRotate 5s linear infinite;
-}
-.r-orb-ring2 {
-  position: absolute;
-  inset: -16px;
-  border-radius: 50%;
-  border: 1px dashed rgba(108,53,222,0.15);
-  animation: ringRotate 8s linear infinite reverse;
-}
-@keyframes ringRotate { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+/* Orb state classes via JS */
+.rpo.thinking .rpo-core{box-shadow:0 0 32px rgba(245,158,11,.55);animation:orb-rot 1.5s linear infinite}
+.rpo.speaking .rpo-core{box-shadow:0 0 32px var(--cglow);animation:orb-rot .8s linear infinite}
+.rpo.listening .rpo-core{box-shadow:0 0 32px rgba(239,68,68,.55);animation:orb-rot 2.5s linear infinite}
+.rpo.executing .rpo-core{box-shadow:0 0 32px rgba(167,139,250,.65);animation:orb-rot .6s linear infinite}
+.rpo.success .rpo-core{box-shadow:0 0 32px rgba(16,185,129,.55)}
+.rpo.error .rpo-core{box-shadow:0 0 32px rgba(239,68,68,.55)}
 
-.orb-state-label {
-  font-family: var(--f-mono);
-  font-size: 0.65rem;
-  letter-spacing: 2px;
-  color: var(--t3);
-  margin-bottom: 4px;
-}
-.orb-state-val {
-  font-family: var(--f-display);
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--violet-hi);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
+.rp-state-k{font-family:var(--fm);font-size:.5rem;letter-spacing:2.5px;color:var(--t3);text-transform:uppercase}
+.rp-state-v{font-family:var(--fd);font-size:.74rem;font-weight:700;color:var(--vhi);letter-spacing:2px;text-transform:uppercase;margin-top:2px}
 
-.r-section { margin-bottom: 4px; }
-.r-section-title {
-  font-size: 0.58rem;
-  font-family: var(--f-mono);
-  letter-spacing: 2px;
-  color: var(--t3);
-  margin-bottom: 8px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--rim);
-}
+/* Activity bars */
+.act-bars{display:flex;align-items:flex-end;gap:2px;height:20px;margin-top:7px;justify-content:center}
+.ab{width:4px;background:var(--vdim);border-radius:1px 1px 0 0;animation:ab-wave 1.4s ease-in-out infinite}
+.ab:nth-child(1){animation-delay:0s}.ab:nth-child(2){animation-delay:.1s}
+.ab:nth-child(3){animation-delay:.2s}.ab:nth-child(4){animation-delay:.3s}
+.ab:nth-child(5){animation-delay:.4s}.ab:nth-child(6){animation-delay:.5s}
+.ab:nth-child(7){animation-delay:.6s}.ab:nth-child(8){animation-delay:.7s}
+@keyframes ab-wave{0%,100%{height:3px;opacity:.3}50%{height:16px;opacity:.9;background:var(--vdim)}}
 
-.r-stat-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 0;
-  font-size: 0.78rem;
-  border-bottom: 1px solid rgba(108,53,222,0.05);
-}
-.r-stat-row:last-child { border-bottom: none; }
-.r-stat-key { color: var(--t3); font-family: var(--f-mono); font-size: 0.68rem; }
-.r-stat-val { color: var(--t1); font-weight: 500; }
+.rp-sec{border-bottom:1px solid var(--b);padding-bottom:10px}
+.rp-sec:last-child{border-bottom:none;padding-bottom:0}
+.rp-sec-t{font-family:var(--fm);font-size:.48rem;letter-spacing:3px;color:var(--t4);margin-bottom:7px;padding-bottom:4px;border-bottom:1px solid rgba(123,63,228,.05);text-transform:uppercase}
+.rp-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0}
+.rp-k{color:var(--t3);font-family:var(--fm);font-size:.58rem;letter-spacing:.5px}
+.rp-v{color:var(--t1);font-weight:600;font-family:var(--fd);font-size:.74rem}
+.mini-bar{height:2px;background:var(--bg4);margin-top:6px;overflow:hidden}
+.mb-f{height:100%;background:linear-gradient(90deg,var(--v),var(--c));transition:width .6s var(--ease)}
 
-.mini-conf-bar {
-  height: 3px;
-  border-radius: 2px;
-  background: var(--ink3);
-  margin-top: 8px;
-  overflow: hidden;
-}
-.mini-conf-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--violet), var(--cyan));
-  border-radius: 2px;
-  transition: width 0.6s var(--ease);
-}
+/* Notifications */
+.notif{position:fixed;bottom:40px;right:20px;padding:10px 16px;background:rgba(5,5,28,.97);border:1px solid var(--b);font-family:var(--fm);font-size:.74rem;color:var(--t1);z-index:9999;animation:notif-in .26s var(--ease);display:flex;align-items:center;gap:7px;max-width:280px;backdrop-filter:blur(20px);box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.notif::before{content:'';position:absolute;top:0;left:0;width:8px;height:8px;border-top:1px solid var(--vhi);border-left:1px solid var(--vhi)}
+@keyframes notif-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.notif.ok{border-color:rgba(16,185,129,.3)}.notif.err{border-color:rgba(239,68,68,.3)}
 
-/* ============================================================
-   MODE: JARVIS extra orb center stage
-   ============================================================ */
-body.jarvis-mode .r-orb { width: 90px; height: 90px; }
-body.jarvis-mode .main-input { border-radius: 4px; }
-body.jarvis-mode .chat-area { background: linear-gradient(180deg, var(--ink) 0%, rgba(5,5,20,1) 100%); }
-body.jarvis-mode .msg.aura .msg-bubble { border-color: rgba(0,212,255,0.2); }
+/* Empty */
+.empty-st{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:8px;color:var(--t3);font-family:var(--fm);font-size:.74rem;letter-spacing:1px}
+.empty-ico{font-size:1.8rem;opacity:.3}
+.sec-lbl{font-family:var(--fm);font-size:.5rem;letter-spacing:3px;color:var(--t4);text-transform:uppercase;margin:10px 0 6px}
 
-/* ============================================================
-   MODE: DEVELOPER — show extra badges
-   ============================================================ */
-body.developer-mode .tag-conf,
-body.developer-mode .tag-agent { display: inline-flex; }
-
-/* ============================================================
-   MODE: MINIMAL — hide right panel, collapse extras
-   ============================================================ */
-body.minimal-mode .r-panel { display: none !important; }
-body.minimal-mode .chips-row { display: none; }
-
-/* ============================================================
-   NOTIFICATIONS
-   ============================================================ */
-.notif {
-  position: fixed;
-  bottom: 24px; right: 24px;
-  padding: 12px 20px;
-  background: var(--surface2);
-  border: 1px solid var(--rim);
-  border-radius: 12px;
-  font-size: 0.83rem;
-  color: var(--t1);
-  z-index: 999;
-  animation: notifIn 0.3s var(--ease);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 320px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+/* Responsive */
+@media(max-width:860px){
+  .sidebar{position:absolute;height:100%;transform:translateX(-100%);transition:transform .32s var(--ease);width:var(--sb-ico);min-width:var(--sb-ico)}
+  .sidebar.mob-open{transform:translateX(0)}
+  .sidebar.mob-open.expanded{width:var(--sb-w);min-width:var(--sb-w)}
+  .r-panel{display:none!important}.msg{max-width:90%}
+  html,body{cursor:auto}#cur,#cur-dot{display:none}
 }
-@keyframes notifIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-.notif.ok   { border-color: rgba(34,211,160,0.3); }
-.notif.err  { border-color: rgba(244,63,94,0.3);  }
-.notif.info { border-color: rgba(108,53,222,0.3); }
+@media(max-width:520px){.chat-area{padding:12px}.input-area{padding:10px 12px 14px}.panel-view{padding:12px}}
 
-/* ============================================================
-   EMPTY STATES
-   ============================================================ */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  gap: 10px;
-  color: var(--t3);
-  font-size: 0.85rem;
-}
-.empty-icon { font-size: 2.5rem; opacity: 0.5; }
-
-/* ============================================================
-   SCROLLABLE WRAPPER UTILITY
-   ============================================================ */
-.scroll-wrap {
-  flex: 1;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scroll-c) transparent;
-}
-
-/* ============================================================
-   RESPONSIVE
-   ============================================================ */
-@media (max-width: 860px) {
-  .sidebar { position: absolute; height: 100%; z-index: 200; transform: translateX(-100%); transition: transform var(--t-mid) var(--ease); }
-  .sidebar.mob-open { transform: translateX(0); }
-  .sidebar.collapsed { width: var(--sidebar-w); min-width: var(--sidebar-w); }
-  .r-panel { display: none !important; }
-  .msg { max-width: 92%; }
-}
-@media (max-width: 520px) {
-  .chat-area { padding: 14px 14px; }
-  .input-area { padding: 10px 14px 14px; }
-  .panel-view { padding: 14px 14px; }
-  .send-btn { padding: 12px 16px; }
-}
+/* Mode overrides */
+body.minimal-mode .r-panel{display:none!important}
+body.minimal-mode .chips-row{display:none}
+body.minimal-mode .msg-meta .tag{display:none}
+body.jarvis-mode .rpo{width:88px;height:88px}
+body.jarvis-mode .chat-area{background:radial-gradient(ellipse at 50% 100%,rgba(123,63,228,.04),transparent 70%)}
 </style>
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════════════════════
-     LEFT SIDEBAR
-     ══════════════════════════════════════════════════════════ -->
-<aside class="sidebar" id="sidebar">
+<!-- AURORA CANVAS -->
+<canvas id="aurora"></canvas>
+<div class="hex-grid"></div>
+<div class="vignette"></div>
 
-  <div class="s-logo" onclick="toggleSidebar()" title="Toggle sidebar">
-    <div class="orb-mini"></div>
-    <div class="s-logo-text">
-      <h1>A U R A</h1>
-      <p>AUTONOMOUS · UNIVERSAL · RESPONSIVE</p>
+<!-- CUSTOM CURSOR -->
+<div id="cur"></div>
+<div id="cur-dot"></div>
+
+<!-- BOOT SCREEN -->
+<div id="boot">
+  <div class="boot-orb"></div>
+  <div class="boot-name">AURA</div>
+  <div class="boot-line" id="boot-line">&nbsp;</div>
+  <div class="boot-bar-wrap"><div class="boot-bar"></div></div>
+  <div class="boot-ver">NEURAL COMMAND CENTER v6.0 &nbsp;·&nbsp; HASSAN SAEED / AURA AI &nbsp;·&nbsp; HAZARA UNIVERSITY</div>
+</div>
+
+<!-- APP SHELL -->
+<div class="shell">
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="s-logo" onclick="toggleSb()">
+    <div class="logo-orb-wrap">
+      <div class="logo-orb">
+        <div class="lo-c"></div><div class="lo-i"></div><div class="lo-s"></div>
+        <div class="lo-r1"></div><div class="lo-r2"></div><div class="lo-ping"></div>
+      </div>
+    </div>
+    <div class="logo-txt">
+      <div class="logo-name">AURA</div>
+      <div class="logo-sub">Neural · Autonomous · Intelligence</div>
     </div>
   </div>
 
-  <div class="mode-badge" onclick="showView('settings', null); scrollToModeSettings()" id="modeBadge">
-    <div class="mode-dot"></div>
-    <span id="modeLabel">SMART MODE</span>
+  <div class="s-pill" onclick="showView('settings',null);scrollToModes()">
+    <span class="s-pill-ico">◉</span>
+    <span class="live-d"></span>
+    <span class="s-pill-txt" id="modePill">SMART MODE</span>
   </div>
 
   <nav class="s-nav">
-    <div class="s-section">INTERFACE</div>
-    <div class="nav-item active" onclick="showView('chat', this)">
-      <span class="nav-icon">💬</span>
-      <span class="nav-label">Chat</span>
-    </div>
-    <div class="nav-item" onclick="showView('memory', this)">
-      <span class="nav-icon">🧠</span>
-      <span class="nav-label">Memory</span>
-    </div>
-    <div class="nav-item" onclick="showView('intelligence', this)">
-      <span class="nav-icon">⚡</span>
-      <span class="nav-label">Intelligence</span>
-    </div>
-    <div class="nav-item" onclick="showView('autonomy', this)">
-      <span class="nav-icon">🤖</span>
-      <span class="nav-label">Autonomy</span>
-    </div>
-    <div class="nav-item" onclick="showView('tasks', this)">
-      <span class="nav-icon">✅</span>
-      <span class="nav-label">Tasks & Reminders</span>
-      <span class="nav-badge" id="taskBadge">0</span>
-    </div>
-    <div class="s-section">SYSTEM</div>
-    <div class="nav-item" onclick="showView('history', this)">
-      <span class="nav-icon">📋</span>
-      <span class="nav-label">History</span>
-    </div>
-    <div class="nav-item" onclick="showView('settings', this)">
-      <span class="nav-icon">⚙️</span>
-      <span class="nav-label">Settings</span>
-    </div>
-    <div class="s-section">ACCOUNT</div>
-    <div class="nav-item" onclick="window.location.href='/login'">
-      <span class="nav-icon">🔐</span>
-      <span class="nav-label">Login</span>
-    </div>
-    <div class="nav-item" onclick="window.location.href='/register'">
-      <span class="nav-icon">✨</span>
-      <span class="nav-label">Register</span>
-    </div>
-    <div class="nav-item" onclick="doLogout()">
-      <span class="nav-icon">🚪</span>
-      <span class="nav-label">Logout</span>
-    </div>
+    <div class="nav-grp"><span class="grp-txt">Interface</span></div>
+    <div class="nav-item active" onclick="showView('chat',this)"><div class="nav-ico">💬</div><span class="nav-lbl">Chat</span></div>
+    <div class="nav-item" onclick="showView('memory',this)"><div class="nav-ico">🧠</div><span class="nav-lbl">Memory</span></div>
+    <div class="nav-item" onclick="showView('intelligence',this)"><div class="nav-ico">⚡</div><span class="nav-lbl">Intelligence</span></div>
+    <div class="nav-item" onclick="showView('autonomy',this)"><div class="nav-ico">🤖</div><span class="nav-lbl">Autonomy</span></div>
+    <div class="nav-item" onclick="showView('tasks',this)"><div class="nav-ico">✅</div><span class="nav-lbl">Tasks & Reminders</span><span class="nav-ct" id="taskBadge">0</span></div>
+    <div class="nav-grp"><span class="grp-txt">System</span></div>
+    <div class="nav-item" onclick="showView('history',this)"><div class="nav-ico">📋</div><span class="nav-lbl">History</span></div>
+    <div class="nav-item" onclick="showView('settings',this)"><div class="nav-ico">⚙️</div><span class="nav-lbl">Settings</span></div>
+    <div class="nav-grp"><span class="grp-txt">Account</span></div>
+    <div class="nav-item" onclick="location.href='/login'"><div class="nav-ico">🔐</div><span class="nav-lbl">Login</span></div>
+    <div class="nav-item" onclick="location.href='/register'"><div class="nav-ico">✨</div><span class="nav-lbl">Register</span></div>
+    <div class="nav-item" onclick="doLogout()"><div class="nav-ico">🚪</div><span class="nav-lbl">Logout</span></div>
   </nav>
 
   <div class="s-user">
-    <div class="avatar" id="s-avatar">G</div>
-    <div class="u-info">
-      <div class="u-name" id="s-name">Guest</div>
-      <div class="u-plan" id="s-plan">FREE PLAN</div>
-    </div>
+    <div class="avatar-wrap"><div class="avatar" id="s-av">G</div></div>
+    <div class="u-info"><div class="u-name" id="s-name">Guest</div><div class="u-plan" id="s-plan">FREE PLAN</div></div>
   </div>
-
 </aside>
 
-<!-- ══════════════════════════════════════════════════════════
-     MAIN WRAPPER
-     ══════════════════════════════════════════════════════════ -->
+<!-- MAIN -->
 <div class="main-wrap">
-
-  <!-- Topbar -->
   <header class="topbar">
-    <button class="tb-toggle" onclick="toggleSidebar()" title="Toggle sidebar">☰</button>
-    <span class="tb-title" id="tb-title">💬 AURA Chat</span>
-
+    <button class="tb-expand" onclick="toggleSb()">☰</button>
+    <div class="tb-orb-wrap"><div class="tb-orb"></div><div class="tb-orb-ring"></div></div>
+    <div class="tb-title"><em>//</em> <span id="tb-title">AURA NEURAL CHAT</span></div>
+    <div class="tb-clock" id="tb-clock">00:00:00</div>
     <div class="tb-right">
-      <div class="orb-status">
-        <div class="orb-dot-sm" id="topDot"></div>
-        <span id="topState">IDLE</span>
-      </div>
-      <select class="tb-select" id="langSel" onchange="setLang(this.value)">
-        <option value="auto">🌐 Auto</option>
-        <option value="english">🇬🇧 English</option>
-        <option value="urdu">🇵🇰 Urdu</option>
+      <div class="state-chip"><div class="sp-dot" id="topDot"></div><span id="topState">IDLE</span></div>
+      <select class="tb-sel" onchange="setLang(this.value)">
+        <option value="auto">🌐 AUTO</option>
+        <option value="english">🇬🇧 EN</option>
+        <option value="urdu">🇵🇰 UR</option>
       </select>
-      <button class="tb-btn" onclick="clearChat()">🗑 Clear</button>
+      <button class="tb-btn" onclick="clearChat()">✕ CLR</button>
     </div>
   </header>
 
-  <!-- Content + Right Panel -->
   <div class="content-wrap">
-
-    <!-- ── VIEW: CHAT ── -->
+    <!-- CHAT -->
     <div class="view active" id="view-chat">
       <div class="chat-area" id="chatArea">
-        <!-- Welcome message -->
-        <div class="msg aura">
-          <div class="msg-meta">
-            <span class="msg-label">AURA</span>
-            <span class="tag tag-ok">● ONLINE</span>
+        <div class="welcome">
+          <div class="wc-tl"></div><div class="wc-tr"></div><div class="wc-bl"></div><div class="wc-br"></div>
+          <div class="w-orb">
+            <div class="wo-glow"></div><div class="wo-r3"></div><div class="wo-r2"></div><div class="wo-r1"></div>
+            <div class="wo-p1"></div><div class="wo-p2"></div>
+            <div class="wo-core"></div><div class="wo-inner"></div><div class="wo-shine"></div>
           </div>
+          <div class="w-title">A &nbsp; U &nbsp; R &nbsp; A</div>
+          <div class="w-sub">Neural Command Center &nbsp;·&nbsp; AI Operating System &nbsp;·&nbsp; v6.0</div>
+          <div class="w-badges">
+            <div class="w-badge"><i style="--d:0s"></i>Understanding</div>
+            <div class="w-badge"><i style="--d:.4s"></i>Reasoning</div>
+            <div class="w-badge"><i style="--d:.8s"></i>Planning</div>
+            <div class="w-badge"><i style="--d:1.2s"></i>Executing</div>
+            <div class="w-badge"><i style="--d:1.6s"></i>Remembering</div>
+          </div>
+        </div>
+        <div class="msg aura">
+          <div class="msg-meta"><span class="msg-who">AURA</span><span class="tag t-ok">● ONLINE</span></div>
           <div class="msg-bubble">
-            Welcome. I am <strong>AURA</strong> — your AI operating system. I understand natural language, remember context, reason through complex requests, plan multi-step tasks, and improve over time.<br><br>
-            Ask me anything — study, code, write, research, translate, analyze, or just have a conversation.
+            Welcome. I am <strong>AURA</strong> — your AI operating system. I understand natural language, remember your context, reason through complex requests, plan multi-step tasks, and improve over time.<br><br>
+            Ask me anything — study, code, write, research, translate, analyze, or just have a conversation. I handle messy input, multi-commands, and more.
           </div>
         </div>
       </div>
-
-      <!-- Chips -->
       <div class="chips-row" id="chipsRow">
         <span class="chip" onclick="sendChip('What is machine learning?')">📚 Machine Learning</span>
         <span class="chip" onclick="sendChip('What is the weather in Islamabad today?')">🌤 Weather</span>
@@ -1461,1118 +812,794 @@ body.minimal-mode .chips-row { display: none; }
         <span class="chip" onclick="sendChip('Generate a secure password for me')">🔐 Password</span>
         <span class="chip" onclick="sendChip('Latest news from Pakistan')">📰 Pakistan News</span>
         <span class="chip" onclick="sendChip('Give me a powerful motivation quote')">💭 Quote</span>
-        <span class="chip" onclick="sendChip('Convert 100 USD to PKR today')">💱 Currency</span>
+        <span class="chip" onclick="sendChip('Convert 100 USD to PKR')">💱 Currency</span>
         <span class="chip" onclick="sendChip('Write a professional email to my professor requesting an extension')">📧 Email Draft</span>
         <span class="chip" onclick="sendChip('Create a quiz on Python basics')">🎯 Python Quiz</span>
         <span class="chip" onclick="sendChip('Help me make a fitness plan for beginners')">💪 Fitness Plan</span>
       </div>
-
-      <!-- Input -->
       <div class="input-area">
         <div class="voice-bar">
-          <button class="v-btn" id="micBtn" onclick="toggleVoice()">🎤 Speak</button>
-          <button class="v-btn" onclick="stopAudio()" style="color:var(--err);border-color:rgba(244,63,94,0.3)">🛑 Stop</button>
-          <span class="v-status" id="vStatus">Click mic to speak</span>
+          <button class="v-btn" id="micBtn" onclick="toggleVoice()">🎤 SPEAK</button>
+          <button class="v-btn" onclick="stopAudio()" style="color:var(--err);border-color:rgba(239,68,68,.35)">⏹ STOP</button>
+          <span class="v-status" id="vStatus">— click mic to activate voice mode —</span>
         </div>
         <div class="input-row">
-          <input type="text" class="main-input" id="userInput"
-            placeholder="Ask AURA anything — it understands messy input, multi-commands, and more..."
-            onkeypress="if(event.key==='Enter') sendMessage()">
-          <button class="send-btn" onclick="sendMessage()">Send</button>
+          <input class="main-input" type="text" id="userInput"
+            placeholder="Ask AURA anything — reasoning, planning, research, code, analysis..."
+            onkeypress="if(event.key==='Enter')sendMsg()">
+          <button class="send-btn" onclick="sendMsg()">SEND ›</button>
         </div>
       </div>
     </div>
 
-    <!-- ── VIEW: MEMORY ── -->
+    <!-- MEMORY -->
     <div class="view" id="view-memory">
       <div class="panel-view">
-        <div class="view-header">
-          <h2>🧠 Memory System</h2>
-          <p>What AURA has learned about you and your usage patterns</p>
-        </div>
-
-        <div class="cards-grid">
+        <div class="view-hdr"><h2>🧠 Memory System</h2><p>// what aura has learned about you · personalization · usage patterns</p></div>
+        <div class="card-grid">
           <div class="card card-holo">
-            <div class="card-title">USER PROFILE</div>
-            <div class="mem-list">
-              <div class="mem-item"><span class="mem-icon">👤</span><span class="mem-key">NAME</span><span class="mem-val" id="mem-name">Guest</span></div>
-              <div class="mem-item"><span class="mem-icon">🗓</span><span class="mem-key">SINCE</span><span class="mem-val" id="mem-since">Today</span></div>
-              <div class="mem-item"><span class="mem-icon">💬</span><span class="mem-key">MSGS</span><span class="mem-val" id="mem-msgs">0</span></div>
-              <div class="mem-item"><span class="mem-icon">🌍</span><span class="mem-key">LANG</span><span class="mem-val" id="mem-lang">Auto</span></div>
-            </div>
+            <div class="ct">User Profile</div>
+            <div class="mi"><span class="mi-ico">👤</span><span class="mi-k">Name</span><span class="mi-v" id="mem-name">Guest</span></div>
+            <div class="mi"><span class="mi-ico">📅</span><span class="mi-k">Since</span><span class="mi-v" id="mem-since">—</span></div>
+            <div class="mi"><span class="mi-ico">💬</span><span class="mi-k">Messages</span><span class="mi-v" id="mem-msgs">0</span></div>
+            <div class="mi"><span class="mi-ico">🌍</span><span class="mi-k">Language</span><span class="mi-v" id="mem-lang">Auto</span></div>
           </div>
           <div class="card card-holo">
-            <div class="card-title">LEARNED INTERESTS</div>
-            <div class="mem-list" id="mem-interests">
-              <div class="mem-item"><span class="mem-icon">📚</span><span class="mem-val">Study & Research</span></div>
-              <div class="mem-item"><span class="mem-icon">💻</span><span class="mem-val">Coding & Tech</span></div>
-              <div class="mem-item"><span class="mem-icon">📰</span><span class="mem-val">Current News</span></div>
-            </div>
+            <div class="ct">Learned Interests</div>
+            <div class="mi"><span class="mi-ico">📚</span><span class="mi-v">Study & Research</span></div>
+            <div class="mi"><span class="mi-ico">💻</span><span class="mi-v">Coding & Technology</span></div>
+            <div class="mi"><span class="mi-ico">📰</span><span class="mi-v">Current Events</span></div>
           </div>
           <div class="card">
-            <div class="card-title">TOP INTENTS USED</div>
-            <div id="intentBars">
-              <div class="intent-bar"><span class="intent-name">Study</span><div class="bar-track"><div class="bar-fill" style="width:78%"></div></div><span class="intent-pct">78%</span></div>
-              <div class="intent-bar"><span class="intent-name">Research</span><div class="bar-track"><div class="bar-fill" style="width:60%"></div></div><span class="intent-pct">60%</span></div>
-              <div class="intent-bar"><span class="intent-name">Coding</span><div class="bar-track"><div class="bar-fill" style="width:45%"></div></div><span class="intent-pct">45%</span></div>
-              <div class="intent-bar"><span class="intent-name">Weather</span><div class="bar-track"><div class="bar-fill" style="width:30%"></div></div><span class="intent-pct">30%</span></div>
-              <div class="intent-bar"><span class="intent-name">Jokes</span><div class="bar-track"><div class="bar-fill" style="width:20%"></div></div><span class="intent-pct">20%</span></div>
-            </div>
+            <div class="ct">Top Intents</div>
+            <div class="ib"><span class="ib-n">Study</span><div class="bt"><div class="bf" style="width:78%"></div></div><span class="ib-p">78%</span></div>
+            <div class="ib"><span class="ib-n">Research</span><div class="bt"><div class="bf" style="width:60%"></div></div><span class="ib-p">60%</span></div>
+            <div class="ib"><span class="ib-n">Coding</span><div class="bt"><div class="bf" style="width:45%"></div></div><span class="ib-p">45%</span></div>
+            <div class="ib"><span class="ib-n">Weather</span><div class="bt"><div class="bf" style="width:30%"></div></div><span class="ib-p">30%</span></div>
+            <div class="ib"><span class="ib-n">Jokes</span><div class="bt"><div class="bf" style="width:20%"></div></div><span class="ib-p">20%</span></div>
           </div>
           <div class="card">
-            <div class="card-title">GREETING PREVIEW</div>
-            <div style="font-size:0.9rem;color:var(--t2);line-height:1.7;font-style:italic" id="greetPreview">
-              "Welcome back! Based on your usage, I've prepared research and study tools for you. What would you like to explore today?"
-            </div>
+            <div class="ct">Greeting Preview</div>
+            <div style="font-size:.83rem;color:var(--t2);line-height:1.9;font-style:italic;position:relative;z-index:1">"Welcome back. Based on your history, I have prepared study and research tools. What would you like to explore today?"</div>
           </div>
         </div>
-
-        <div class="card" style="margin-top:4px">
-          <div class="card-title">MEMORY INSIGHTS</div>
-          <div class="mem-list">
-            <div class="mem-item"><span class="mem-icon">🔁</span><span class="mem-key">PATTERN</span><span class="mem-val">Most active in evenings. Prefers concise answers with examples.</span></div>
-            <div class="mem-item"><span class="mem-icon">📈</span><span class="mem-key">GROWTH</span><span class="mem-val">Interaction quality improved 23% over last 30 sessions.</span></div>
-            <div class="mem-item"><span class="mem-icon">🎯</span><span class="mem-key">NEXT</span><span class="mem-val">AURA will proactively suggest study materials based on your history.</span></div>
-          </div>
+        <div class="card">
+          <div class="ct">Memory Insights</div>
+          <div class="mi"><span class="mi-ico">🔁</span><span class="mi-k">Pattern</span><span class="mi-v">Most active evenings. Prefers concise answers with examples.</span></div>
+          <div class="mi"><span class="mi-ico">📈</span><span class="mi-k">Growth</span><span class="mi-v">Interaction quality improved 23% over last 30 sessions.</span></div>
+          <div class="mi"><span class="mi-ico">🎯</span><span class="mi-k">Next</span><span class="mi-v">AURA will proactively suggest materials based on your history.</span></div>
         </div>
       </div>
     </div>
 
-    <!-- ── VIEW: INTELLIGENCE ── -->
+    <!-- INTELLIGENCE -->
     <div class="view" id="view-intelligence">
       <div class="panel-view">
-        <div class="view-header">
-          <h2>⚡ Intelligence Core</h2>
-          <p>AURA's reasoning, intent detection, and self-improvement systems</p>
-        </div>
-
-        <div class="intel-grid">
+        <div class="view-hdr"><h2>⚡ Intelligence Core</h2><p>// reasoning · intent detection · confidence · self-improvement</p></div>
+        <div class="card-grid">
           <div class="card card-holo">
-            <div class="card-title">CONFIDENCE SCORE</div>
-            <div style="
-              width: 90px; height: 90px;
-              border-radius: 50%;
-              background: conic-gradient(var(--violet) 75%, var(--ink3) 0);
-              display: flex; align-items: center; justify-content: center;
-              margin: 0 auto 14px; position: relative;
-            ">
-              <div style="
-                width: 70px; height: 70px; border-radius: 50%;
-                background: var(--surface);
-                display: flex; align-items: center; justify-content: center;
-                font-family: var(--f-mono); font-size: 1.1rem; font-weight: 700;
-                color: var(--t1);
-              " id="confScore">75%</div>
+            <div class="ct">Confidence Score</div>
+            <div class="cr">
+              <svg width="90" height="90" style="position:absolute;inset:0;transform:rotate(-90deg)">
+                <circle cx="45" cy="45" r="38" fill="none" stroke="rgba(123,63,228,.1)" stroke-width="5"/>
+                <circle id="confCircle" cx="45" cy="45" r="38" fill="none" stroke="url(#cg)" stroke-width="5" stroke-linecap="round" stroke-dasharray="238.76" stroke-dashoffset="59.69"/>
+                <defs><linearGradient id="cg" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#7B3FE4"/><stop offset="100%" stop-color="#2DD4BF"/></linearGradient></defs>
+              </svg>
+              <div class="cr-v" id="confScore">75%</div>
             </div>
-            <div style="text-align:center;font-size:0.75rem;color:var(--t3)">Last intent detection</div>
+            <div style="text-align:center;font-size:.58rem;color:var(--t3);font-family:var(--fm);position:relative;z-index:1">LAST INTENT CONFIDENCE</div>
           </div>
-
           <div class="card">
-            <div class="card-title">CURRENT STATE</div>
-            <div class="status-item"><span class="status-key">LAST INTENT</span><span class="tag s-info" id="lastIntent">general</span></div>
-            <div class="status-item"><span class="status-key">ACTIVE AGENT</span><span class="status-val" id="activeAgent">—</span></div>
-            <div class="status-item"><span class="status-key">REASONING</span><span class="tag s-ok">ACTIVE</span></div>
-            <div class="status-item"><span class="status-key">MEMORY</span><span class="tag s-ok">CONNECTED</span></div>
-            <div class="status-item"><span class="status-key">MULTI-CMD</span><span class="tag s-ok">ENABLED</span></div>
+            <div class="ct">Current State</div>
+            <div class="dr"><span class="dk">LAST INTENT</span><span class="sb sb-inf" id="lastIntent">general</span></div>
+            <div class="dr"><span class="dk">ACTIVE AGENT</span><span class="dv" id="activeAgent">—</span></div>
+            <div class="dr"><span class="dk">REASONING</span><span class="sb sb-ok">ACTIVE</span></div>
+            <div class="dr"><span class="dk">MEMORY</span><span class="sb sb-ok">CONNECTED</span></div>
+            <div class="dr"><span class="dk">MULTI-CMD</span><span class="sb sb-ok">ENABLED</span></div>
           </div>
         </div>
-
         <div class="card card-holo">
-          <div class="card-title">SELF-IMPROVEMENT LOG</div>
-          <div style="display:flex;flex-direction:column;gap:8px" id="improveLog">
-            <div class="log-entry log-ok"><span class="log-time">NOW</span><span class="log-msg">Intent routing accuracy at 94.2%. Messy-input normalization active.</span></div>
-            <div class="log-entry log-ok"><span class="log-time">5m</span><span class="log-msg">Memory context successfully injected into last response.</span></div>
-            <div class="log-entry log-warn"><span class="log-time">12m</span><span class="log-msg">Low confidence (42%) on ambiguous query — fallback to clarification mode.</span></div>
-            <div class="log-entry log-ok"><span class="log-time">18m</span><span class="log-msg">Multi-command split successful: 2 agents invoked in parallel.</span></div>
-            <div class="log-entry log-err"><span class="log-time">25m</span><span class="log-msg">Weather API timeout — fallback response generated. Logged for retry.</span></div>
-          </div>
+          <div class="ct">Self-Improvement Log</div>
+          <div class="le ok"><span class="le-t">NOW</span><span class="le-m">Intent routing accuracy at 94.2%. Messy-input normalization active.</span></div>
+          <div class="le ok"><span class="le-t">5m</span><span class="le-m">Memory context successfully injected into last response.</span></div>
+          <div class="le warn"><span class="le-t">12m</span><span class="le-m">Low confidence (42%) on ambiguous query — fallback to clarification mode.</span></div>
+          <div class="le ok"><span class="le-t">18m</span><span class="le-m">Multi-command split successful: 2 agents invoked in parallel.</span></div>
+          <div class="le err"><span class="le-t">25m</span><span class="le-m">Weather API timeout — fallback response generated. Logged for retry.</span></div>
         </div>
-
-        <div class="intel-grid">
-          <div class="card">
-            <div class="card-title">AGENT REGISTRY</div>
-            <div class="status-item"><span class="status-key">TOTAL AGENTS</span><span class="status-val">25+</span></div>
-            <div class="status-item"><span class="status-key">LIVE AGENTS</span><span class="tag s-ok">18</span></div>
-            <div class="status-item"><span class="status-key">STANDBY</span><span class="tag s-warn">7</span></div>
-            <div class="status-item"><span class="status-key">ERROR STATE</span><span class="tag s-err">0</span></div>
+        <div class="card-grid">
+          <div class="card"><div class="ct">Agent Registry</div>
+            <div class="dr"><span class="dk">TOTAL AGENTS</span><span class="dv">25+</span></div>
+            <div class="dr"><span class="dk">LIVE</span><span class="sb sb-ok">18</span></div>
+            <div class="dr"><span class="dk">STANDBY</span><span class="sb sb-warn">7</span></div>
+            <div class="dr"><span class="dk">ERROR STATE</span><span class="sb sb-ok">0</span></div>
           </div>
-          <div class="card">
-            <div class="card-title">MODEL INFO</div>
-            <div class="status-item"><span class="status-key">BASE MODEL</span><span class="status-val">Llama 3.3 70B</span></div>
-            <div class="status-item"><span class="status-key">ORCHESTRATOR</span><span class="tag s-ok">ONLINE</span></div>
-            <div class="status-item"><span class="status-key">VERSION</span><span class="status-val">1.0.0</span></div>
-            <div class="status-item"><span class="status-key">DEVELOPER</span><span class="status-val">Hassan Saeed</span></div>
+          <div class="card"><div class="ct">Model Info</div>
+            <div class="dr"><span class="dk">BASE MODEL</span><span class="dv">Llama 3.3 70B</span></div>
+            <div class="dr"><span class="dk">ORCHESTRATOR</span><span class="sb sb-ok">ONLINE</span></div>
+            <div class="dr"><span class="dk">VERSION</span><span class="dv">1.0.0</span></div>
+            <div class="dr"><span class="dk">DEVELOPER</span><span class="dv">Hassan Saeed</span></div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ── VIEW: AUTONOMY ── -->
+    <!-- AUTONOMY -->
     <div class="view" id="view-autonomy">
       <div class="panel-view">
-        <div class="view-header">
-          <h2>🤖 Autonomy Engine</h2>
-          <p>Real-time planning, execution, tool selection, and progress tracking</p>
-        </div>
-
-        <div class="card">
-          <div class="card-title">EXECUTION PROGRESS</div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-            <span style="font-size:0.8rem;color:var(--t2)">Task: Research & summarize AI trends</span>
-            <span style="font-family:var(--f-mono);font-size:0.72rem;color:var(--cyan)">60%</span>
+        <div class="view-hdr"><h2>🤖 Autonomy Engine</h2><p>// planning · execution · tool selection · progress tracking</p></div>
+        <div class="card"><div class="ct">Execution Progress</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;position:relative;z-index:1">
+            <span style="font-size:.72rem;color:var(--t2);font-family:var(--fm)">TASK: Research &amp; summarize AI trends</span>
+            <span style="font-family:var(--fm);font-size:.66rem;color:var(--chi)">60%</span>
           </div>
-          <div class="exec-progress"><div class="exec-progress-fill" style="width:60%"></div></div>
+          <div class="ep" style="position:relative;z-index:1"><div class="ep-f" style="width:60%"></div></div>
         </div>
-
         <div class="card card-holo">
-          <div class="card-title">EXECUTION TIMELINE</div>
-          <div class="exec-timeline">
-            <div class="exec-step">
-              <div class="step-left">
-                <div class="step-circle done">✓</div>
-                <div class="step-line done"></div>
-              </div>
-              <div class="step-body">
-                <div class="step-title">Intent Detection</div>
-                <div class="step-detail">Identified research task with web search and summarization requirements.</div>
-                <span class="step-tool">🔍 intent_classifier</span>
-              </div>
-            </div>
-            <div class="exec-step">
-              <div class="step-left">
-                <div class="step-circle done">✓</div>
-                <div class="step-line done"></div>
-              </div>
-              <div class="step-body">
-                <div class="step-title">Plan Generated</div>
-                <div class="step-detail">Created 4-step execution plan: search → fetch → analyze → summarize.</div>
-                <span class="step-tool">🧭 planner_agent</span>
-              </div>
-            </div>
-            <div class="exec-step">
-              <div class="step-left">
-                <div class="step-circle active">⟳</div>
-                <div class="step-line"></div>
-              </div>
-              <div class="step-body">
-                <div class="step-title">Web Search & Fetch</div>
-                <div class="step-detail">Fetching top sources. 3 of 5 pages retrieved.</div>
-                <span class="step-tool">🌐 web_search_agent</span>
-              </div>
-            </div>
-            <div class="exec-step">
-              <div class="step-left">
-                <div class="step-circle">4</div>
-                <div class="step-line"></div>
-              </div>
-              <div class="step-body">
-                <div class="step-title">Analysis & Summary</div>
-                <div class="step-detail">Pending web fetch completion.</div>
-                <span class="step-tool">📝 summarize_agent</span>
-              </div>
-            </div>
-            <div class="exec-step">
-              <div class="step-left">
-                <div class="step-circle">5</div>
-              </div>
-              <div class="step-body">
-                <div class="step-title">Response Delivery</div>
-                <div class="step-detail">Final formatted response to user.</div>
-                <span class="step-tool">📤 output_agent</span>
-              </div>
-            </div>
+          <div class="ct">Execution Timeline</div>
+          <div style="position:relative;z-index:1">
+            <div class="exec-step"><div class="es-l"><div class="es-c done">✓</div><div class="es-line done"></div></div><div class="es-body"><div class="es-title">Intent Detection</div><div class="es-detail">Identified research task with web search and summarization requirements.</div><span class="es-tag">🔍 intent_classifier</span></div></div>
+            <div class="exec-step"><div class="es-l"><div class="es-c done">✓</div><div class="es-line done"></div></div><div class="es-body"><div class="es-title">Plan Generated</div><div class="es-detail">Created 4-step execution plan: search → fetch → analyze → summarize.</div><span class="es-tag">🧭 planner_agent</span></div></div>
+            <div class="exec-step"><div class="es-l"><div class="es-c live">⟳</div><div class="es-line"></div></div><div class="es-body"><div class="es-title">Web Search &amp; Fetch</div><div class="es-detail">Fetching top sources. 3 of 5 pages retrieved.</div><span class="es-tag">🌐 web_search_agent</span></div></div>
+            <div class="exec-step"><div class="es-l"><div class="es-c">4</div><div class="es-line"></div></div><div class="es-body"><div class="es-title">Analysis &amp; Summary</div><div class="es-detail">Pending web fetch completion.</div><span class="es-tag">📝 summarize_agent</span></div></div>
+            <div class="exec-step"><div class="es-l"><div class="es-c">5</div></div><div class="es-body"><div class="es-title">Response Delivery</div><div class="es-detail">Final formatted response to user.</div><span class="es-tag">📤 output_agent</span></div></div>
           </div>
         </div>
-
-        <div class="cards-grid">
-          <div class="card">
-            <div class="card-title">TOOL SELECTION</div>
-            <div class="status-item"><span class="status-key">ACTIVE TOOLS</span><span class="status-val">web_search, summarize</span></div>
-            <div class="status-item"><span class="status-key">RETRIES</span><span class="tag s-warn">1</span></div>
-            <div class="status-item"><span class="status-key">FAILED STEPS</span><span class="tag s-ok">0</span></div>
-            <div class="status-item"><span class="status-key">AUTO-DEBUG</span><span class="tag s-ok">ON</span></div>
+        <div class="card-grid">
+          <div class="card"><div class="ct">Tool Selection</div>
+            <div class="dr"><span class="dk">ACTIVE TOOLS</span><span class="dv" style="font-size:.72rem">web_search, summarize</span></div>
+            <div class="dr"><span class="dk">RETRIES</span><span class="sb sb-warn">1</span></div>
+            <div class="dr"><span class="dk">FAILED STEPS</span><span class="sb sb-ok">0</span></div>
+            <div class="dr"><span class="dk">AUTO-DEBUG</span><span class="sb sb-ok">ON</span></div>
           </div>
-          <div class="card">
-            <div class="card-title">PLANNER STATUS</div>
-            <div class="status-item"><span class="status-key">PLANS TODAY</span><span class="status-val">3</span></div>
-            <div class="status-item"><span class="status-key">COMPLETED</span><span class="tag s-ok">2</span></div>
-            <div class="status-item"><span class="status-key">IN PROGRESS</span><span class="tag s-info">1</span></div>
-            <div class="status-item"><span class="status-key">CONFIDENCE</span><span class="status-val">88%</span></div>
+          <div class="card"><div class="ct">Planner Status</div>
+            <div class="dr"><span class="dk">PLANS TODAY</span><span class="dv">3</span></div>
+            <div class="dr"><span class="dk">COMPLETED</span><span class="sb sb-ok">2</span></div>
+            <div class="dr"><span class="dk">IN PROGRESS</span><span class="sb sb-ion">1</span></div>
+            <div class="dr"><span class="dk">CONFIDENCE</span><span class="dv">88%</span></div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ── VIEW: TASKS ── -->
+    <!-- TASKS -->
     <div class="view" id="view-tasks">
       <div class="panel-view">
-        <div class="view-header">
-          <h2>✅ Tasks & Reminders</h2>
-          <p>Manage your active tasks and scheduled reminders</p>
+        <div class="view-hdr"><h2>✅ Tasks &amp; Reminders</h2><p>// active · completed · scheduled</p></div>
+        <div class="task-add">
+          <input type="text" id="taskInput" placeholder="Add a task or reminder..." onkeypress="if(event.key==='Enter')addTask()">
+          <select id="taskPri"><option value="lo">Low</option><option value="med" selected>Medium</option><option value="hi">High</option></select>
+          <button class="add-btn" onclick="addTask()">+ ADD</button>
         </div>
-
-        <div class="tasks-add">
-          <input type="text" id="taskInput" placeholder="Add a task or reminder..." onkeypress="if(event.key==='Enter') addTask()">
-          <select id="taskPri" style="padding:10px 12px;background:var(--surface);border:1px solid var(--rim);border-radius:10px;color:var(--t1);font-family:var(--f-body);outline:none;font-size:0.82rem;">
-            <option value="lo">Low</option>
-            <option value="med" selected>Medium</option>
-            <option value="hi">High</option>
-          </select>
-          <button class="add-btn" onclick="addTask()">+ Add</button>
-        </div>
-
-        <div style="font-size:0.65rem;font-family:var(--f-mono);letter-spacing:2px;color:var(--t3);margin-bottom:10px">ACTIVE TASKS</div>
-        <div id="tasksList">
-          <!-- tasks render here -->
-        </div>
-
-        <div style="font-size:0.65rem;font-family:var(--f-mono);letter-spacing:2px;color:var(--t3);margin:16px 0 10px">COMPLETED</div>
-        <div id="doneList">
-          <!-- done tasks -->
-        </div>
+        <div class="sec-lbl">Active Tasks</div><div id="tasksList"></div>
+        <div class="sec-lbl" style="margin-top:14px">Completed</div><div id="doneList"></div>
       </div>
     </div>
 
-    <!-- ── VIEW: HISTORY ── -->
+    <!-- HISTORY -->
     <div class="view" id="view-history">
       <div class="panel-view">
-        <div class="view-header">
-          <h2>📋 Chat History</h2>
-          <p>Your complete conversation archive</p>
-        </div>
-        <div id="historyList">
-          <div class="empty-state" style="margin-top:40px">
-            <div class="empty-icon">📭</div>
-            <div>No conversation history yet.</div>
-            <div style="font-size:0.75rem;color:var(--t3)">Start chatting to see your history here.</div>
-          </div>
-        </div>
+        <div class="view-hdr"><h2>📋 Chat History</h2><p>// complete conversation archive</p></div>
+        <div id="historyList"><div class="empty-st" style="margin-top:48px"><div class="empty-ico">📭</div><div>No conversation history yet.</div></div></div>
       </div>
     </div>
 
-    <!-- ── VIEW: SETTINGS ── -->
+    <!-- SETTINGS -->
     <div class="view" id="view-settings">
       <div class="panel-view">
-        <div class="view-header">
-          <h2>⚙️ Settings</h2>
-          <p>Customize AURA's interface, behavior, and accessibility</p>
-        </div>
-
-        <!-- Interface Mode -->
+        <div class="view-hdr"><h2>⚙️ Settings</h2><p>// interface · behavior · accessibility · privacy</p></div>
         <div class="s-card" id="modeSection">
-          <h3>🎛 INTERFACE MODE</h3>
+          <h3>🎛 Interface Mode</h3>
           <div class="mode-grid">
-            <div class="mode-opt" onclick="setMode('minimal', this)">
-              <div class="mode-opt-name">Minimal</div>
-              <div class="mode-opt-desc">Clean · Focused · Accessible</div>
-            </div>
-            <div class="mode-opt sel" onclick="setMode('smart', this)" id="modeOpt-smart">
-              <div class="mode-opt-name">Smart ★</div>
-              <div class="mode-opt-desc">Balanced · Default · Elegant</div>
-            </div>
-            <div class="mode-opt" onclick="setMode('jarvis', this)">
-              <div class="mode-opt-name">Jarvis</div>
-              <div class="mode-opt-desc">Cinematic · Orb-first · Immersive</div>
-            </div>
-            <div class="mode-opt" onclick="setMode('developer', this)">
-              <div class="mode-opt-name">Developer</div>
-              <div class="mode-opt-desc">Confidence · Agent · Intent data</div>
-            </div>
-            <div class="mode-opt" onclick="setMode('autonomous', this)" style="grid-column:span 2">
-              <div class="mode-opt-name">Autonomous</div>
-              <div class="mode-opt-desc">Full plans · Execution · Tool visibility</div>
-            </div>
+            <div class="mode-opt" data-mode="minimal" onclick="setMode('minimal')"><div class="mo-n">Minimal</div><div class="mo-d">Clean · Focused</div></div>
+            <div class="mode-opt sel" data-mode="smart" onclick="setMode('smart')"><div class="mo-n">Smart ★</div><div class="mo-d">Balanced · Default</div></div>
+            <div class="mode-opt" data-mode="jarvis" onclick="setMode('jarvis')"><div class="mo-n">Jarvis</div><div class="mo-d">Cinematic · Orb</div></div>
+            <div class="mode-opt" data-mode="developer" onclick="setMode('developer')"><div class="mo-n">Developer</div><div class="mo-d">Confidence · Intent</div></div>
+            <div class="mode-opt" data-mode="autonomous" onclick="setMode('autonomous')" style="grid-column:span 2"><div class="mo-n">Autonomous</div><div class="mo-d">Full plans · Execution · Tool visibility</div></div>
           </div>
         </div>
-
         <div class="settings-grid">
-          <!-- Appearance -->
-          <div class="s-card">
-            <h3>🎨 APPEARANCE</h3>
-            <div class="s-row">
-              <div><div class="s-label">Theme</div></div>
-              <div class="s-ctrl">
-                <select onchange="setTheme(this.value)">
-                  <option value="dark">Dark</option>
-                  <option value="light">Light</option>
-                  <option value="system">System Auto</option>
-                </select>
-              </div>
-            </div>
-            <div class="s-row">
-              <div><div class="s-label">Large Text</div><div class="s-sublabel">Increase readability</div></div>
-              <div class="toggle" id="tog-large" onclick="toggleBody('large-text', 'tog-large')"></div>
-            </div>
-            <div class="s-row">
-              <div><div class="s-label">High Contrast</div><div class="s-sublabel">Enhanced visibility</div></div>
-              <div class="toggle" id="tog-hc" onclick="toggleBody('hc', 'tog-hc')"></div>
-            </div>
+          <div class="s-card"><h3>🎨 Appearance</h3>
+            <div class="s-row"><div><div class="s-lbl">Theme</div></div><div class="s-ctrl"><select onchange="setTheme(this.value)"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></div></div>
+            <div class="s-row"><div><div class="s-lbl">Large Text</div><div class="s-sub">Improve readability</div></div><div class="toggle" id="tog-big" onclick="toggleB('big','tog-big')"></div></div>
+            <div class="s-row"><div><div class="s-lbl">High Contrast</div><div class="s-sub">Enhanced visibility</div></div><div class="toggle" id="tog-hc" onclick="toggleB('hc','tog-hc')"></div></div>
           </div>
-
-          <!-- Voice -->
-          <div class="s-card">
-            <h3>🎤 VOICE</h3>
-            <div class="s-row">
-              <div class="s-label">Voice Type</div>
-              <div class="s-ctrl">
-                <select id="voiceType">
-                  <option value="female">Female (Hazel)</option>
-                  <option value="male">Male (David)</option>
-                </select>
-              </div>
-            </div>
-            <div class="s-row">
-              <div class="s-label">Speech Speed</div>
-              <div class="s-ctrl">
-                <select id="speechSpeed">
-                  <option value="0.75">Slow</option>
-                  <option value="1" selected>Normal</option>
-                  <option value="1.4">Fast</option>
-                </select>
-              </div>
-            </div>
-            <div class="s-row">
-              <div><div class="s-label">Auto Read Replies</div></div>
-              <div class="toggle" id="tog-autoread" onclick="togglePref('autoRead', 'tog-autoread')"></div>
-            </div>
+          <div class="s-card"><h3>🎤 Voice</h3>
+            <div class="s-row"><div class="s-lbl">Voice Type</div><div class="s-ctrl"><select id="voiceType"><option>Female (Hazel)</option><option>Male (David)</option></select></div></div>
+            <div class="s-row"><div class="s-lbl">Speech Speed</div><div class="s-ctrl"><select id="speechSpeed"><option value="0.75">Slow</option><option value="1" selected>Normal</option><option value="1.4">Fast</option></select></div></div>
+            <div class="s-row"><div><div class="s-lbl">Auto Read Replies</div></div><div class="toggle" id="tog-ar" onclick="toggleP('autoRead','tog-ar')"></div></div>
           </div>
-
-          <!-- Language -->
-          <div class="s-card">
-            <h3>🌍 LANGUAGE</h3>
-            <div class="s-row">
-              <div class="s-label">Response Language</div>
-              <div class="s-ctrl">
-                <select onchange="setLang(this.value)">
-                  <option value="auto">Auto Detect</option>
-                  <option value="english">English</option>
-                  <option value="urdu">اردو Urdu</option>
-                </select>
-              </div>
-            </div>
+          <div class="s-card"><h3>🌍 Language</h3>
+            <div class="s-row"><div class="s-lbl">Response Language</div><div class="s-ctrl"><select onchange="setLang(this.value)"><option value="auto">Auto Detect</option><option value="english">English</option><option value="urdu">Urdu</option></select></div></div>
           </div>
-
-          <!-- Intelligence Panels -->
-          <div class="s-card">
-            <h3>⚡ INTELLIGENCE PANEL</h3>
-            <div class="s-row">
-              <div><div class="s-label">Show Right Panel</div><div class="s-sublabel">In Smart/Dev/Auto modes</div></div>
-              <div class="toggle on" id="tog-rpanel" onclick="toggleRPanel()"></div>
-            </div>
-            <div class="s-row">
-              <div><div class="s-label">Show Confidence</div></div>
-              <div class="toggle on" id="tog-conf" onclick="togglePref('showConf','tog-conf')"></div>
-            </div>
-            <div class="s-row">
-              <div><div class="s-label">Show Agent Tags</div></div>
-              <div class="toggle on" id="tog-agent" onclick="togglePref('showAgent','tog-agent')"></div>
-            </div>
-            <div class="s-row">
-              <div><div class="s-label">Show Plan Blocks</div></div>
-              <div class="toggle on" id="tog-plans" onclick="togglePref('showPlans','tog-plans')"></div>
-            </div>
+          <div class="s-card"><h3>⚡ Intelligence Panel</h3>
+            <div class="s-row"><div><div class="s-lbl">Show Right Panel</div><div class="s-sub">Smart/Dev/Auto modes</div></div><div class="toggle on" id="tog-rp" onclick="toggleRP()"></div></div>
+            <div class="s-row"><div><div class="s-lbl">Show Confidence</div></div><div class="toggle on" id="tog-cf" onclick="toggleP('showConf','tog-cf')"></div></div>
+            <div class="s-row"><div><div class="s-lbl">Show Agent Tags</div></div><div class="toggle on" id="tog-ag" onclick="toggleP('showAgent','tog-ag')"></div></div>
+            <div class="s-row"><div><div class="s-lbl">Show Plan Blocks</div></div><div class="toggle on" id="tog-pl" onclick="toggleP('showPlans','tog-pl')"></div></div>
           </div>
-
-          <!-- Privacy -->
-          <div class="s-card">
-            <h3>🔒 PRIVACY & MEMORY</h3>
-            <div class="s-row">
-              <div><div class="s-label">Save History</div></div>
-              <div class="toggle on" id="tog-hist" onclick="togglePref('saveHist','tog-hist')"></div>
-            </div>
-            <div class="s-row">
-              <div><div class="s-label">Memory Learning</div></div>
-              <div class="toggle on" id="tog-mem" onclick="togglePref('memLearn','tog-mem')"></div>
-            </div>
-            <div class="s-row">
-              <div class="s-label">Clear All Memory</div>
-              <button onclick="clearMemory()" style="padding:5px 14px;border-radius:8px;border:1px solid rgba(244,63,94,0.3);background:rgba(244,63,94,0.08);color:var(--err);cursor:pointer;font-size:0.78rem;font-family:var(--f-body)">Clear</button>
-            </div>
+          <div class="s-card"><h3>🔒 Privacy &amp; Memory</h3>
+            <div class="s-row"><div><div class="s-lbl">Save History</div></div><div class="toggle on" id="tog-hi" onclick="toggleP('saveHist','tog-hi')"></div></div>
+            <div class="s-row"><div><div class="s-lbl">Memory Learning</div></div><div class="toggle on" id="tog-ml" onclick="toggleP('memLearn','tog-ml')"></div></div>
+            <div class="s-row"><div class="s-lbl">Clear All Memory</div><button onclick="clearMem()" style="padding:5px 12px;border:1px solid rgba(239,68,68,.3);background:var(--err-lo);color:var(--err);cursor:none;font-size:.58rem;font-family:var(--fm);letter-spacing:1.5px;text-transform:uppercase">CLEAR</button></div>
           </div>
-
-          <!-- About -->
-          <div class="s-card">
-            <h3>🤖 ABOUT AURA</h3>
-            <div class="s-row"><span class="status-key">VERSION</span><span class="status-val">1.0.0</span></div>
-            <div class="s-row"><span class="status-key">AI MODEL</span><span class="status-val">Llama 3.3 70B</span></div>
-            <div class="s-row"><span class="status-key">AGENTS</span><span class="status-val">25+</span></div>
-            <div class="s-row"><span class="status-key">DEVELOPER</span><span class="status-val">Hassan Saeed</span></div>
-            <div class="s-row"><span class="status-key">UNIVERSITY</span><span class="status-val">Hazara University</span></div>
-            <div class="s-row"><span class="status-key">COMPANY</span><span class="status-val">AURA AI</span></div>
+          <div class="s-card"><h3>🤖 About AURA</h3>
+            <div class="dr"><span class="dk">VERSION</span><span class="dv">1.0.0</span></div>
+            <div class="dr"><span class="dk">AI MODEL</span><span class="dv">Llama 3.3 70B</span></div>
+            <div class="dr"><span class="dk">AGENTS</span><span class="dv">25+</span></div>
+            <div class="dr"><span class="dk">DEVELOPER</span><span class="dv">Hassan Saeed</span></div>
+            <div class="dr"><span class="dk">UNIVERSITY</span><span class="dv">Hazara University</span></div>
+            <div class="dr"><span class="dk">COMPANY</span><span class="dv">AURA AI</span></div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ══════════════════════════════════════════════════════════
-         RIGHT INTELLIGENCE PANEL
-         ══════════════════════════════════════════════════════════ -->
-    <aside class="r-panel visible" id="rPanel">
-
-      <div class="r-orb-wrap">
-        <div class="r-orb idle" id="rOrb">
-          <div class="r-orb-ring"></div>
-          <div class="r-orb-ring2"></div>
+    <!-- RIGHT PANEL -->
+    <aside class="r-panel show" id="rPanel">
+      <div class="rp-orb-sec">
+        <div class="rpo" id="rOrb">
+          <div class="rpo-core"></div><div class="rpo-inner"></div><div class="rpo-shine"></div>
+          <div class="rpo-r1"></div><div class="rpo-r2"></div><div class="rpo-ping"></div>
         </div>
-        <div class="orb-state-label">AURA STATUS</div>
-        <div class="orb-state-val" id="orbStateLabel">Idle</div>
+        <div class="rp-state-k">AURA STATUS</div>
+        <div class="rp-state-v" id="orbLabel">Idle</div>
+        <div class="act-bars"><div class="ab"></div><div class="ab"></div><div class="ab"></div><div class="ab"></div><div class="ab"></div><div class="ab"></div><div class="ab"></div><div class="ab"></div></div>
       </div>
-
-      <div class="r-section">
-        <div class="r-section-title">ACTIVE SESSION</div>
-        <div class="r-stat-row"><span class="r-stat-key">USER</span><span class="r-stat-val" id="rp-user">Guest</span></div>
-        <div class="r-stat-row"><span class="r-stat-key">MODE</span><span class="r-stat-val" id="rp-mode">Smart</span></div>
-        <div class="r-stat-row"><span class="r-stat-key">MESSAGES</span><span class="r-stat-val" id="rp-msgs">0</span></div>
-        <div class="r-stat-row"><span class="r-stat-key">LANGUAGE</span><span class="r-stat-val" id="rp-lang">Auto</span></div>
+      <div class="rp-sec"><div class="rps-t">Active Session</div>
+        <div class="rp-row"><span class="rp-k">USER</span><span class="rp-v" id="rp-user">Guest</span></div>
+        <div class="rp-row"><span class="rp-k">MODE</span><span class="rp-v" id="rp-mode">Smart</span></div>
+        <div class="rp-row"><span class="rp-k">MESSAGES</span><span class="rp-v" id="rp-msgs">0</span></div>
+        <div class="rp-row"><span class="rp-k">LANGUAGE</span><span class="rp-v" id="rp-lang">Auto</span></div>
       </div>
-
-      <div class="r-section">
-        <div class="r-section-title">INTELLIGENCE</div>
-        <div class="r-stat-row"><span class="r-stat-key">LAST INTENT</span><span class="r-stat-val" id="rp-intent">—</span></div>
-        <div class="r-stat-row"><span class="r-stat-key">AGENT</span><span class="r-stat-val" id="rp-agent">—</span></div>
-        <div class="r-stat-row"><span class="r-stat-key">CONFIDENCE</span><span class="r-stat-val" id="rp-conf">—</span></div>
-        <div class="mini-conf-bar"><div class="mini-conf-fill" id="rp-conf-bar" style="width:0%"></div></div>
+      <div class="rp-sec"><div class="rps-t">Intelligence</div>
+        <div class="rp-row"><span class="rp-k">LAST INTENT</span><span class="rp-v" id="rp-intent">—</span></div>
+        <div class="rp-row"><span class="rp-k">AGENT</span><span class="rp-v" id="rp-agent">—</span></div>
+        <div class="rp-row"><span class="rp-k">CONFIDENCE</span><span class="rp-v" id="rp-conf">—</span></div>
+        <div class="mini-bar"><div class="mb-f" id="rp-cb" style="width:0%"></div></div>
       </div>
-
-      <div class="r-section">
-        <div class="r-section-title">MEMORY CONTEXT</div>
-        <div class="r-stat-row"><span class="r-stat-key">NAME KNOWN</span><span class="r-stat-val">Yes</span></div>
-        <div class="r-stat-row"><span class="r-stat-key">INTERESTS</span><span class="r-stat-val">3 tracked</span></div>
-        <div class="r-stat-row"><span class="r-stat-key">PATTERNS</span><span class="r-stat-val">Learning</span></div>
+      <div class="rp-sec"><div class="rps-t">Memory Context</div>
+        <div class="rp-row"><span class="rp-k">NAME KNOWN</span><span class="rp-v" style="color:var(--ok)">Yes</span></div>
+        <div class="rp-row"><span class="rp-k">INTERESTS</span><span class="rp-v">3 tracked</span></div>
+        <div class="rp-row"><span class="rp-k">PATTERNS</span><span class="rp-v">Learning</span></div>
       </div>
-
-      <div class="r-section">
-        <div class="r-section-title">SYSTEM</div>
-        <div class="r-stat-row"><span class="r-stat-key">ORCHESTRATOR</span><span class="r-stat-val" style="color:var(--ok)">Online</span></div>
-        <div class="r-stat-row"><span class="r-stat-key">REASONER</span><span class="r-stat-val" style="color:var(--ok)">Active</span></div>
-        <div class="r-stat-row"><span class="r-stat-key">PLANNER</span><span class="r-stat-val" style="color:var(--ok)">Ready</span></div>
-        <div class="r-stat-row"><span class="r-stat-key">MEMORY</span><span class="r-stat-val" style="color:var(--ok)">Connected</span></div>
+      <div class="rp-sec"><div class="rps-t">System Status</div>
+        <div class="rp-row"><span class="rp-k">ORCHESTRATOR</span><span class="rp-v" style="color:var(--ok)">Online</span></div>
+        <div class="rp-row"><span class="rp-k">REASONER</span><span class="rp-v" style="color:var(--ok)">Active</span></div>
+        <div class="rp-row"><span class="rp-k">PLANNER</span><span class="rp-v" style="color:var(--ok)">Ready</span></div>
+        <div class="rp-row"><span class="rp-k">MEMORY</span><span class="rp-v" style="color:var(--ok)">Connected</span></div>
       </div>
-
     </aside>
+  </div>
 
-  </div><!-- /content-wrap -->
-</div><!-- /main-wrap -->
-
-<!-- ============================================================
-     JAVASCRIPT ENGINE
-     ============================================================ -->
+  <!-- STATUS BAR -->
+  <div class="status-bar">
+    <div class="st-seg">AURA NEXUS</div>
+    <div class="st-seg"><div class="st-dot st-ok"></div>Connected</div>
+    <div class="st-seg">Llama 3.3 70B</div>
+    <div class="st-seg"><div class="st-dot st-ok"></div>Agents: 18/25</div>
+    <div class="st-seg">Hassan Saeed / AURA AI</div>
+    <div class="st-seg">Hazara University</div>
+    <div class="st-flex"></div>
+    <div class="st-r">v1.0.0</div>
+    <div class="st-r">Ctrl+/ to focus</div>
+  </div>
+</div>
+</div>
 <script>
 'use strict';
-/* ── State ── */
-const State = {
-  mode:      localStorage.getItem('aura_mode')     || 'smart',
-  theme:     localStorage.getItem('aura_theme')    || 'dark',
-  lang:      localStorage.getItem('aura_lang')     || 'auto',
-  msgCount:  parseInt(localStorage.getItem('aura_msgs') || '0'),
-  sidebarCollapsed: false,
-  orbState:  'idle',
-  isRecording: false,
-  recognition: null,
+/* ═══════════════════════════════════════
+   AURORA CANVAS
+   ═══════════════════════════════════════ */
+(function(){
+  const canvas = document.getElementById('aurora');
+  const ctx = canvas.getContext('2d');
+  let W, H, t = 0;
+  const waves = [
+    { color: [123,63,228],  amp: 90,  freq: 0.0025, speed: 0.0004, yRatio: 0.35 },
+    { color: [45,212,191],  amp: 65,  freq: 0.003,  speed: 0.0006, yRatio: 0.55 },
+    { color: [167,139,250], amp: 110, freq: 0.002,  speed: 0.0003, yRatio: 0.42 },
+    { color: [123,63,228],  amp: 50,  freq: 0.004,  speed: 0.0008, yRatio: 0.65 },
+  ];
+
+  function resize() { W = canvas.width = innerWidth; H = canvas.height = innerHeight; }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    waves.forEach(function(w) {
+      ctx.beginPath();
+      ctx.moveTo(0, H);
+      for (var x = 0; x <= W; x += 3) {
+        var y = w.yRatio * H + Math.sin(x * w.freq + t * w.speed * 1000) * w.amp;
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(W, H);
+      ctx.closePath();
+      var grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, 'rgba(' + w.color.join(',') + ',0.055)');
+      grad.addColorStop(0.5, 'rgba(' + w.color.join(',') + ',0.028)');
+      grad.addColorStop(1, 'rgba(' + w.color.join(',') + ',0)');
+      ctx.fillStyle = grad;
+      ctx.fill();
+    });
+    t++;
+    requestAnimationFrame(draw);
+  }
+  resize(); draw();
+  window.addEventListener('resize', resize);
+})();
+
+/* ═══════════════════════════════════════
+   CUSTOM CURSOR
+   ═══════════════════════════════════════ */
+(function(){
+  var cur = document.getElementById('cur');
+  var dot = document.getElementById('cur-dot');
+  var mx = 0, my = 0, dx = 0, dy = 0;
+  document.addEventListener('mousemove', function(e) { mx = e.clientX; my = e.clientY; });
+  function tick() {
+    dx += (mx - dx) * 0.12;
+    dy += (my - dy) * 0.12;
+    if (cur) { cur.style.left = mx + 'px'; cur.style.top = my + 'px'; }
+    if (dot) { dot.style.left = dx + 'px'; dot.style.top = dy + 'px'; }
+    requestAnimationFrame(tick);
+  }
+  tick();
+})();
+
+/* ═══════════════════════════════════════
+   BOOT SEQUENCE
+   ═══════════════════════════════════════ */
+(function(){
+  var lines = [
+    'Initializing neural core...',
+    'Loading 25 autonomous agents...',
+    'Connecting memory system...',
+    'Calibrating intent classifier...',
+    'AURA OS ready.'
+  ];
+  var el = document.getElementById('boot-line');
+  var i = 0;
+  function nextLine() {
+    if (i < lines.length) {
+      el.textContent = lines[i++];
+      setTimeout(nextLine, 380);
+    } else {
+      setTimeout(function() {
+        document.getElementById('boot').classList.add('hidden');
+      }, 400);
+    }
+  }
+  setTimeout(nextLine, 300);
+})();
+
+/* ═══════════════════════════════════════
+   LIVE CLOCK
+   ═══════════════════════════════════════ */
+function updateClock() {
+  var now = new Date();
+  var h = String(now.getHours()).padStart(2,'0');
+  var m = String(now.getMinutes()).padStart(2,'0');
+  var s = String(now.getSeconds()).padStart(2,'0');
+  var el = document.getElementById('tb-clock');
+  if (el) el.textContent = h + ':' + m + ':' + s;
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+/* ═══════════════════════════════════════
+   APP STATE
+   ═══════════════════════════════════════ */
+var S = {
+  mode:  localStorage.getItem('aura_mode')  || 'smart',
+  theme: localStorage.getItem('aura_theme') || 'dark',
+  lang:  localStorage.getItem('aura_lang')  || 'auto',
+  msgs:  parseInt(localStorage.getItem('aura_msgs') || '0'),
   prefs: JSON.parse(localStorage.getItem('aura_prefs') || '{}'),
   tasks: JSON.parse(localStorage.getItem('aura_tasks') || '[]'),
-  history: JSON.parse(localStorage.getItem('aura_hist') || '[]'),
-  userName: 'Guest',
-  userPlan:  'FREE',
+  hist:  JSON.parse(localStorage.getItem('aura_hist')  || '[]'),
+  name: 'Guest', plan: 'FREE PLAN',
+  lastMsg: '', sbExpanded: false, isRec: false, recog: null,
 };
 
-/* ── Agent display map ── */
-const AGENT_MAP = {
+var _mi = 0;
+
+var AGENTS = {
   study:'📚 STUDY', research:'🔍 RESEARCH', code:'💻 CODING',
   weather:'🌤 WEATHER', news:'📰 NEWS', math:'🧮 MATH',
   translation:'🌍 TRANSLATE', email:'📧 EMAIL', content:'✍️ CONTENT',
   summarize:'📝 SUMMARY', grammar:'✅ GRAMMAR', quiz:'🎯 QUIZ',
   joke:'😄 JOKE', quote:'💭 QUOTE', password:'🔐 PASSWORD',
   task:'📋 TASK', reminder:'⏰ REMINDER', resume:'📄 RESUME',
-  currency:'💱 CURRENCY', dictionary:'📖 DICT',
-  web_search:'🌐 SEARCH', file:'📁 FILE', screenshot:'📸 SCREEN',
-  memory:'🧠 MEMORY', fitness:'💪 FITNESS', general:'💬 GENERAL',
+  currency:'💱 CURRENCY', dictionary:'📖 DICT', web_search:'🌐 SEARCH',
+  file:'📁 FILE', screenshot:'📸 SCREEN', memory:'🧠 MEMORY',
+  fitness:'💪 FITNESS', general:'💬 GENERAL'
 };
 
-/* ══════════════════════════════════════════════
-   INIT
-   ══════════════════════════════════════════════ */
+function q(s)  { return document.querySelector(s); }
+function qa(s) { return document.querySelectorAll(s); }
+
+/* ── Init ── */
 function init() {
-  // Load user
-  const saved = localStorage.getItem('aura_user');
-  if (saved) {
-    try {
-      const u = JSON.parse(saved);
-      State.userName = u.name || u.username || 'Guest';
-      State.userPlan = ((u.plan || 'free') + ' PLAN').toUpperCase();
-    } catch(e) {}
-  }
-  // Apply UI
-  document.getElementById('s-avatar').textContent = State.userName[0].toUpperCase();
-  document.getElementById('s-name').textContent = State.userName;
-  document.getElementById('s-plan').textContent = State.userPlan;
-  document.getElementById('rp-user').textContent = State.userName;
-  document.getElementById('mem-name').textContent = State.userName;
-  document.getElementById('mem-since').textContent = new Date().toLocaleDateString();
-  document.getElementById('mem-msgs').textContent = State.msgCount;
-  document.getElementById('rp-msgs').textContent = State.msgCount;
-
-  applyTheme(State.theme);
-  applyMode(State.mode);
+  try {
+    var u = JSON.parse(localStorage.getItem('aura_user') || 'null');
+    if (u) { S.name = u.name || u.username || 'Guest'; S.plan = ((u.plan || 'free') + ' PLAN').toUpperCase(); }
+  } catch(e) {}
+  q('#s-av').textContent   = S.name[0].toUpperCase();
+  q('#s-name').textContent = S.name;
+  q('#s-plan').textContent = S.plan;
+  q('#rp-user').textContent = S.name;
+  q('#mem-name').textContent = S.name;
+  q('#mem-since').textContent = new Date().toLocaleDateString();
+  q('#mem-msgs').textContent  = S.msgs;
+  q('#rp-msgs').textContent   = S.msgs;
+  applyTheme(S.theme);
+  applyMode(S.mode);
   renderTasks();
-  renderHistory();
-  updateTaskBadge();
-
-  // Prefs toggles
-  ['saveHist','memLearn','showConf','showAgent','showPlans','autoRead'].forEach(k => {
-    if (State.prefs[k] !== false) {
-      const el = document.getElementById('tog-' + k.toLowerCase().replace(/show/,'').replace('autoread','autoread'));
-      // just ensure defaults are 'on' visually (they're on by default)
-    }
-  });
+  renderHist();
+  updateBadge();
 }
 
-/* ══════════════════════════════════════════════
-   SIDEBAR
-   ══════════════════════════════════════════════ */
-function toggleSidebar() {
-  const sb = document.getElementById('sidebar');
-  State.sidebarCollapsed = !State.sidebarCollapsed;
-  sb.classList.toggle('collapsed', State.sidebarCollapsed);
-  // On small screens, use mob-open
+/* ── Sidebar ── */
+function toggleSb() {
+  var sb = q('#sidebar');
   if (window.innerWidth <= 860) {
-    State.sidebarCollapsed = false;
     sb.classList.toggle('mob-open');
-    sb.classList.remove('collapsed');
+  } else {
+    S.sbExpanded = !S.sbExpanded;
+    sb.classList.toggle('expanded', S.sbExpanded);
   }
 }
 
-/* ══════════════════════════════════════════════
-   VIEWS
-   ══════════════════════════════════════════════ */
-const VIEW_TITLES = {
-  chat: '💬 AURA Chat',
-  memory: '🧠 Memory System',
-  intelligence: '⚡ Intelligence Core',
-  autonomy: '🤖 Autonomy Engine',
-  tasks: '✅ Tasks & Reminders',
-  history: '📋 Chat History',
-  settings: '⚙️ Settings',
+/* ── Views ── */
+var VT = {
+  chat: 'AURA NEURAL CHAT', memory: 'MEMORY SYSTEM',
+  intelligence: 'INTELLIGENCE CORE', autonomy: 'AUTONOMY ENGINE',
+  tasks: 'TASKS AND REMINDERS', history: 'CHAT HISTORY', settings: 'SETTINGS'
 };
 
-function showView(id, navEl) {
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.getElementById('view-' + id).classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  if (navEl) navEl.classList.add('active');
-  document.getElementById('tb-title').textContent = VIEW_TITLES[id] || '';
-  if (id === 'history') loadHistory();
+function showView(id, nav) {
+  qa('.view').forEach(function(v) { v.classList.remove('active'); });
+  qa('.nav-item').forEach(function(n) { n.classList.remove('active'); });
+  var v = q('#view-' + id);
+  if (v) v.classList.add('active');
+  if (nav) nav.classList.add('active');
+  var tt = q('#tb-title');
+  if (tt) tt.textContent = VT[id] || '';
+  if (id === 'history') loadHist();
   if (id === 'tasks') renderTasks();
 }
 
-function scrollToModeSettings() {
-  setTimeout(() => {
-    document.getElementById('modeSection')?.scrollIntoView({ behavior:'smooth' });
+function scrollToModes() {
+  setTimeout(function() {
+    var el = q('#modeSection');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
   }, 100);
 }
 
-/* ══════════════════════════════════════════════
-   MODES
-   ══════════════════════════════════════════════ */
-const MODE_CLASSES = ['minimal-mode','smart-mode','jarvis-mode','developer-mode','autonomous-mode'];
-const MODE_LABELS = {
-  minimal:'MINIMAL MODE', smart:'SMART MODE', jarvis:'JARVIS MODE',
-  developer:'DEV MODE', autonomous:'AUTO MODE'
-};
-const MODE_RPANEL = { minimal:false, smart:true, jarvis:true, developer:true, autonomous:true };
+/* ── Modes ── */
+var MC = ['minimal-mode','smart-mode','jarvis-mode','developer-mode','autonomous-mode'];
+var ML = { minimal:'MINIMAL MODE', smart:'SMART MODE', jarvis:'JARVIS MODE', developer:'DEV MODE', autonomous:'AUTO MODE' };
+var MRP = { minimal: false, smart: true, jarvis: true, developer: true, autonomous: true };
 
-function applyMode(mode) {
-  STATE_body_remove_modes();
-  document.body.classList.add(mode + '-mode');
-  document.getElementById('modeLabel').textContent = MODE_LABELS[mode] || 'SMART MODE';
-  document.getElementById('rp-mode').textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
-  const rp = document.getElementById('rPanel');
-  if (rp) {
-    rp.classList.toggle('visible', MODE_RPANEL[mode] !== false);
-  }
-  // Highlight settings opt
-  document.querySelectorAll('.mode-opt').forEach(o => o.classList.remove('sel'));
-  const sel = document.querySelector('[onclick="setMode(\'' + mode + '\', this)"]');
-  if (sel) sel.classList.add('sel');
-  State.mode = mode;
-  localStorage.setItem('aura_mode', mode);
+function applyMode(m) {
+  MC.forEach(function(c) { document.body.classList.remove(c); });
+  document.body.classList.add(m + '-mode');
+  var pill = q('#modePill'); if (pill) pill.textContent = ML[m] || 'SMART MODE';
+  var rpm  = q('#rp-mode');  if (rpm)  rpm.textContent  = m.charAt(0).toUpperCase() + m.slice(1);
+  var rp   = q('#rPanel');
+  if (rp) rp.classList.toggle('show', !!MRP[m]);
+  qa('.mode-opt').forEach(function(o) { o.classList.toggle('sel', o.dataset.mode === m); });
+  S.mode = m;
+  localStorage.setItem('aura_mode', m);
 }
+function setMode(m) { applyMode(m); }
 
-function STATE_body_remove_modes() {
-  MODE_CLASSES.forEach(c => document.body.classList.remove(c));
-}
-
-function setMode(mode, el) {
-  applyMode(mode);
-}
-
-/* ══════════════════════════════════════════════
-   THEME
-   ══════════════════════════════════════════════ */
-function applyTheme(theme) {
-  if (theme === 'light') document.body.classList.add('light-mode');
-  else if (theme === 'dark') document.body.classList.remove('light-mode');
-  else {
-    const pref = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    document.body.classList.toggle('light-mode', !pref);
-  }
-  State.theme = theme;
-  localStorage.setItem('aura_theme', theme);
+/* ── Theme ── */
+function applyTheme(t) {
+  if (t === 'light')  document.body.classList.add('light');
+  else if (t === 'dark') document.body.classList.remove('light');
+  else document.body.classList.toggle('light', !window.matchMedia('(prefers-color-scheme:dark)').matches);
+  S.theme = t; localStorage.setItem('aura_theme', t);
 }
 function setTheme(t) { applyTheme(t); }
 
-/* ══════════════════════════════════════════════
-   TOGGLES
-   ══════════════════════════════════════════════ */
-function toggleBody(cls, togId) {
-  document.body.classList.toggle(cls);
-  document.getElementById(togId)?.classList.toggle('on');
-}
+/* ── Toggles ── */
+function toggleB(cls, id) { document.body.classList.toggle(cls); var el = q('#'+id); if(el) el.classList.toggle('on'); }
+function toggleP(k, id)   { S.prefs[k] = !S.prefs[k]; var el = q('#'+id); if(el) el.classList.toggle('on'); localStorage.setItem('aura_prefs', JSON.stringify(S.prefs)); }
+function toggleRP()       { var rp = q('#rPanel'), t = q('#tog-rp'); if(rp) rp.classList.toggle('show'); if(t) t.classList.toggle('on', rp && rp.classList.contains('show')); }
 
-function togglePref(key, togId) {
-  State.prefs[key] = !State.prefs[key];
-  document.getElementById(togId)?.classList.toggle('on');
-  localStorage.setItem('aura_prefs', JSON.stringify(State.prefs));
-}
+/* ── Orb State ── */
+var OL = { idle:'Idle', listening:'Listening', thinking:'Thinking', speaking:'Speaking', executing:'Executing', success:'Done', error:'Error' };
 
-function toggleRPanel() {
-  const rp = document.getElementById('rPanel');
-  const tog = document.getElementById('tog-rpanel');
-  rp.classList.toggle('visible');
-  tog.classList.toggle('on', rp.classList.contains('visible'));
-}
-
-/* ══════════════════════════════════════════════
-   ORB STATE
-   ══════════════════════════════════════════════ */
-const ORB_LABELS = {
-  idle:'Idle', listening:'Listening', thinking:'Thinking',
-  speaking:'Speaking', executing:'Executing', success:'Done', error:'Error'
-};
-
-function setOrbState(state) {
-  State.orbState = state;
-  const orb = document.getElementById('rOrb');
-  const topDot = document.getElementById('topDot');
-  const topState = document.getElementById('topState');
-  const label = document.getElementById('orbStateLabel');
-  const mini = document.querySelector('.orb-mini');
-
-  ['idle','listening','thinking','speaking','executing','success','error'].forEach(s => {
-    orb.classList.remove(s);
-    topDot.classList.remove(s);
+function setOrb(state) {
+  var orb = q('#rOrb'), dot = q('#topDot');
+  ['idle','listening','thinking','speaking','executing','success','error'].forEach(function(s) {
+    if (orb) orb.classList.remove(s);
+    if (dot) dot.classList.remove(s);
   });
-  orb.classList.add(state);
-  if (state !== 'idle') topDot.classList.add(state);
-  topState.textContent = (ORB_LABELS[state] || state).toUpperCase();
-  label.textContent = ORB_LABELS[state] || state;
+  if (orb) orb.classList.add(state);
+  if (state !== 'idle' && dot) dot.classList.add(state);
+  var ts = q('#topState'); if (ts) ts.textContent = (OL[state] || state).toUpperCase();
+  var ol = q('#orbLabel'); if (ol) ol.textContent = OL[state] || state;
 }
 
-/* ══════════════════════════════════════════════
-   CHAT — SEND MESSAGE
-   ══════════════════════════════════════════════ */
-let msgCounter = 0;
-
-async function sendMessage() {
-  const input = document.getElementById('userInput');
-  const chat  = document.getElementById('chatArea');
-  const text  = input.value.trim();
+/* ── Chat ── */
+async function sendMsg() {
+  var inp  = q('#userInput');
+  var chat = q('#chatArea');
+  if (!inp || !chat) return;
+  var text = inp.value.trim();
   if (!text) return;
 
-  // Hide chips after first interaction
-  document.getElementById('chipsRow').style.display = 'none';
+  var cr = q('#chipsRow'); if (cr) cr.style.display = 'none';
+  S.lastMsg = text;
 
-  // User bubble
-  chat.insertAdjacentHTML('beforeend', `
-    <div class="msg user">
-      <div class="msg-bubble">${escHtml(text)}</div>
-    </div>`);
-  input.value = '';
+  chat.insertAdjacentHTML('beforeend',
+    '<div class="msg user"><div class="msg-bubble">' + esc(text) + '</div></div>');
+  inp.value = '';
   scrollChat();
 
-  // Typing
-  const typId = 'typ' + Date.now();
-  chat.insertAdjacentHTML('beforeend', `
-    <div class="typing-ind" id="${typId}">
-      <div class="t-dot"></div><div class="t-dot"></div><div class="t-dot"></div>
-    </div>`);
+  var typId = 't' + Date.now();
+  chat.insertAdjacentHTML('beforeend',
+    '<div class="typing-ind" id="' + typId + '"><div class="td"></div><div class="td"></div><div class="td"></div></div>');
   scrollChat();
-  setOrbState('thinking');
+  setOrb('thinking');
 
   try {
-    const res = await fetch('/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, username: State.userName })
-    });
-    const data = await res.json();
-    document.getElementById(typId)?.remove();
-    setOrbState('speaking');
+    var res  = await fetch('/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ text: text, username: S.name }) });
+    var data = await res.json();
+    var tel  = q('#' + typId); if (tel) tel.remove();
+    setOrb('speaking');
 
-    const intent  = data.intent || 'general';
-    const agent   = AGENT_MAP[intent] || '💬 GENERAL';
-    const conf    = data.confidence ? Math.round(data.confidence * 100) : null;
-    const msgId   = 'msg' + (++msgCounter);
-    const response = data.response || 'No response.';
+    var intent   = data.intent || 'general';
+    var agent    = AGENTS[intent] || '💬 GENERAL';
+    var conf     = data.confidence ? Math.round(data.confidence * 100) : null;
+    var response = data.response || 'No response received.';
+    var mid      = 'm' + String(++_mi);
 
-    // Update right panel
-    document.getElementById('rp-intent').textContent = intent;
-    document.getElementById('rp-agent').textContent  = agent;
-    document.getElementById('lastIntent').textContent = intent;
-    document.getElementById('activeAgent').textContent = agent;
+    /* Update panels */
+    var ri = q('#rp-intent'); if (ri) ri.textContent = intent;
+    var ra = q('#rp-agent');  if (ra) ra.textContent  = agent;
+    var li = q('#lastIntent');if (li) li.textContent  = intent;
+    var aa = q('#activeAgent');if(aa) aa.textContent  = agent;
     if (conf !== null) {
-      document.getElementById('rp-conf').textContent = conf + '%';
-      document.getElementById('rp-conf-bar').style.width = conf + '%';
-      document.getElementById('confScore').textContent = conf + '%';
+      var rc  = q('#rp-conf');    if (rc)  rc.textContent   = conf + '%';
+      var rcb = q('#rp-cb');      if (rcb) rcb.style.width  = conf + '%';
+      var cs  = q('#confScore');  if (cs)  cs.textContent   = conf + '%';
+      var cc  = q('#confCircle'); if (cc)  cc.setAttribute('stroke-dashoffset', (238.76 * (1 - conf / 100)).toFixed(2));
     }
 
-    // Build tags
-    let tags = `<span class="tag tag-agent">${agent}</span>`;
-    if (conf !== null) tags += `<span class="tag tag-conf">${conf}%</span>`;
+    var tags = '<span class="tag t-ag">' + agent + '</span>';
+    if (conf !== null) tags += '<span class="tag t-cf">' + conf + '%</span>';
 
-    // Plan block (shown in developer/autonomous mode)
-    let planHtml = '';
-    if (data.plan && State.mode !== 'minimal') {
-      planHtml = `
-        <div class="plan-block">
-          <div class="plan-block-head" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
-            📋 EXECUTION PLAN <span style="margin-left:auto;opacity:0.5">▾</span>
-          </div>
-          <div class="plan-block-body">
-            ${data.plan.map((s,i) => `<div class="plan-step"><div class="plan-step-num">${i+1}</div><div>${escHtml(s)}</div></div>`).join('')}
-          </div>
-        </div>`;
+    var planHtml = '';
+    if (data.plan && S.mode !== 'minimal') {
+      var steps = data.plan.map(function(s, i) {
+        return '<div class="plan-step"><div class="ps-n">' + (i+1) + '</div><div>' + esc(s) + '</div></div>';
+      }).join('');
+      planHtml = '<div class="plan-block"><div class="plan-head" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\'">📋 EXECUTION PLAN <span style="margin-left:auto;opacity:.4">▾</span></div><div class="plan-body">' + steps + '</div></div>';
     }
 
-    chat.insertAdjacentHTML('beforeend', `
-      <div class="msg aura" id="${msgId}">
-        <div class="msg-meta">
-          <span class="msg-label">AURA</span>
-          ${tags}
-        </div>
-        <div class="msg-bubble">
-          <div class="msg-content">${escHtml(response).replace(/\n/g,'<br>')}</div>
-          ${planHtml}
-        </div>
-        <div class="msg-actions">
-          <button class="act-btn" onclick="readFull('${msgId}')">🔊 Read</button>
-          <button class="act-btn" onclick="stopAudio()">🛑 Stop</button>
-          <button class="act-btn" onclick="copyMsg('${msgId}')">📋 Copy</button>
-          <button class="act-btn" onclick="retryMsg()">↩ Retry</button>
-        </div>
-      </div>`);
-
+    chat.insertAdjacentHTML('beforeend',
+      '<div class="msg aura" id="' + mid + '">' +
+        '<div class="msg-meta"><span class="msg-who">AURA</span>' + tags + '</div>' +
+        '<div class="msg-bubble">' +
+          '<div class="msg-content">' + esc(response).replace(/\n/g,'<br>') + '</div>' +
+          planHtml +
+        '</div>' +
+        '<div class="msg-actions">' +
+          '<button class="act-btn" onclick="readMsg(\'' + mid + '\')">🔊 READ</button>' +
+          '<button class="act-btn" onclick="stopAudio()">⏹ STOP</button>' +
+          '<button class="act-btn" onclick="copyMsg(\'' + mid + '\')">📋 COPY</button>' +
+          '<button class="act-btn" onclick="retryMsg()">↩ RETRY</button>' +
+        '</div>' +
+      '</div>');
     scrollChat();
 
-    // Update counters
-    State.msgCount++;
-    localStorage.setItem('aura_msgs', State.msgCount);
-    document.getElementById('rp-msgs').textContent = State.msgCount;
-    document.getElementById('mem-msgs').textContent = State.msgCount;
+    S.msgs++;
+    localStorage.setItem('aura_msgs', S.msgs);
+    var rm = q('#rp-msgs'); if (rm) rm.textContent = S.msgs;
+    var mm = q('#mem-msgs'); if (mm) mm.textContent = S.msgs;
 
-    // Save history
-    const histEntry = {
-      time: new Date().toLocaleTimeString(),
-      date: new Date().toLocaleDateString(),
-      user: text,
-      aura: response.slice(0, 200),
-      intent
-    };
-    State.history.unshift(histEntry);
-    if (State.history.length > 100) State.history.pop();
-    localStorage.setItem('aura_hist', JSON.stringify(State.history));
+    S.hist.unshift({ time: new Date().toLocaleTimeString(), date: new Date().toLocaleDateString(), user: text, aura: response.slice(0, 200), intent: intent });
+    if (S.hist.length > 100) S.hist.pop();
+    localStorage.setItem('aura_hist', JSON.stringify(S.hist));
 
-    // Auto-read
-    if (State.prefs.autoRead) readFull(msgId);
-
-    setTimeout(() => setOrbState('idle'), 2000);
+    if (S.prefs.autoRead) readMsg(mid);
+    setTimeout(function() { setOrb('idle'); }, 2200);
 
   } catch(e) {
-    document.getElementById(typId)?.remove();
-    setOrbState('error');
-    chat.insertAdjacentHTML('beforeend', `
-      <div class="msg aura">
-        <div class="msg-meta"><span class="msg-label">AURA</span><span class="tag" style="background:rgba(244,63,94,0.1);color:var(--err)">CONNECTION ERROR</span></div>
-        <div class="msg-bubble" style="color:var(--t2)">
-          Connection issue. Please check your connection and try again.
-        </div>
-      </div>`);
+    var te = q('#' + typId); if (te) te.remove();
+    setOrb('error');
+    chat.insertAdjacentHTML('beforeend',
+      '<div class="msg aura"><div class="msg-meta"><span class="msg-who">AURA</span><span class="tag t-er">CONNECTION ERROR</span></div>' +
+      '<div class="msg-bubble" style="color:var(--t2)">Connection issue. Please check your connection and try again.</div></div>');
     scrollChat();
-    setTimeout(() => setOrbState('idle'), 3000);
-    showNotif('Connection error. Please try again.', 'err');
+    setTimeout(function() { setOrb('idle'); }, 3000);
+    notify('Connection error. Please try again.', 'err');
   }
 }
 
-function sendChip(t) {
-  document.getElementById('userInput').value = t;
-  sendMessage();
-}
+function sendChip(t) { var inp = q('#userInput'); if (inp) inp.value = t; sendMsg(); }
 
 function scrollChat() {
-  const c = document.getElementById('chatArea');
-  c.scrollTop = c.scrollHeight;
+  var c = q('#chatArea'); if (c) c.scrollTop = c.scrollHeight;
 }
 
 function clearChat() {
-  document.getElementById('chatArea').innerHTML = `
-    <div class="msg aura">
-      <div class="msg-meta"><span class="msg-label">AURA</span></div>
-      <div class="msg-bubble">Chat cleared. How can I help you?</div>
-    </div>`;
-  document.getElementById('chipsRow').style.display = 'flex';
+  var c = q('#chatArea');
+  if (!c) return;
+  c.innerHTML =
+    '<div class="welcome">' +
+      '<div class="wc-tl"></div><div class="wc-tr"></div><div class="wc-bl"></div><div class="wc-br"></div>' +
+      '<div class="w-orb"><div class="wo-glow"></div><div class="wo-r3"></div><div class="wo-r2"></div><div class="wo-r1"></div><div class="wo-p1"></div><div class="wo-p2"></div><div class="wo-core"></div><div class="wo-inner"></div><div class="wo-shine"></div></div>' +
+      '<div class="w-title">A &nbsp; U &nbsp; R &nbsp; A</div>' +
+      '<div class="w-sub">Neural Command Center</div>' +
+    '</div>' +
+    '<div class="msg aura"><div class="msg-meta"><span class="msg-who">AURA</span></div><div class="msg-bubble">Chat cleared. How can I assist you?</div></div>';
+  var cr = q('#chipsRow'); if (cr) cr.style.display = 'flex';
 }
 
-/* ══════════════════════════════════════════════
-   VOICE
-   ══════════════════════════════════════════════ */
+/* ── Voice ── */
 function toggleVoice() {
-  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    showNotif('Voice requires Chrome browser.', 'err'); return;
-  }
-  if (State.isRecording) stopRecording();
-  else startRecording();
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) { notify('Voice requires Chrome.', 'err'); return; }
+  if (S.isRec) stopRec(); else startRec();
 }
-
-function startRecording() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  State.recognition = new SR();
-  State.recognition.lang = State.lang === 'urdu' ? 'ur-PK' : 'en-US';
-  State.recognition.continuous = false;
-  State.recognition.interimResults = false;
-
-  State.recognition.onstart = () => {
-    State.isRecording = true;
-    document.getElementById('micBtn').classList.add('rec');
-    document.getElementById('micBtn').textContent = '🔴 Listening...';
-    document.getElementById('vStatus').textContent = 'Listening... speak now';
-    setOrbState('listening');
+function startRec() {
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  S.recog = new SR();
+  S.recog.lang = S.lang === 'urdu' ? 'ur-PK' : 'en-US';
+  S.recog.continuous = false; S.recog.interimResults = false;
+  S.recog.onstart = function() {
+    S.isRec = true;
+    var mb = q('#micBtn'); if (mb) { mb.classList.add('rec'); mb.textContent = '🔴 LISTENING'; }
+    var vs = q('#vStatus'); if (vs) vs.textContent = '— listening, speak now —';
+    setOrb('listening');
   };
-  State.recognition.onresult = e => {
-    const t = e.results[0][0].transcript;
-    document.getElementById('userInput').value = t;
-    document.getElementById('vStatus').textContent = 'Heard: "' + t + '"';
-    stopRecording();
-    sendMessage();
+  S.recog.onresult = function(e) {
+    var t = e.results[0][0].transcript;
+    var inp = q('#userInput'); if (inp) inp.value = t;
+    var vs = q('#vStatus'); if (vs) vs.textContent = '— heard: "' + t + '" —';
+    stopRec(); sendMsg();
   };
-  State.recognition.onerror = () => { stopRecording(); document.getElementById('vStatus').textContent = 'Could not hear. Try again.'; };
-  State.recognition.onend   = () => stopRecording();
-  State.recognition.start();
+  S.recog.onerror = function() { stopRec(); var vs = q('#vStatus'); if (vs) vs.textContent = '— could not hear, try again —'; };
+  S.recog.onend   = function() { stopRec(); };
+  S.recog.start();
 }
-
-function stopRecording() {
-  State.isRecording = false;
-  if (State.recognition) State.recognition.stop();
-  document.getElementById('micBtn').classList.remove('rec');
-  document.getElementById('micBtn').textContent = '🎤 Speak';
-  setOrbState('idle');
+function stopRec() {
+  S.isRec = false;
+  if (S.recog) S.recog.stop();
+  var mb = q('#micBtn'); if (mb) { mb.classList.remove('rec'); mb.textContent = '🎤 SPEAK'; }
+  setOrb('idle');
 }
-
-function readFull(msgId) {
+function readMsg(id) {
   if (!('speechSynthesis' in window)) return;
-  const el = document.querySelector('#' + msgId + ' .msg-content');
-  if (!el) return;
+  var el = q('#' + id + ' .msg-content'); if (!el) return;
   window.speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance(el.textContent);
-  utt.lang  = State.lang === 'urdu' ? 'ur-PK' : 'en-US';
-  utt.rate  = parseFloat(document.getElementById('speechSpeed')?.value || '1');
-  window.speechSynthesis.speak(utt);
-  setOrbState('speaking');
-  utt.onend = () => setOrbState('idle');
+  var u = new SpeechSynthesisUtterance(el.textContent);
+  u.lang = S.lang === 'urdu' ? 'ur-PK' : 'en-US';
+  u.rate = parseFloat((q('#speechSpeed') || {value:'1'}).value);
+  window.speechSynthesis.speak(u);
+  setOrb('speaking');
+  u.onend = function() { setOrb('idle'); };
 }
-
 function stopAudio() {
-  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-  setOrbState('idle');
-  document.getElementById('vStatus').textContent = 'Stopped';
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  setOrb('idle');
+  var vs = q('#vStatus'); if (vs) vs.textContent = '— stopped —';
 }
-
-function copyMsg(msgId) {
-  const el = document.querySelector('#' + msgId + ' .msg-content');
-  if (!el) return;
-  navigator.clipboard.writeText(el.textContent)
-    .then(() => showNotif('Copied to clipboard', 'ok'));
+function copyMsg(id) {
+  var el = q('#' + id + ' .msg-content'); if (!el) return;
+  navigator.clipboard.writeText(el.textContent).then(function() { notify('Copied to clipboard', 'ok'); });
 }
-
 function retryMsg() {
-  const last = document.getElementById('userInput');
-  if (last) last.focus();
+  if (S.lastMsg) { var inp = q('#userInput'); if (inp) { inp.value = S.lastMsg; inp.focus(); } }
 }
 
-/* ══════════════════════════════════════════════
-   LANGUAGE
-   ══════════════════════════════════════════════ */
-function setLang(lang) {
-  State.lang = lang;
-  localStorage.setItem('aura_lang', lang);
-  document.getElementById('rp-lang').textContent = lang.charAt(0).toUpperCase() + lang.slice(1);
-  document.getElementById('mem-lang').textContent = lang;
+/* ── Language ── */
+function setLang(l) {
+  S.lang = l; localStorage.setItem('aura_lang', l);
+  var rl = q('#rp-lang'); if (rl) rl.textContent = l.charAt(0).toUpperCase() + l.slice(1);
+  var ml = q('#mem-lang'); if (ml) ml.textContent = l;
 }
 
-/* ══════════════════════════════════════════════
-   TASKS
-   ══════════════════════════════════════════════ */
+/* ── Tasks ── */
 function addTask() {
-  const inp = document.getElementById('taskInput');
-  const pri = document.getElementById('taskPri').value;
-  const text = inp.value.trim();
-  if (!text) return;
-  State.tasks.push({ id: Date.now(), text, pri, done: false });
+  var inp = q('#taskInput'), pri = (q('#taskPri') || {}).value || 'med';
+  if (!inp) return;
+  var text = inp.value.trim(); if (!text) return;
+  S.tasks.push({ id: Date.now(), text: text, pri: pri, done: false });
   inp.value = '';
-  saveTasks();
-  renderTasks();
+  saveTasks(); renderTasks();
 }
-
-function toggleTask(id) {
-  const t = State.tasks.find(t => t.id === id);
-  if (t) t.done = !t.done;
-  saveTasks();
-  renderTasks();
-}
-
-function deleteTask(id) {
-  State.tasks = State.tasks.filter(t => t.id !== id);
-  saveTasks();
-  renderTasks();
-}
-
-function saveTasks() {
-  localStorage.setItem('aura_tasks', JSON.stringify(State.tasks));
-  updateTaskBadge();
-}
-
-function updateTaskBadge() {
-  const active = State.tasks.filter(t => !t.done).length;
-  document.getElementById('taskBadge').textContent = active;
-}
+function toggleTask(id) { var t = S.tasks.find(function(t){return t.id===id;}); if (t) t.done = !t.done; saveTasks(); renderTasks(); }
+function delTask(id)    { S.tasks = S.tasks.filter(function(t){return t.id!==id;}); saveTasks(); renderTasks(); }
+function saveTasks() { localStorage.setItem('aura_tasks', JSON.stringify(S.tasks)); updateBadge(); }
+function updateBadge() { var el = q('#taskBadge'); if (el) el.textContent = S.tasks.filter(function(t){return !t.done;}).length; }
 
 function renderTasks() {
-  const active = State.tasks.filter(t => !t.done);
-  const done   = State.tasks.filter(t =>  t.done);
-
-  document.getElementById('tasksList').innerHTML = active.length === 0
-    ? '<div style="color:var(--t3);font-size:0.82rem;padding:10px 0">No active tasks. Add one above.</div>'
-    : active.map(t => taskCard(t)).join('');
-
-  document.getElementById('doneList').innerHTML = done.length === 0
-    ? '<div style="color:var(--t3);font-size:0.82rem;padding:10px 0">No completed tasks yet.</div>'
-    : done.map(t => taskCard(t)).join('');
+  var active = S.tasks.filter(function(t){return !t.done;}), done = S.tasks.filter(function(t){return t.done;});
+  var tl = q('#tasksList'), dl = q('#doneList');
+  if (tl) tl.innerHTML = active.length ? active.map(tc).join('') : '<div style="color:var(--t3);font-size:.72rem;padding:8px 0;font-family:var(--fm);letter-spacing:1px">— no active tasks —</div>';
+  if (dl) dl.innerHTML = done.length  ? done.map(tc).join('')   : '<div style="color:var(--t4);font-size:.72rem;padding:8px 0;font-family:var(--fm);letter-spacing:1px">— no completed tasks —</div>';
+}
+function tc(t) {
+  return '<div class="task-card' + (t.done?' done':'') + '">' +
+    '<div class="tc-ch' + (t.done?' on':'') + '" onclick="toggleTask(' + t.id + ')">' + (t.done?'✓':'') + '</div>' +
+    '<div class="tc-text">' + esc(t.text) + '</div>' +
+    '<span class="tc-pri ' + t.pri + '">' + t.pri.toUpperCase() + '</span>' +
+    '<button class="tc-del" onclick="delTask(' + t.id + ')">✕</button>' +
+  '</div>';
 }
 
-function taskCard(t) {
-  return `<div class="task-card ${t.done?'done':''}">
-    <div class="task-check ${t.done?'checked':''}" onclick="toggleTask(${t.id})">${t.done?'✓':''}</div>
-    <div class="task-text">${escHtml(t.text)}</div>
-    <span class="task-pri ${t.pri}">${t.pri.toUpperCase()}</span>
-    <button class="task-del" onclick="deleteTask(${t.id})">✕</button>
-  </div>`;
-}
-
-/* ══════════════════════════════════════════════
-   HISTORY
-   ══════════════════════════════════════════════ */
-async function loadHistory() {
-  const container = document.getElementById('historyList');
-  // Try API first, then fall back to local
+/* ── History ── */
+async function loadHist() {
+  var container = q('#historyList');
   try {
-    const res = await fetch('/history');
-    const data = await res.json();
-    if (Array.isArray(data) && data.length > 0) {
-      renderHistoryData(data.reverse(), container);
-      return;
-    }
+    var res  = await fetch('/history');
+    var data = await res.json();
+    if (Array.isArray(data) && data.length) { renderHD(data.reverse(), container); return; }
   } catch(e) {}
-  // Local fallback
-  renderHistoryData(State.history, container);
+  renderHD(S.hist, container);
 }
-
-function renderHistory() {
-  renderHistoryData(State.history, document.getElementById('historyList'));
-}
-
-function renderHistoryData(data, container) {
-  if (!data || data.length === 0) {
-    container.innerHTML = `<div class="empty-state" style="margin-top:40px">
-      <div class="empty-icon">📭</div>
-      <div>No conversation history yet.</div>
-      <div style="font-size:0.75rem;color:var(--t3)">Start chatting to see your history here.</div>
-    </div>`;
+function renderHist() { renderHD(S.hist, q('#historyList')); }
+function renderHD(data, container) {
+  if (!container) return;
+  if (!data || !data.length) {
+    container.innerHTML = '<div class="empty-st" style="margin-top:48px"><div class="empty-ico">📭</div><div>No history yet.</div></div>';
     return;
   }
-  container.innerHTML = data.map(item => `
-    <div class="hist-card">
-      <div class="hist-meta">
-        <span class="hist-time">${item.time || ''} ${item.date || ''}</span>
-        ${item.intent ? `<span class="tag tag-agent">${AGENT_MAP[item.intent]||item.intent}</span>` : ''}
-      </div>
-      <div class="hist-user-q">You: ${escHtml(item.user || '')}</div>
-      <div class="hist-aura-r">AURA: ${escHtml((item.aura || '').slice(0,200))}${(item.aura||'').length>200?'…':''}</div>
-    </div>`).join('');
+  container.innerHTML = data.map(function(item) {
+    return '<div class="hist-card">' +
+      '<div class="hist-meta">' +
+        '<span class="hist-time">' + (item.time||'') + ' ' + (item.date||'') + '</span>' +
+        (item.intent ? '<span class="tag t-ag">' + (AGENTS[item.intent]||item.intent) + '</span>' : '') +
+      '</div>' +
+      '<div class="hist-q">▸ ' + esc(item.user||'') + '</div>' +
+      '<div class="hist-r">' + esc((item.aura||'').slice(0,200)) + ((item.aura||'').length>200?'…':'') + '</div>' +
+    '</div>';
+  }).join('');
 }
 
-/* ══════════════════════════════════════════════
-   MEMORY / PRIVACY
-   ══════════════════════════════════════════════ */
-function clearMemory() {
+/* ── Memory ── */
+function clearMem() {
   if (!confirm('Clear all AURA memory? This cannot be undone.')) return;
-  State.history = [];
-  State.tasks   = [];
-  State.msgCount = 0;
-  localStorage.removeItem('aura_hist');
-  localStorage.removeItem('aura_tasks');
-  localStorage.removeItem('aura_msgs');
-  renderTasks();
-  renderHistory();
-  updateTaskBadge();
-  showNotif('Memory cleared.', 'ok');
+  S.hist = []; S.tasks = []; S.msgs = 0;
+  ['aura_hist','aura_tasks','aura_msgs'].forEach(function(k){localStorage.removeItem(k);});
+  renderTasks(); renderHist(); updateBadge();
+  notify('Memory cleared.', 'ok');
 }
 
-/* ══════════════════════════════════════════════
-   NOTIFICATIONS
-   ══════════════════════════════════════════════ */
-function showNotif(msg, type='info') {
-  const icons = { ok:'✅', err:'❌', info:'ℹ️' };
-  const el = document.createElement('div');
+/* ── Notify ── */
+function notify(msg, type) {
+  type = type || 'info';
+  var icons = { ok:'✓', err:'✕', info:'i' };
+  var el = document.createElement('div');
   el.className = 'notif ' + type;
-  el.innerHTML = `<span>${icons[type]||'ℹ️'}</span> ${escHtml(msg)}`;
+  el.innerHTML = '<span>' + (icons[type]||'i') + '</span> ' + esc(msg);
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 3500);
+  setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 3500);
 }
 
-/* ══════════════════════════════════════════════
-   LOGOUT
-   ══════════════════════════════════════════════ */
-function doLogout() {
-  localStorage.removeItem('aura_user');
-  window.location.href = '/login';
-}
+/* ── Auth ── */
+function doLogout() { localStorage.removeItem('aura_user'); location.href = '/login'; }
 
-/* ══════════════════════════════════════════════
-   UTILS
-   ══════════════════════════════════════════════ */
-function escHtml(s) {
+/* ── Utils ── */
+function esc(s) {
   if (!s) return '';
-  return String(s)
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-/* ══════════════════════════════════════════════
-   KEYBOARD SHORTCUTS
-   ══════════════════════════════════════════════ */
-document.addEventListener('keydown', e => {
+/* ── Keyboard ── */
+document.addEventListener('keydown', function(e) {
   if ((e.ctrlKey || e.metaKey) && e.key === '/') {
-    document.getElementById('userInput')?.focus();
+    var inp = q('#userInput'); if (inp) inp.focus();
     e.preventDefault();
   }
 });
 
-/* ══════════════════════════════════════════════
-   SYSTEM THEME LISTENER
-   ══════════════════════════════════════════════ */
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-  if (State.theme === 'system') applyTheme('system');
+window.matchMedia('(prefers-color-scheme:dark)').addEventListener('change', function() {
+  if (S.theme === 'system') applyTheme('system');
 });
 
 /* ── BOOT ── */

@@ -8,7 +8,6 @@ SHORT_FORM_MAP = {
     "plz": "please",
     "pls": "please",
     "bcz": "because",
-    "bcz": "because",
     "wht": "what",
     "wat": "what",
     "msg": "message",
@@ -26,101 +25,176 @@ SHORT_FORM_MAP = {
     "smth": "something",
     "govt": "government",
     "pic": "picture",
-    "vid": "video"
+    "vid": "video",
+    "insta": "instagram",
+    "snap": "snapchat",
+    "emailto": "email to",
 }
+
+
+TYPO_REPLACEMENTS = {
+    "emailto": "email to",
+    "facebokk": "facebook",
+    "facebok": "facebook",
+    "whats": "what is",
+    "what's": "what is",
+    "wheres": "where is",
+    "where's": "where is",
+    "hows": "how is",
+    "how's": "how is",
+    "wether": "weather",
+    "remaind": "remind",
+    "remine": "remind",
+    "grammer": "grammar",
+    "sumarize": "summarize",
+    "summrize": "summarize",
+    "transalte": "translate",
+    "yotube": "youtube",
+    "defination": "definition",
+}
+
+
+SAFE_MULTI_SEPARATORS = [
+    " and then ",
+    " then ",
+    " also ",
+    " as well as ",
+    " plus ",
+    "&",
+]
+
+
+ACTION_STARTERS = (
+    "open", "search", "find", "show", "tell", "give", "set", "add", "delete",
+    "remove", "create", "write", "send", "read", "analyze", "summarize",
+    "translate", "calculate", "solve", "compare", "list", "take", "remind",
+    "research", "study", "explain", "check", "fix"
+)
+
+
+PROTECTED_PATTERNS = [
+    r"\bdifference between .+ and .+",
+    r"\bcompare .+ and .+",
+    r"\bbetween \d+ and \d+",
+    r"\bbetween [a-zA-Z]+ and [a-zA-Z]+",
+    r"\btranslate .+ in [a-zA-Z]+ and [a-zA-Z]+",
+]
 
 
 def normalize_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", str(text)).strip()
 
 
+def fix_common_typos(text: str) -> str:
+    result = str(text)
+
+    for old, new in TYPO_REPLACEMENTS.items():
+        result = re.sub(rf"\b{re.escape(old)}\b", new, result, flags=re.IGNORECASE)
+
+    return result
+
+
 def expand_short_forms(text: str) -> str:
     words = text.split()
-    expanded = []
+    expanded_words = []
 
     for word in words:
-        key = re.sub(r"[^\w']", "", word.lower())
-        if key in SHORT_FORM_MAP:
-            replacement = SHORT_FORM_MAP[key]
-            punctuation = ""
-            if word and not word[-1].isalnum():
-                punctuation = word[-1]
-            expanded.append(replacement + punctuation)
-        else:
-            expanded.append(word)
+        prefix_match = re.match(r"^[^\w']*", word)
+        suffix_match = re.search(r"[^\w']*$", word)
 
-    return " ".join(expanded)
+        prefix = prefix_match.group(0) if prefix_match else ""
+        suffix = suffix_match.group(0) if suffix_match else ""
+
+        core = word[len(prefix):]
+        if suffix:
+            core = core[:-len(suffix)]
+
+        key = core.lower()
+        replacement = SHORT_FORM_MAP.get(key, core)
+
+        expanded_words.append(f"{prefix}{replacement}{suffix}")
+
+    return " ".join(expanded_words)
 
 
-def normalize_common_phrases(text: str) -> str:
-    text = text.strip()
+def strip_conversation_fillers(text: str) -> str:
+    patterns = [
+        r"^\s*hi\s+",
+        r"^\s*hey\s+",
+        r"^\s*hello\s+",
+        r"^\s*hi aura\s+",
+        r"^\s*hey aura\s+",
+        r"^\s*hello aura\s+",
+        r"^\s*no\s+i\s+mean\s+",
+        r"^\s*i\s+mean\s+",
+    ]
 
-    replacements = {
-        "what's": "what is",
-        "whats": "what is",
-        "who's": "who is",
-        "wheres": "where is",
-        "where's": "where is",
-        "how's": "how is",
-        "im ": "i am ",
-        "i m ": "i am ",
-        "dont ": "don't ",
-        "cant ": "can't ",
-        "wont ": "won't "
-    }
+    result = text
 
+    for pattern in patterns:
+        result = re.sub(pattern, "", result, flags=re.IGNORECASE)
+
+    return result.strip()
+
+
+def is_meaningful_text(text: str) -> bool:
+    if not text:
+        return False
+
+    stripped = text.strip(" ,.?;:!-")
+    return bool(stripped)
+
+
+def is_protected_single_intent(text: str) -> bool:
+    for pattern in PROTECTED_PATTERNS:
+        if re.search(pattern, text, flags=re.IGNORECASE):
+            return True
+    return False
+
+
+def starts_with_action(text: str) -> bool:
+    lowered = text.strip().lower()
+    return lowered.startswith(ACTION_STARTERS)
+
+
+def should_split_on_and(text: str) -> bool:
     lowered = text.lower()
-    for old, new in replacements.items():
-        lowered = lowered.replace(old, new)
 
-    return lowered
+    if " and " not in lowered:
+        return False
+
+    if is_protected_single_intent(lowered):
+        return False
+
+    parts = lowered.split(" and ", 1)
+    if len(parts) != 2:
+        return False
+
+    left = parts[0].strip()
+    right = parts[1].strip()
+
+    if not left or not right:
+        return False
+
+    if starts_with_action(right):
+        return True
+
+    if starts_with_action(left) and len(right.split()) <= 4:
+        return True
+
+    return False
 
 
 def clean_user_input(text: str) -> str:
     text = normalize_whitespace(text)
+    text = fix_common_typos(text)
     text = expand_short_forms(text)
-    text = normalize_common_phrases(text)
+    text = strip_conversation_fillers(text)
     text = normalize_whitespace(text)
     return text
 
 
 def split_multi_intent(text: str):
-    text = clean_user_input(text)
+    from brain.command_splitter import split_commands
 
-    separators = [
-        " and then ",
-        " then ",
-        " also ",
-        " as well as ",
-        " plus ",
-        " and ",
-        "&"
-    ]
-
-    parts = [text]
-
-    for sep in separators:
-        new_parts = []
-        for part in parts:
-            split_parts = [p.strip(" ,.?") for p in part.split(sep) if p.strip(" ,.?")]
-            new_parts.extend(split_parts)
-        parts = new_parts
-
-    cleaned = []
-    for part in parts:
-        if part and part not in cleaned:
-            cleaned.append(part)
-
-    return cleaned[:3]
-
-
-def estimate_input_quality(text: str) -> dict:
-    original = str(text)
-    cleaned = clean_user_input(original)
-
-    return {
-        "original": original,
-        "cleaned": cleaned,
-        "changed": original.strip() != cleaned.strip(),
-        "word_count": len(cleaned.split())
-    }
+    return split_commands(text, max_commands=3)

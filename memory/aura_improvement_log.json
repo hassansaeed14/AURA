@@ -1,14 +1,491 @@
 {
-    "failures": [],
+    "failures": [
+        {
+            "time": "2026-04-10 04:07",
+            "command": "add task buy milk",
+            "reason": "Planning failed: Connection error."
+        },
+        {
+            "time": "2026-04-10 04:17",
+            "command": "add task buy milk",
+            "reason": "Planning failed: Connection error."
+        },
+        {
+            "time": "2026-04-10 05:01",
+            "command": "add task buy milk",
+            "reason": "Planning failed: Connection error."
+        }
+    ],
     "low_confidence_commands": [
         {
             "time": "2026-04-09 00:52",
             "command": "what is tree answer me in urdu",
             "confidence": 0.25
+        },
+        {
+            "time": "2026-04-09 19:22",
+            "command": "open facebokk",
+            "confidence": 0.0
+        },
+        {
+            "time": "2026-04-09 19:23",
+            "command": "open facebook",
+            "confidence": 0.0
+        },
+        {
+            "time": "2026-04-09 19:23",
+            "command": "send emailto my professor",
+            "confidence": 0.0
+        },
+        {
+            "time": "2026-04-09 19:23",
+            "command": "but chatgpt plus",
+            "confidence": 0.0
+        },
+        {
+            "time": "2026-04-09 19:24",
+            "command": "buy chatgpt plus",
+            "confidence": 0.0
+        },
+        {
+            "time": "2026-04-10 03:05",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 03:08",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 03:10",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 03:40",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 03:40",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 03:44",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 03:45",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 04:07",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 04:17",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 05:01",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 12:07",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 12:11",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 12:12",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 12:13",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 12:15",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 13:17",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 13:22",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 13:29",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 13:41",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 13:43",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 13:47",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
+        },
+        {
+            "time": "2026-04-10 13:50",
+            "command": "research and summarize AI agents",
+            "confidence": 0.3
         }
     ],
     "agent_errors": [],
     "user_corrections": [],
     "improvement_suggestions": [],
-    "last_reviewed": null
+    "last_reviewed": null,
+    "reflections": [
+        {
+            "time": "2026-04-10 12:07",
+            "requested_action": "general",
+            "actual_action": "research",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 12:07",
+            "requested_action": "time",
+            "actual_action": "time",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 12:07",
+            "requested_action": "task",
+            "actual_action": "task",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 12:11",
+            "requested_action": "general",
+            "actual_action": "research",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 12:11",
+            "requested_action": "time",
+            "actual_action": "time",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 12:11",
+            "requested_action": "task",
+            "actual_action": "task",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 12:12",
+            "requested_action": "general",
+            "actual_action": "research",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 12:12",
+            "requested_action": "time",
+            "actual_action": "time",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 12:12",
+            "requested_action": "task",
+            "actual_action": "task",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 12:13",
+            "requested_action": "general",
+            "actual_action": "research",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 12:13",
+            "requested_action": "time",
+            "actual_action": "time",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 12:13",
+            "requested_action": "task",
+            "actual_action": "task",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 12:15",
+            "requested_action": "general",
+            "actual_action": "research",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 12:15",
+            "requested_action": "time",
+            "actual_action": "time",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 12:15",
+            "requested_action": "task",
+            "actual_action": "task",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:17",
+            "requested_action": "general",
+            "actual_action": "research",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:17",
+            "requested_action": "time",
+            "actual_action": "time",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:17",
+            "requested_action": "task",
+            "actual_action": "task",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:22",
+            "requested_action": "general",
+            "actual_action": "research",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:22",
+            "requested_action": "time",
+            "actual_action": "time",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:22",
+            "requested_action": "task",
+            "actual_action": "task",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:29",
+            "requested_action": "general",
+            "actual_action": "research",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:29",
+            "requested_action": "time",
+            "actual_action": "time",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:29",
+            "requested_action": "task",
+            "actual_action": "task",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:41",
+            "requested_action": "general",
+            "actual_action": "research",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:41",
+            "requested_action": "time",
+            "actual_action": "time",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:41",
+            "requested_action": "task",
+            "actual_action": "task",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:43",
+            "requested_action": "general",
+            "actual_action": "research",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:43",
+            "requested_action": "time",
+            "actual_action": "time",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:43",
+            "requested_action": "task",
+            "actual_action": "task",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:47",
+            "requested_action": "general",
+            "actual_action": "research",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:47",
+            "requested_action": "time",
+            "actual_action": "time",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:47",
+            "requested_action": "task",
+            "actual_action": "task",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:50",
+            "requested_action": "general",
+            "actual_action": "research",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:50",
+            "requested_action": "time",
+            "actual_action": "time",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-10 13:50",
+            "requested_action": "task",
+            "actual_action": "task",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        }
+    ]
 }

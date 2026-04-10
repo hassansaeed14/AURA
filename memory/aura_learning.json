@@ -121,7 +121,10 @@
         }
     ],
     "learned_facts": [
-        "my name is Hassan"
+        "my name is Hassan",
+        "hi my name is hassan",
+        "ni my name is hassan",
+        "no i mean my name is hassan"
     ],
     "user_profile": {
         "name": null,
@@ -129,16 +132,16 @@
         "preferences": {}
     },
     "topic_frequency": {
-        "general": 3,
+        "general": 8,
         "news": 1,
-        "memory": 4,
+        "memory": 9,
         "greeting": 6,
         "translation": 5,
-        "joke": 3,
+        "joke": 4,
         "dictionary": 2,
         "screenshot": 1,
         "code": 1,
-        "currency": 1
+        "currency": 2
     },
     "interaction_history": [
         {
@@ -329,11 +332,95 @@
             "input": "mera nam kya ha?",
             "response": "I am unable to provide a conversion for 1.0 NAM to KYA as I do not have information on the exchange rate for these currencies. Can you provide more context or details about the NAM and KYA currencies ",
             "length_type": "short"
+        },
+        {
+            "time": "2026-04-09 19:22",
+            "intent": "memory",
+            "input": "hi my name is hassan",
+            "response": "Nice to meet you hi  hassan! I will remember your name.",
+            "length_type": "medium"
+        },
+        {
+            "time": "2026-04-09 19:22",
+            "intent": "memory",
+            "input": "what is my name",
+            "response": "Your name is hi  hassan.",
+            "length_type": "short"
+        },
+        {
+            "time": "2026-04-09 19:22",
+            "intent": "memory",
+            "input": "ni my name is hassan",
+            "response": "Nice to meet you ni  hassan! I will remember your name.",
+            "length_type": "medium"
+        },
+        {
+            "time": "2026-04-09 19:22",
+            "intent": "memory",
+            "input": "no i mean my name is hassan",
+            "response": "Nice to meet you no i mean  hassan! I will remember your name.",
+            "length_type": "medium"
+        },
+        {
+            "time": "2026-04-09 19:23",
+            "intent": "general",
+            "input": "open facebokk",
+            "response": "To open Facebook, you can go to the Facebook website on your computer or mobile device, or use the Facebook mobile application. If you're on a computer, you can type facebook.com into your web browser",
+            "length_type": "short"
+        },
+        {
+            "time": "2026-04-09 19:23",
+            "intent": "general",
+            "input": "open facebook",
+            "response": "You can open Facebook by typing facebook.com into your web browser or by using the Facebook mobile app on your device. If you need help with logging in or accessing the website or app, I can provide m",
+            "length_type": "short"
+        },
+        {
+            "time": "2026-04-09 19:23",
+            "intent": "general",
+            "input": "send emailto my professor",
+            "response": "To send an email to your professor, you'll need to know their email address, which is usually found on the university's website or in the course syllabus. You can then compose a clear and concise emai",
+            "length_type": "short"
+        },
+        {
+            "time": "2026-04-09 19:23",
+            "intent": "general",
+            "input": "but chatgpt plus",
+            "response": "It seems like you're comparing or referencing ChatGPT Plus, but the context is unclear. Could you please provide more information or clarify what you're trying to say or ask about ChatGPT Plus? I'll d",
+            "length_type": "short"
+        },
+        {
+            "time": "2026-04-09 19:24",
+            "intent": "general",
+            "input": "buy chatgpt plus",
+            "response": "To decide whether to buy ChatGPT Plus, consider how often you use ChatGPT and whether the additional features it offers, such as priority access and faster response times, would significantly benefit ",
+            "length_type": "short"
+        },
+        {
+            "time": "2026-04-09 19:24",
+            "intent": "memory",
+            "input": "what is my name",
+            "response": "Your name is no i mean  hassan.",
+            "length_type": "short"
+        },
+        {
+            "time": "2026-04-09 19:24",
+            "intent": "joke",
+            "input": "tell me a joke",
+            "response": "JOKE\n\nWhy did the golfer bring two pairs of pants?\n\nIn case he got a hole in one.",
+            "length_type": "short"
+        },
+        {
+            "time": "2026-04-09 19:24",
+            "intent": "currency",
+            "input": "bye bye",
+            "response": "1.0 BYE is equal to 1.0 BYE",
+            "length_type": "short"
         }
     ],
     "behavior_stats": {
-        "short_queries": 20,
-        "medium_queries": 7,
+        "short_queries": 29,
+        "medium_queries": 10,
         "long_queries": 0
     },
     "intent_sequences": [
@@ -440,19 +527,67 @@
         [
             "translation",
             "currency"
+        ],
+        [
+            "currency",
+            "memory"
+        ],
+        [
+            "memory",
+            "memory"
+        ],
+        [
+            "memory",
+            "memory"
+        ],
+        [
+            "memory",
+            "memory"
+        ],
+        [
+            "memory",
+            "general"
+        ],
+        [
+            "general",
+            "general"
+        ],
+        [
+            "general",
+            "general"
+        ],
+        [
+            "general",
+            "general"
+        ],
+        [
+            "general",
+            "general"
+        ],
+        [
+            "general",
+            "memory"
+        ],
+        [
+            "memory",
+            "joke"
+        ],
+        [
+            "joke",
+            "currency"
         ]
     ],
     "intent_weights": {
-        "general": 6,
+        "general": 16,
         "news": 2,
-        "memory": 8,
+        "memory": 18,
         "greeting": 12,
         "translation": 10,
-        "joke": 6,
+        "joke": 8,
         "dictionary": 4,
         "screenshot": 2,
         "code": 2,
-        "currency": 2
+        "currency": 4
     },
-    "last_seen": "2026-04-09 00:53"
+    "last_seen": "2026-04-09 19:24"
 }
