@@ -49,6 +49,7 @@ from brain.provider_hub import (
     STATUS_RATE_LIMITED,
     STATUS_UNAVAILABLE,
     get_provider_status as get_runtime_provider_status,
+    get_runtime_provider_summary,
     list_provider_statuses,
     summarize_provider_statuses,
 )
@@ -97,6 +98,7 @@ PROVIDER_HEALTH_CACHE: dict[str, Any] = {
     "checked_at": 0.0,
     "items": [],
     "providers": {},
+    "assistant_runtime": {},
 }
 PROVIDER_REFRESH_INTERVAL_SECONDS = 300
 
@@ -175,6 +177,7 @@ class AgentRunRequest(BaseModel):
 
 class VoiceTextRequest(BaseModel):
     text: str
+    mode: str = "hybrid"
 
 
 class VoiceCaptureRequest(BaseModel):
@@ -269,6 +272,7 @@ def _provider_health_snapshot(*, force: bool = False) -> dict[str, Any]:
 
     should_probe = force or not PROVIDER_HEALTH_CACHE["items"] or cache_age >= PROVIDER_REFRESH_INTERVAL_SECONDS
     summary = summarize_provider_statuses(fresh=should_probe)
+    runtime_summary = get_runtime_provider_summary(fresh=should_probe)
     items = summary.get("items", [])
     snapshot = {
         "checked_at_ts": now,
@@ -278,6 +282,7 @@ def _provider_health_snapshot(*, force: bool = False) -> dict[str, Any]:
         "routing_order": list(summary.get("routing_order", [])),
         "healthy": list(summary.get("healthy", [])),
         "configured": list(summary.get("configured", [])),
+        "assistant_runtime": runtime_summary,
     }
     PROVIDER_HEALTH_CACHE.update(snapshot)
     return PROVIDER_HEALTH_CACHE
@@ -361,6 +366,7 @@ def _system_health_payload() -> dict[str, Any]:
         "providers": dict(provider_snapshot.get("providers", {})),
         "provider_details": provider_snapshot.get("items", []),
         "routing_order": list(provider_snapshot.get("routing_order", [])),
+        "assistant_runtime": dict(provider_snapshot.get("assistant_runtime") or {}),
         "uptime_seconds": round(time.time() - SERVER_STARTED_AT, 2),
         "total_requests": int(REQUEST_METRICS["total_requests"]),
         "failed_requests": int(REQUEST_METRICS["failed_requests"]),
@@ -1450,19 +1456,30 @@ async def system_status(request: Request):
     memory_connected = memory_status["vector_store_ready"]
     memory_health = "connected" if memory_connected else "degraded"
     memory_mode = "real" if memory_connected else "fallback"
-    provider_summary = summarize_provider_statuses(fresh=False)
-    routing_order = provider_summary.get("routing_order", [])
-    primary_provider = routing_order[0] if routing_order else None
-    primary_model = next(
-        (item.get("model") for item in provider_summary.get("items", []) if item.get("provider") == primary_provider),
+    provider_snapshot = _provider_health_snapshot(force=False)
+    provider_summary = {
+        "routing_order": provider_snapshot.get("routing_order", []),
+        "healthy": provider_snapshot.get("healthy", []),
+        "configured": provider_snapshot.get("configured", []),
+        "items": provider_snapshot.get("items", []),
+        "providers": provider_snapshot.get("providers", {}),
+        "assistant_runtime": provider_snapshot.get("assistant_runtime", {}),
+    }
+    assistant_runtime = provider_snapshot.get("assistant_runtime") or {}
+    primary_provider = assistant_runtime.get("preferred_provider")
+    active_provider = assistant_runtime.get("active_provider")
+    displayed_provider = active_provider or primary_provider
+    displayed_model = assistant_runtime.get("active_model") or next(
+        (item.get("model") for item in provider_snapshot.get("items", []) if item.get("provider") == displayed_provider),
         None,
     )
     profile = load_user_profile()
     return {
         "status": "online",
         "version": "1.0.0",
-        "model": primary_model or MODEL_NAME,
+        "model": displayed_model or MODEL_NAME,
         "primary_provider": primary_provider,
+        "active_provider": active_provider,
         "orchestrator": "rule_based_available",
         "reasoning": "hybrid_available",
         "memory": memory_health,
@@ -1473,6 +1490,7 @@ async def system_status(request: Request):
         "memory_stats": get_memory_stats(),
         "memory_backend": memory_status,
         "providers": provider_summary,
+        "assistant_runtime": assistant_runtime,
         "security": {
             "pin": get_pin_status(),
             "auth": {"authenticated": True, "user": user},
@@ -1486,10 +1504,12 @@ async def system_status(request: Request):
             "planner": {"status": "available", "mode": "hybrid"},
             "voice": {"status": "available" if get_voice_status()["settings"]["enabled"] else "standby", "mode": "hybrid"},
             "providers": {
-                "status": "available" if provider_summary["healthy"] else "degraded",
-                "mode": "hybrid",
+                "status": assistant_runtime.get("status") or ("healthy" if provider_summary["healthy"] else "degraded"),
+                "mode": "real" if assistant_runtime.get("active_provider") else "hybrid",
                 "available": provider_summary["healthy"],
                 "routing_order": provider_summary["routing_order"],
+                "summary": assistant_runtime.get("message") or "Provider routing data is not available yet.",
+                "active_provider": assistant_runtime.get("active_provider"),
             },
             "memory": {
                 "status": memory_health,
@@ -1543,6 +1563,7 @@ async def get_provider_status(request: Request):
         "items": snapshot.get("items", []),
         "providers": snapshot.get("providers", {}),
         "checked_at": snapshot.get("checked_at"),
+        "assistant_runtime": snapshot.get("assistant_runtime", {}),
     }
 
 
@@ -1565,6 +1586,7 @@ async def get_provider_health(request: Request):
         "routing_order": snapshot.get("routing_order", []),
         "healthy": snapshot.get("healthy", []),
         "configured": snapshot.get("configured", []),
+        "assistant_runtime": snapshot.get("assistant_runtime", {}),
     }
 
 
@@ -1684,8 +1706,15 @@ async def update_voice_settings_endpoint(settings: VoiceSettingsUpdate):
 
 
 @app.post("/api/voice/text")
-async def process_voice_text_endpoint(request: VoiceTextRequest):
-    return process_voice_text(request.text)
+async def process_voice_text_endpoint(payload: VoiceTextRequest, request: Request):
+    user = _require_authenticated_user(request)
+    session_id = _resolve_session_id(request)
+    return process_voice_text(
+        payload.text,
+        session_id=session_id,
+        user_profile=user,
+        current_mode=payload.mode,
+    )
 
 
 @app.post("/api/voice/speak")

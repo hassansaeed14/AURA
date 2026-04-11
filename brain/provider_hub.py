@@ -192,6 +192,15 @@ def _error_status(error: str) -> tuple[str, str]:
     return STATUS_DEGRADED, "Provider call failed."
 
 
+def _humanize_status(status: str) -> str:
+    normalized = str(status or "").strip().lower()
+    if not normalized:
+        return "unknown"
+    if normalized == STATUS_CONFIGURED_UNVERIFIED:
+        return "configured but not verified yet"
+    return normalized.replace("_", " ")
+
+
 class ProviderHub:
     """Shared provider routing and health source of truth for AURA."""
 
@@ -695,6 +704,54 @@ class ProviderHub:
     def get_all_statuses(self, fresh: bool = False) -> Dict[str, dict[str, Any]]:
         return {provider: self.check_provider(provider, fresh=fresh) for provider in self._routing_order()}
 
+    def get_runtime_summary(self, *, preferred: Optional[str] = None, fresh: bool = False) -> Dict[str, Any]:
+        route_order = self._routing_order(preferred=preferred)
+        items = [get_provider_status(provider, fresh=fresh).to_dict() for provider in route_order]
+        by_provider = {item["provider"]: item for item in items}
+        preferred_provider = route_order[0] if route_order else None
+        preferred_item = by_provider.get(preferred_provider or "")
+        configured = [item["provider"] for item in items if item.get("configured")]
+        healthy_items = [by_provider[provider] for provider in route_order if by_provider.get(provider, {}).get("status") == STATUS_HEALTHY]
+        recently_used = [item for item in healthy_items if item.get("last_used_at")]
+        active_item = (
+            max(recently_used, key=lambda item: float(item.get("last_used_at") or 0.0))
+            if recently_used
+            else (healthy_items[0] if healthy_items else None)
+        )
+
+        if active_item:
+            active_provider = str(active_item.get("provider") or "").strip().lower()
+            status = STATUS_HEALTHY if active_provider == preferred_provider else STATUS_DEGRADED
+            if active_provider == preferred_provider:
+                message = f"{active_provider.upper()} is healthy and serving AURA's active reasoning path."
+            else:
+                preferred_status = _humanize_status(str(preferred_item.get("status") if preferred_item else STATUS_NOT_CONFIGURED))
+                message = (
+                    f"{str(preferred_provider or 'primary provider').upper()} is {preferred_status}, "
+                    f"so AURA is routing through {active_provider.upper()}."
+                )
+        elif configured:
+            active_provider = None
+            status = STATUS_DEGRADED
+            message = "Configured providers are present, but none are healthy enough for dependable live responses."
+        else:
+            active_provider = None
+            status = STATUS_NOT_CONFIGURED
+            message = "No live providers are configured."
+
+        return {
+            "status": status,
+            "preferred_provider": preferred_provider,
+            "preferred_status": preferred_item.get("status") if preferred_item else STATUS_NOT_CONFIGURED,
+            "active_provider": active_provider,
+            "active_model": active_item.get("model") if active_item else None,
+            "routing_order": route_order,
+            "healthy_providers": [item["provider"] for item in healthy_items],
+            "configured_providers": configured,
+            "message": message,
+            "items": items,
+        }
+
 
 provider_hub = ProviderHub()
 
@@ -748,6 +805,10 @@ def summarize_provider_statuses(*, fresh: bool = False) -> Dict[str, Any]:
         "items": items,
         "providers": {item["provider"]: item["status"] for item in items},
     }
+
+
+def get_runtime_provider_summary(*, preferred: Optional[str] = None, fresh: bool = False) -> Dict[str, Any]:
+    return provider_hub.get_runtime_summary(preferred=preferred, fresh=fresh)
 
 
 def pick_provider(preferred: Optional[str] = None) -> Optional[str]:
