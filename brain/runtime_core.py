@@ -1,4 +1,5 @@
 import re
+import time
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
@@ -14,13 +15,27 @@ from brain.decision_engine import (
     should_treat_as_multi_command,
     should_use_agent,
 )
+from brain.entity_parser import parse_entities
 from brain.planner import summarize_execution_plan
+from brain.provider_hub import generate_with_best_provider
 from brain.reflection_engine import record_reflection
-from brain.intent_engine import detect_intent_with_confidence
 from brain.orchestrator import orchestrator as master_orchestrator
-from brain.response_engine import generate_response
+from brain.response_engine import (
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_TEMPERATURE,
+    FALLBACK_USER_MESSAGE,
+    add_to_history,
+    build_messages,
+    build_system_prompt,
+    clean_response,
+    generate_response,
+    is_meaningful_text,
+)
+from brain.telemetry_engine import ProcessingTelemetry, set_last_telemetry
+from brain.intent_engine import detect_intent_with_confidence
 from brain.understanding_engine import clean_user_input
 
+from config.settings import DEFAULT_REASONING_PROVIDER
 from memory.knowledge_base import get_user_name, store_user_name
 from memory.memory_controller import process_interaction_memory
 
@@ -62,8 +77,7 @@ from agents.productivity.summarizer_agent import summarize_text, summarize_topic
 from agents.productivity.task_agent import add_task, complete_task, delete_task, get_tasks, plan_tasks
 from agents.system.file_agent import analyze_file, list_files
 from agents.system.screenshot_agent import take_screenshot
-
-from security.trust_engine import build_permission_response
+from security.trust_engine import build_permission_response, get_trust_level
 from agents.agent_fabric import match_generated_agent_request, run_generated_agent
 from agents.registry import build_runtime_agent_cards
 
@@ -75,6 +89,92 @@ try:
 except Exception:
     def store_memory(*args, **kwargs) -> None:
         return None
+
+
+def _telemetry_excerpt(value: Any, limit: int = 220) -> str:
+    if isinstance(value, dict):
+        text = clean_response(str({key: value[key] for key in list(value)[:4]}))
+    elif isinstance(value, list):
+        text = clean_response(", ".join(str(item) for item in value[:4]))
+    else:
+        text = clean_response(str(value or ""))
+    return text[:limit] if len(text) > limit else text
+
+
+def _with_telemetry(
+    payload: Dict[str, Any],
+    telemetry: Optional[ProcessingTelemetry],
+    *,
+    publish: bool = True,
+) -> Dict[str, Any]:
+    if telemetry is None:
+        return payload
+    telemetry_payload = telemetry.get_telemetry()
+    payload["telemetry"] = telemetry_payload
+    if publish:
+        set_last_telemetry(telemetry_payload)
+    return payload
+
+
+def _llm_response_with_provider(user_input: str, language: str) -> Dict[str, Any]:
+    system_prompt = build_system_prompt(language)
+    messages = build_messages(user_input, system_prompt)
+    started = time.perf_counter()
+    provider_response = generate_with_best_provider(
+        messages,
+        preferred=DEFAULT_REASONING_PROVIDER,
+        max_tokens=DEFAULT_MAX_TOKENS,
+        temperature=DEFAULT_TEMPERATURE,
+    )
+    elapsed_ms = (time.perf_counter() - started) * 1000
+
+    if not provider_response.get("success"):
+        reason = provider_response.get("reason") or "No configured provider produced a response."
+        attempts = provider_response.get("attempts") or []
+        failed_attempt = next((item for item in reversed(attempts) if item.get("status") == "failed"), None)
+        last_attempt = failed_attempt or next((item for item in reversed(attempts) if item.get("provider")), None)
+        provider_name = str((last_attempt or {}).get("provider") or "unavailable")
+        return {
+            "success": False,
+            "text": "",
+            "provider_name": provider_name,
+            "model": "unknown",
+            "tokens_used": None,
+            "time_ms": elapsed_ms,
+            "error": str(reason),
+        }
+
+    raw_result = str(provider_response.get("text", "")).strip()
+    cleaned = clean_response(raw_result)
+    if not is_meaningful_text(cleaned):
+        return {
+            "success": False,
+            "text": "",
+            "provider_name": provider_response.get("provider") or "unknown",
+            "model": provider_response.get("model") or "unknown",
+            "tokens_used": provider_response.get("tokens_used"),
+            "time_ms": elapsed_ms,
+            "error": FALLBACK_USER_MESSAGE,
+        }
+
+    add_to_history("user", user_input)
+    add_to_history("assistant", cleaned)
+    return {
+        "success": True,
+        "text": cleaned,
+        "provider_name": provider_response.get("provider") or "unknown",
+        "model": provider_response.get("model") or "unknown",
+        "tokens_used": provider_response.get("tokens_used"),
+        "time_ms": elapsed_ms,
+    }
+
+
+def _max_trust_level(levels: List[str]) -> str:
+    order = {"safe": 0, "private": 1, "sensitive": 2, "critical": 3}
+    normalized = [str(level or "safe").strip().lower() for level in levels if level]
+    if not normalized:
+        return "safe"
+    return max(normalized, key=lambda item: order.get(item, 0))
 
 
 def extract_currency_request(command: str) -> tuple[float, str, str]:
@@ -479,6 +579,8 @@ def build_result(
     plan_steps: Optional[List[str]] = None,
     permission_action: Optional[str] = None,
     permission: Optional[Dict[str, Any]] = None,
+    telemetry: Optional[ProcessingTelemetry] = None,
+    publish_telemetry: bool = True,
 ) -> Dict[str, Any]:
     translated_response = respond_in_language(response, language)
     final_intent = detected_intent if detected_intent != "general" else orchestration.get("primary_agent", "general")
@@ -512,7 +614,7 @@ def build_result(
     except Exception:
         pass
 
-    return {
+    return _with_telemetry({
         "intent": final_intent,
         "detected_intent": detected_intent,
         "confidence": confidence,
@@ -527,15 +629,33 @@ def build_result(
         "confidence_detail": confidence_detail,
         "permission_action": permission_action,
         "permission": permission,
-    }
+    }, telemetry, publish=publish_telemetry)
 
 
-def process_single_command_detailed(command: str) -> Dict[str, Any]:
+def process_single_command_detailed(
+    command: str,
+    telemetry: Optional[ProcessingTelemetry] = None,
+    *,
+    publish_telemetry: bool = True,
+) -> Dict[str, Any]:
+    active_telemetry = telemetry or ProcessingTelemetry()
+    raw_input = str(command or "")
+    understanding_started = time.perf_counter()
     raw_command = clean_user_input(command)
+    entities = parse_entities(raw_command).to_dict()
+    active_telemetry.record_understanding(
+        raw_input=raw_input,
+        normalized=raw_command,
+        entities=entities,
+        time_ms=(time.perf_counter() - understanding_started) * 1000,
+    )
     command_lower = raw_command.lower()
 
     if not raw_command:
-        return {
+        active_telemetry.record_intent("general", 0.0, [], 0.0)
+        active_telemetry.record_routing("general", "No message was provided.", "safe", 0.0)
+        active_telemetry.record_execution("general", "Please type something.", False, 0.0)
+        return _with_telemetry({
             "intent": "general",
             "detected_intent": "general",
             "confidence": 0.0,
@@ -549,12 +669,15 @@ def process_single_command_detailed(command: str) -> Dict[str, Any]:
             "language": "english",
             "permission_action": "general",
             "permission": build_permission_response("general"),
-        }
+        }, active_telemetry, publish=publish_telemetry)
 
     if command_lower in GREETING_INPUTS:
         response = get_personalized_greeting()
+        active_telemetry.record_intent("greeting", 1.0, [], 0.0)
+        active_telemetry.record_routing("general", "Greeting shortcut matched a known greeting input.", "safe", 0.0)
+        active_telemetry.record_execution("general", response, True, 0.0)
         store_and_learn(raw_command, response, "greeting")
-        return {
+        return _with_telemetry({
             "intent": "greeting",
             "detected_intent": "greeting",
             "confidence": 1.0,
@@ -568,12 +691,15 @@ def process_single_command_detailed(command: str) -> Dict[str, Any]:
             "language": "english",
             "permission_action": "general",
             "permission": build_permission_response("general"),
-        }
+        }, active_telemetry, publish=publish_telemetry)
 
     memory_response = handle_personal_memory(raw_command)
     if memory_response:
+        active_telemetry.record_intent(memory_response[0], 1.0, [], 0.0)
+        active_telemetry.record_routing("memory", "Personal memory handler matched the request.", "safe", 0.0)
+        active_telemetry.record_execution("memory", memory_response[1], True, 0.0)
         store_and_learn(raw_command, memory_response[1], memory_response[0])
-        return {
+        return _with_telemetry({
             "intent": memory_response[0],
             "detected_intent": memory_response[0],
             "confidence": 1.0,
@@ -587,18 +713,55 @@ def process_single_command_detailed(command: str) -> Dict[str, Any]:
             "language": "english",
             "permission_action": "memory_read",
             "permission": build_permission_response("memory_read", confirmed=True),
-        }
+        }, active_telemetry, publish=publish_telemetry)
 
     language = detect_language(raw_command)
+
+    intent_started = time.perf_counter()
     detected_intent, confidence = detect_intent_with_confidence(raw_command)
     confidence_detail = evaluate_confidence(raw_command).to_dict()
+    alternatives = [
+        {
+            "intent": item.get("intent"),
+            "score": item.get("score"),
+            "matched_rules": item.get("matched_rules", []),
+        }
+        for item in (confidence_detail.get("candidates") or [])[:3]
+    ]
+    active_telemetry.record_intent(
+        primary_intent=detected_intent,
+        confidence=confidence,
+        alternatives=alternatives,
+        time_ms=(time.perf_counter() - intent_started) * 1000,
+    )
+
+    routing_started = time.perf_counter()
     orchestration = master_orchestrator.analyze_task(raw_command, intent=detected_intent)
     permission_action = resolve_permission_action(raw_command, detected_intent, orchestration)
     permission = build_permission_response(permission_action)
+    selected_agent = orchestration.get("primary_agent") or detected_intent or "general"
+    routing_reason = (
+        orchestration.get("reason")
+        or orchestration.get("routing_reason")
+        or f"Detected intent '{detected_intent}' and selected '{selected_agent}'."
+    )
+    trust_level = get_trust_level(permission_action).value if permission_action else "safe"
+    active_telemetry.record_routing(
+        agent_selected=selected_agent,
+        reason=str(routing_reason),
+        trust_level=trust_level,
+        time_ms=(time.perf_counter() - routing_started) * 1000,
+    )
 
     if not permission["success"]:
+        active_telemetry.record_execution(
+            selected_agent,
+            permission["permission"]["reason"],
+            False,
+            0.0,
+        )
         try:
-            update_context_from_command(raw_command, agent=orchestration.get("primary_agent") or detected_intent)
+            update_context_from_command(raw_command, agent=selected_agent)
             record_reflection(
                 requested_action=detected_intent,
                 actual_action="permission_blocked",
@@ -609,15 +772,15 @@ def process_single_command_detailed(command: str) -> Dict[str, Any]:
             )
         except Exception:
             pass
-        return {
+        return _with_telemetry({
             "intent": "permission",
             "detected_intent": detected_intent,
             "confidence": confidence,
             "response": permission["permission"]["reason"],
             "plan": [],
-            "used_agents": [orchestration.get("primary_agent") or detected_intent] if (orchestration.get("primary_agent") or detected_intent) else [],
+            "used_agents": [selected_agent] if selected_agent else [],
             "agent_capabilities": build_agent_capability_cards(
-                [orchestration.get("primary_agent") or detected_intent],
+                [selected_agent],
                 detected_intent,
                 orchestration,
             ),
@@ -628,13 +791,14 @@ def process_single_command_detailed(command: str) -> Dict[str, Any]:
             "confidence_detail": confidence_detail,
             "permission_action": permission_action,
             "permission": permission,
-        }
+        }, active_telemetry, publish=publish_telemetry)
 
     if confidence < 0.40:
         log_low_confidence(raw_command, confidence)
 
     special_response = handle_special_intents(detected_intent)
     if special_response:
+        active_telemetry.record_execution(detected_intent, special_response, True, 0.0)
         return build_result(
             raw_command=raw_command,
             detected_intent=detected_intent,
@@ -647,6 +811,8 @@ def process_single_command_detailed(command: str) -> Dict[str, Any]:
             plan_steps=[],
             permission_action=permission_action,
             permission=permission,
+            telemetry=active_telemetry,
+            publish_telemetry=publish_telemetry,
         )
 
     resolved_intent = detected_intent
@@ -656,35 +822,75 @@ def process_single_command_detailed(command: str) -> Dict[str, Any]:
     response = ""
     used_agents: List[str] = []
     execution_mode = "fallback_llm"
+    execution_started = time.perf_counter()
 
-    orchestrated_response, orchestrated_agents, execution_mode = execute_orchestrated_agents(
-        raw_command,
-        detected_intent,
-        confidence,
-        orchestration,
-    )
+    try:
+        orchestrated_response, orchestrated_agents, execution_mode = execute_orchestrated_agents(
+            raw_command,
+            detected_intent,
+            confidence,
+            orchestration,
+        )
 
-    if orchestrated_response:
-        response = orchestrated_response
-        used_agents = orchestrated_agents
-    elif should_use_agent(resolved_intent, confidence, AGENT_ROUTER):
-        response = run_agent(resolved_intent, raw_command)
-        used_agents = [resolved_intent]
-        execution_mode = "single_agent"
-    else:
-        generated_match = match_generated_agent_request(raw_command, exclude_ids=AGENT_ROUTER.keys())
-        if generated_match:
-            generated_result = run_generated_agent(generated_match.id, raw_command)
-            response = normalize_agent_output(generated_result)
-            used_agents = [generated_match.id]
-            execution_mode = "generated_agent"
+        if orchestrated_response:
+            response = orchestrated_response
+            used_agents = orchestrated_agents
+        elif should_use_agent(resolved_intent, confidence, AGENT_ROUTER):
+            response = run_agent(resolved_intent, raw_command)
+            used_agents = [resolved_intent]
+            execution_mode = "single_agent"
         else:
-            enhanced_input = build_enhanced_input(raw_command, confidence)
-            try:
-                response = generate_response(enhanced_input)
-            except Exception as error:
-                log_failure(raw_command, str(error))
-                response = "I ran into a problem while processing that request."
+            generated_match = match_generated_agent_request(raw_command, exclude_ids=AGENT_ROUTER.keys())
+            if generated_match:
+                generated_result = run_generated_agent(generated_match.id, raw_command)
+                response = normalize_agent_output(generated_result)
+                used_agents = [generated_match.id]
+                execution_mode = "generated_agent"
+            else:
+                enhanced_input = build_enhanced_input(raw_command, confidence)
+                provider_result = _llm_response_with_provider(enhanced_input, language)
+                if provider_result.get("success"):
+                    response = str(provider_result.get("text") or "")
+                    active_telemetry.record_provider(
+                        provider_result.get("provider_name") or "unknown",
+                        provider_result.get("model") or "unknown",
+                        provider_result.get("tokens_used"),
+                        provider_result.get("time_ms") or 0.0,
+                    )
+                else:
+                    active_telemetry.record_provider(
+                        provider_result.get("provider_name") or "unavailable",
+                        provider_result.get("model") or "unknown",
+                        provider_result.get("tokens_used"),
+                        provider_result.get("time_ms") or 0.0,
+                        success=False,
+                        error=provider_result.get("error"),
+                    )
+                    log_failure(raw_command, str(provider_result.get("error") or "Provider response failed"))
+                    try:
+                        response = generate_response(enhanced_input)
+                    except Exception as error:
+                        log_failure(raw_command, str(error))
+                        response = "I ran into a problem while processing that request."
+        normalized_response = clean_response(response).lower()
+        success = bool(normalized_response) and "i ran into a problem" not in normalized_response
+    except Exception as error:
+        execution_time_ms = (time.perf_counter() - execution_started) * 1000
+        active_telemetry.record_execution(
+            used_agents[0] if used_agents else (orchestration.get("primary_agent") or resolved_intent or "general"),
+            str(error),
+            False,
+            execution_time_ms,
+        )
+        raise
+
+    execution_time_ms = (time.perf_counter() - execution_started) * 1000
+    active_telemetry.record_execution(
+        used_agents[0] if used_agents else (orchestration.get("primary_agent") or resolved_intent or "general"),
+        _telemetry_excerpt(response),
+        success,
+        execution_time_ms,
+    )
 
     plan_steps = build_plan_steps(raw_command, resolved_intent, confidence, orchestration)
 
@@ -700,6 +906,8 @@ def process_single_command_detailed(command: str) -> Dict[str, Any]:
         plan_steps=plan_steps,
         permission_action=permission_action,
         permission=permission,
+        telemetry=active_telemetry,
+        publish_telemetry=publish_telemetry,
     )
 
 
@@ -709,6 +917,7 @@ def process_single_command(command: str) -> tuple[str, str]:
 
 
 def process_command_detailed(command: str) -> Dict[str, Any]:
+    raw_input = str(command or "")
     raw_command = clean_user_input(command)
 
     if not raw_command:
@@ -719,7 +928,19 @@ def process_command_detailed(command: str) -> Dict[str, Any]:
     if not should_treat_as_multi_command(sub_commands):
         return process_single_command_detailed(raw_command)
 
-    results = [process_single_command_detailed(sub_command) for sub_command in sub_commands]
+    aggregate_telemetry = ProcessingTelemetry()
+    understanding_started = time.perf_counter()
+    aggregate_telemetry.record_understanding(
+        raw_input=raw_input,
+        normalized=raw_command,
+        entities=parse_entities(raw_command).to_dict(),
+        time_ms=(time.perf_counter() - understanding_started) * 1000,
+    )
+
+    results = [
+        process_single_command_detailed(sub_command, publish_telemetry=False)
+        for sub_command in sub_commands
+    ]
     responses = [item["response"] for item in results]
 
     used_agents: List[str] = []
@@ -749,8 +970,72 @@ def process_command_detailed(command: str) -> Dict[str, Any]:
         "mode": "real",
         "blocked_commands": blocked_permissions,
     }
+    intent_alternatives = []
+    routing_levels = []
+    execution_success = True
+    execution_time_ms = 0.0
+    last_provider_stage: Optional[Dict[str, Any]] = None
 
-    return {
+    for sub_command, item in zip(sub_commands, results):
+        telemetry = item.get("telemetry") or {}
+        stages = telemetry.get("stages") or {}
+        intent_stage = stages.get("intent") or {}
+        routing_stage = stages.get("routing") or {}
+        execution_stage = stages.get("execution") or {}
+        provider_stage = stages.get("provider") or {}
+
+        if intent_stage:
+            intent_alternatives.append(
+                {
+                    "intent": intent_stage.get("primary_intent") or item.get("detected_intent"),
+                    "score": intent_stage.get("confidence"),
+                    "matched_rules": [],
+                    "command": sub_command,
+                }
+            )
+        if routing_stage.get("trust_level"):
+            routing_levels.append(routing_stage.get("trust_level"))
+        if execution_stage.get("status") == "failed":
+            execution_success = False
+        execution_time_ms += float(execution_stage.get("time_ms") or 0.0)
+        if provider_stage.get("status") and provider_stage.get("status") != "idle":
+            last_provider_stage = provider_stage
+
+    aggregate_telemetry.record_intent(
+        primary_intent="multi_command",
+        confidence=max((item.get("confidence", 0.0) for item in results), default=0.0),
+        alternatives=intent_alternatives[:3],
+        time_ms=sum(
+            float(((item.get("telemetry") or {}).get("stages", {}).get("intent", {}) or {}).get("time_ms") or 0.0)
+            for item in results
+        ),
+    )
+    aggregate_telemetry.record_routing(
+        agent_selected=", ".join(used_agents) if used_agents else "multi_command",
+        reason=f"Split the request into {len(sub_commands)} actionable commands.",
+        trust_level=_max_trust_level(routing_levels),
+        time_ms=sum(
+            float(((item.get("telemetry") or {}).get("stages", {}).get("routing", {}) or {}).get("time_ms") or 0.0)
+            for item in results
+        ),
+    )
+    aggregate_telemetry.record_execution(
+        "multi_command",
+        f"Processed {len(results)} commands.",
+        execution_success,
+        execution_time_ms,
+    )
+    if last_provider_stage:
+        aggregate_telemetry.record_provider(
+            last_provider_stage.get("provider_name") or "unknown",
+            last_provider_stage.get("model") or "unknown",
+            last_provider_stage.get("tokens_used"),
+            float(last_provider_stage.get("time_ms") or 0.0),
+            success=last_provider_stage.get("status") != "failed",
+            error=last_provider_stage.get("error"),
+        )
+
+    return _with_telemetry({
         "intent": "multi_command",
         "detected_intent": "multi_command",
         "confidence": max((item.get("confidence", 0.0) for item in results), default=0.0),
@@ -772,7 +1057,7 @@ def process_command_detailed(command: str) -> Dict[str, Any]:
         "language": detect_language(raw_command),
         "permission_action": "multi_command",
         "permission": aggregated_permission,
-    }
+    }, aggregate_telemetry, publish=True)
 
 
 def process_command(command: str) -> tuple[str, str]:

@@ -59,6 +59,13 @@
               <small>Intent, reasoning, routing</small>
             </span>
           </button>
+          <button class="nav-item" type="button" data-view-target="processing">
+            <span class="nav-item__icon">PR</span>
+            <span class="nav-item__copy">
+              <strong>Processing</strong>
+              <small>Real pipeline telemetry</small>
+            </span>
+          </button>
           <button class="nav-item" type="button" data-view-target="autonomy">
             <span class="nav-item__icon">AU</span>
             <span class="nav-item__copy">
@@ -501,6 +508,87 @@
                   </div>
                 </div>
                 <div class="timeline" id="autonomyTimeline"></div>
+              </article>
+            </div>
+          </section>
+
+          <section class="view-section" data-view="processing">
+            <div class="section-header">
+              <div>
+                <p class="eyebrow">Processing view</p>
+                <h3>Real backend telemetry and health signals</h3>
+              </div>
+              <span class="surface-badge surface-badge--holo">Backend visibility</span>
+            </div>
+
+            <div class="view-grid view-grid--processing">
+              <article class="panel panel--full">
+                <div class="panel__head">
+                  <div>
+                    <p class="eyebrow">Live pipeline</p>
+                    <h4>Understanding to response</h4>
+                  </div>
+                </div>
+                <div class="pipeline-container" id="processingPipeline"></div>
+                <div id="processingEmptyState"></div>
+              </article>
+
+              <article class="panel panel--wide">
+                <div class="panel__head">
+                  <div>
+                    <p class="eyebrow">Last request details</p>
+                    <h4>Understanding and intent</h4>
+                  </div>
+                </div>
+                <details class="stage-detail" open>
+                  <summary>Understanding</summary>
+                  <div id="processingUnderstandingDetails"></div>
+                </details>
+                <details class="stage-detail">
+                  <summary>Intent detection</summary>
+                  <div id="processingIntentDetails"></div>
+                </details>
+              </article>
+
+              <article class="panel panel--wide">
+                <div class="panel__head">
+                  <div>
+                    <p class="eyebrow">Routing and execution</p>
+                    <h4>Selected path and result</h4>
+                  </div>
+                </div>
+                <details class="stage-detail" open>
+                  <summary>Routing decision</summary>
+                  <div id="processingRoutingDetails"></div>
+                </details>
+                <details class="stage-detail">
+                  <summary>Execution</summary>
+                  <div id="processingExecutionDetails"></div>
+                </details>
+                <details class="stage-detail">
+                  <summary>AI provider</summary>
+                  <div id="processingProviderDetails"></div>
+                </details>
+              </article>
+
+              <article class="panel panel--wide">
+                <div class="panel__head">
+                  <div>
+                    <p class="eyebrow">Provider health</p>
+                    <h4>Live provider probes</h4>
+                  </div>
+                </div>
+                <div class="provider-grid" id="processingProviderCards"></div>
+              </article>
+
+              <article class="panel panel--wide">
+                <div class="panel__head">
+                  <div>
+                    <p class="eyebrow">System health</p>
+                    <h4>Observed backend status</h4>
+                  </div>
+                </div>
+                <div class="health-grid" id="processingSystemHealth"></div>
               </article>
             </div>
           </section>

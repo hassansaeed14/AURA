@@ -1,5 +1,7 @@
 import json
+import sqlite3
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -30,17 +32,23 @@ from brain.understanding_engine import clean_user_input
 from brain.intent_engine import detect_intent_with_confidence
 from brain.decision_engine import build_decision_summary
 from brain.core_ai import AGENT_ROUTER, process_command_detailed
+from brain.telemetry_engine import get_last_telemetry
 from brain.response_engine import (
     FALLBACK_USER_MESSAGE,
     clean_response,
     generate_response,
 )
-from brain.provider_hub import summarize_provider_statuses
+from brain.provider_hub import (
+    SUPPORTED_PROVIDERS,
+    generate_with_provider,
+    get_provider_status as get_runtime_provider_status,
+    summarize_provider_statuses,
+)
 from config.master_spec import CAPABILITY_LABELS, HYBRID_IMPLEMENTATION_ORDER
 from config.system_modes import list_system_modes
 from config.settings import MODEL_NAME
 from memory import vector_memory
-from memory.chat_history import clear_history, get_all_sessions, get_history, save_message
+from memory.chat_history import DB_PATH as CHAT_HISTORY_DB_PATH, clear_history, get_all_sessions, get_history, save_message
 from memory.memory_stats import get_memory_stats
 from security.access_control import AccessController
 from security.auth_manager import (
@@ -74,6 +82,14 @@ from voice.voice_manager import load_user_profile, save_user_profile
 
 
 app = FastAPI()
+SERVER_STARTED_AT = time.time()
+REQUEST_METRICS = {"total_requests": 0, "failed_requests": 0}
+PROVIDER_HEALTH_CACHE: dict[str, Any] = {
+    "checked_at_ts": 0.0,
+    "checked_at": 0.0,
+    "items": [],
+    "providers": {},
+}
 
 app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
 
@@ -229,6 +245,154 @@ def _cors_headers() -> dict[str, str]:
     return {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "Content-Type",
+    }
+
+
+def _provider_probe_messages() -> list[dict[str, str]]:
+    return [
+        {"role": "system", "content": "Reply with exactly OK."},
+        {"role": "user", "content": "OK?"},
+    ]
+
+
+def _probe_provider_health(provider: str) -> dict[str, Any]:
+    provider_status = get_runtime_provider_status(provider)
+    base_payload = {
+        "provider": provider_status.provider,
+        "model": provider_status.model,
+        "response_time_ms": None,
+        "error": None,
+    }
+
+    if not provider_status.configured:
+        return {
+            **base_payload,
+            "status": "not_configured",
+            "error": provider_status.reason,
+        }
+
+    if not provider_status.available:
+        return {
+            **base_payload,
+            "status": "failing",
+            "error": provider_status.reason,
+        }
+
+    started = time.perf_counter()
+    try:
+        result = generate_with_provider(
+            provider_status.provider,
+            _provider_probe_messages(),
+            max_tokens=8,
+            temperature=0.0,
+        )
+        return {
+            **base_payload,
+            "status": "working",
+            "model": result.get("model") or provider_status.model,
+            "response_time_ms": round((time.perf_counter() - started) * 1000, 2),
+            "error": None,
+        }
+    except Exception as error:
+        return {
+            **base_payload,
+            "status": "failing",
+            "response_time_ms": round((time.perf_counter() - started) * 1000, 2),
+            "error": str(error),
+        }
+
+
+def _provider_health_snapshot(*, force: bool = False) -> dict[str, Any]:
+    now = time.time()
+    if (
+        not force
+        and PROVIDER_HEALTH_CACHE["items"]
+        and (now - float(PROVIDER_HEALTH_CACHE["checked_at_ts"] or 0.0)) < 55
+    ):
+        return PROVIDER_HEALTH_CACHE
+
+    items = [_probe_provider_health(provider) for provider in SUPPORTED_PROVIDERS]
+    snapshot = {
+        "checked_at_ts": now,
+        "checked_at": datetime.now().isoformat(timespec="seconds"),
+        "items": items,
+        "providers": {item["provider"]: item["status"] for item in items},
+    }
+    PROVIDER_HEALTH_CACHE.update(snapshot)
+    return PROVIDER_HEALTH_CACHE
+
+
+def _chat_requests_today() -> Optional[int]:
+    if not CHAT_HISTORY_DB_PATH.exists():
+        return 0
+    try:
+        with sqlite3.connect(CHAT_HISTORY_DB_PATH, timeout=5) as connection:
+            row = connection.execute(
+                """
+                SELECT COUNT(*) AS total
+                FROM chat_history
+                WHERE role = 'user' AND timestamp LIKE ?
+                """,
+                (f"{datetime.now().strftime('%Y-%m-%d')}%",),
+            ).fetchone()
+        if not row:
+            return 0
+        return int(row[0] or 0)
+    except Exception:
+        return None
+
+
+def _memory_health_label() -> str:
+    try:
+        get_memory_stats()
+        return "working"
+    except Exception:
+        return "down"
+
+
+def _vector_memory_health_label() -> str:
+    try:
+        status = vector_memory.get_status()
+    except Exception:
+        return "down"
+
+    if status.get("vector_store_ready"):
+        return "working"
+    if str(status.get("backend") or "").strip().lower() == "fallback":
+        return "fallback"
+    return "down"
+
+
+def _brain_health_label(provider_snapshot: dict[str, Any]) -> str:
+    telemetry = get_last_telemetry() or {}
+    execution = ((telemetry.get("stages") or {}).get("execution") or {})
+    status = str(execution.get("status") or "").strip().lower()
+    success = execution.get("success")
+    if status == "complete" and success is True:
+        return "working"
+    if status == "failed":
+        return "degraded"
+    if any(item.get("status") == "working" for item in provider_snapshot.get("items", [])):
+        return "degraded"
+    return "down"
+
+
+def _system_health_payload() -> dict[str, Any]:
+    provider_snapshot = _provider_health_snapshot(force=False)
+    voice_status = get_voice_status()
+    requests_today = _chat_requests_today()
+    return {
+        "brain": _brain_health_label(provider_snapshot),
+        "memory": _memory_health_label(),
+        "vector_memory": _vector_memory_health_label(),
+        "voice_stt": "working" if voice_status.get("stt", {}).get("available") else "unavailable",
+        "voice_tts": "working" if voice_status.get("tts", {}).get("available") else "unavailable",
+        "providers": dict(provider_snapshot.get("providers", {})),
+        "provider_details": provider_snapshot.get("items", []),
+        "uptime_seconds": round(time.time() - SERVER_STARTED_AT, 2),
+        "total_requests": int(REQUEST_METRICS["total_requests"]),
+        "failed_requests": int(REQUEST_METRICS["failed_requests"]),
+        "requests_today": requests_today,
     }
 
 
@@ -599,6 +763,24 @@ PUBLIC_PATHS = {
     "/api/setup",
     "/api/auth/session",
 }
+
+
+@app.middleware("http")
+async def aura_request_metrics_middleware(request: Request, call_next):
+    track_request = request.url.path in {"/api/chat", "/chat"}
+    try:
+        response = await call_next(request)
+    except Exception:
+        if track_request:
+            REQUEST_METRICS["total_requests"] += 1
+            REQUEST_METRICS["failed_requests"] += 1
+        raise
+
+    if track_request:
+        REQUEST_METRICS["total_requests"] += 1
+        if int(getattr(response, "status_code", 200)) >= 400:
+            REQUEST_METRICS["failed_requests"] += 1
+    return response
 
 
 @app.middleware("http")
@@ -1356,6 +1538,32 @@ async def get_capabilities():
 @app.get("/api/providers")
 async def get_provider_status():
     return summarize_provider_statuses()
+
+
+@app.get("/api/telemetry/last")
+async def get_last_request_telemetry():
+    return {
+        "status": "ok",
+        "telemetry": get_last_telemetry(),
+    }
+
+
+@app.get("/api/telemetry/providers")
+async def get_provider_health():
+    snapshot = _provider_health_snapshot(force=True)
+    return {
+        "status": "ok",
+        "checked_at": snapshot.get("checked_at"),
+        "items": snapshot.get("items", []),
+        "providers": snapshot.get("providers", {}),
+    }
+
+
+@app.get("/api/system/health")
+async def get_system_health():
+    payload = _system_health_payload()
+    payload["status"] = "ok"
+    return payload
 
 
 @app.get("/api/memory/stats")

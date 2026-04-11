@@ -14,6 +14,16 @@
             "time": "2026-04-10 05:01",
             "command": "add task buy milk",
             "reason": "Planning failed: Connection error."
+        },
+        {
+            "time": "2026-04-11 03:53",
+            "command": "aura",
+            "reason": "No configured provider produced a response."
+        },
+        {
+            "time": "2026-04-11 03:53",
+            "command": "aura",
+            "reason": "No configured provider produced a response."
         }
     ],
     "low_confidence_commands": [
@@ -281,6 +291,16 @@
             "time": "2026-04-11 00:24",
             "command": "research and summarize AI agents",
             "confidence": 0.3
+        },
+        {
+            "time": "2026-04-11 03:52",
+            "command": "aura",
+            "confidence": 0.0
+        },
+        {
+            "time": "2026-04-11 03:53",
+            "command": "aura",
+            "confidence": 0.0
         }
     ],
     "agent_errors": [],
@@ -967,6 +987,24 @@
             "time": "2026-04-11 00:24",
             "requested_action": "task",
             "actual_action": "task",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-11 03:53",
+            "requested_action": "general",
+            "actual_action": "general",
+            "success": true,
+            "blocked_by_permission": false,
+            "retry_possible": false,
+            "learning_signal": "successful_runtime_path"
+        },
+        {
+            "time": "2026-04-11 03:53",
+            "requested_action": "general",
+            "actual_action": "general",
             "success": true,
             "blocked_by_permission": false,
             "retry_possible": false,

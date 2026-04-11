@@ -18,6 +18,7 @@
     chat: { label: "AURA Operating Interface", title: "Chat" },
     memory: { label: "Memory Surface", title: "Memory" },
     intelligence: { label: "Reasoning and Routing", title: "Intelligence" },
+    processing: { label: "Live Pipeline Visibility", title: "Processing" },
     autonomy: { label: "Planning and Execution", title: "Autonomy" },
     tasks: { label: "Structured Follow Through", title: "Tasks and Reminders" },
     history: { label: "Conversation Record", title: "History" },
@@ -127,6 +128,9 @@
     reminderEditingId: null,
     memoryInsights: null,
     intelligenceInsights: null,
+    processingTelemetry: null,
+    providerHealth: null,
+    systemHealth: null,
     messages: [],
     historyFilter: "",
     sidebarOpen: false,
@@ -141,6 +145,8 @@
     recognition: null,
     speechSupported: "speechSynthesis" in window,
     speechVoice: null,
+    providerHealthTimer: null,
+    systemHealthTimer: null,
   };
 
   const el = {};
@@ -160,6 +166,7 @@
     seedWelcomeMessage();
     await bootstrapSession();
     await refreshAllData();
+    scheduleHealthRefresh();
   }
 
   function cacheDom() {
@@ -176,6 +183,9 @@
       "memoryPreferenceList", "memoryFactList", "memoryInterestList", "memoryTopIntents", "memoryInsights",
       "intelIntent", "intelConfidence", "intelAgent", "intelExecutionMode", "intelReasoningStatus",
       "intelPermissionStatus", "intelRecoveryNote", "intelImprovementSummary", "statusSubsystems",
+      "processingPipeline", "processingEmptyState", "processingUnderstandingDetails", "processingIntentDetails",
+      "processingRoutingDetails", "processingExecutionDetails", "processingProviderDetails",
+      "processingProviderCards", "processingSystemHealth",
       "capabilityGrid", "autonomyHeadline", "autonomyProgressBar", "autonomyProgressLabel",
       "autonomyTelemetryNote", "autonomyTools", "autonomyCompleted", "autonomyFailed", "autonomyRetries",
       "autonomyTimeline", "taskSummaryPending", "taskSummaryCompleted", "reminderSummaryActive",
@@ -637,6 +647,9 @@
       loadHistory(),
       loadMemoryInsights(),
       loadIntelligenceInsights(),
+      loadLastTelemetry(),
+      loadProviderHealth(),
+      loadSystemHealth(),
       loadVoiceRuntimeStatus(),
       loadConfirmationStatus(),
       loadTasks(),
@@ -647,10 +660,25 @@
     renderMemory();
     renderIntelligence();
     renderAutonomy();
+    updateProcessingView(state.processingTelemetry);
     renderTasks();
     renderHistory();
     renderRail();
     updateHeaderMetrics();
+  }
+
+  function scheduleHealthRefresh() {
+    if (!state.providerHealthTimer) {
+      state.providerHealthTimer = window.setInterval(() => {
+        loadProviderHealth();
+      }, 60000);
+    }
+
+    if (!state.systemHealthTimer) {
+      state.systemHealthTimer = window.setInterval(() => {
+        loadSystemHealth();
+      }, 30000);
+    }
   }
 
   async function loadProfileSettings(silent = true) {
@@ -795,6 +823,47 @@
     } catch (error) {
       if (!silent) {
         showToast("Intelligence insights unavailable", error.message, true);
+      }
+    }
+  }
+
+  async function loadLastTelemetry(silent = true) {
+    try {
+      const payload = await fetchJson("/api/telemetry/last");
+      state.processingTelemetry = payload.telemetry || null;
+      updateProcessingView(state.processingTelemetry);
+    } catch (error) {
+      state.processingTelemetry = null;
+      updateProcessingView(null);
+      if (!silent) {
+        showToast("Telemetry unavailable", error.message, true);
+      }
+    }
+  }
+
+  async function loadProviderHealth(silent = true) {
+    try {
+      const payload = await fetchJson("/api/telemetry/providers");
+      state.providerHealth = payload;
+      updateProcessingView(state.processingTelemetry);
+    } catch (error) {
+      state.providerHealth = null;
+      updateProcessingView(state.processingTelemetry);
+      if (!silent) {
+        showToast("Provider health unavailable", error.message, true);
+      }
+    }
+  }
+
+  async function loadSystemHealth(silent = true) {
+    try {
+      state.systemHealth = await fetchJson("/api/system/health");
+      updateProcessingView(state.processingTelemetry);
+    } catch (error) {
+      state.systemHealth = null;
+      updateProcessingView(state.processingTelemetry);
+      if (!silent) {
+        showToast("System health unavailable", error.message, true);
       }
     }
   }
@@ -944,6 +1013,7 @@
 
       setCurrentSessionId(result.session_id || state.currentSessionId);
       state.lastResult = { ...result, input: text };
+      state.processingTelemetry = result.telemetry || null;
       registerSessionMeta(text, result);
       setSystemState(result.plan?.length ? "executing" : "success");
       updateMessage(replyId, {
@@ -959,6 +1029,7 @@
       renderMemory();
       renderIntelligence();
       renderAutonomy();
+      updateProcessingView(state.processingTelemetry);
       renderHistory();
       renderRail();
 
@@ -966,7 +1037,14 @@
         showToast("History unavailable", result.history_status.error || "Chat history could not be saved locally.", true);
       }
 
-      await Promise.allSettled([loadSessions(), loadHistory(), loadMemoryInsights(), loadIntelligenceInsights()]);
+      await Promise.allSettled([
+        loadSessions(),
+        loadHistory(),
+        loadMemoryInsights(),
+        loadIntelligenceInsights(),
+        loadProviderHealth(),
+        loadSystemHealth(),
+      ]);
 
       if (state.settings.readResponses) {
         speakText(result.response);
@@ -987,6 +1065,7 @@
           streaming: false,
         },
       });
+      await Promise.allSettled([loadLastTelemetry(), loadProviderHealth(), loadSystemHealth()]);
       showToast("Command failed", error.message, true);
     } finally {
       setComposerBusy(false);
@@ -1066,6 +1145,7 @@
       permission_action: payload.permission_action || null,
       permission: payload.permission || {},
       agent_capabilities: Array.isArray(payload.agent_capabilities) ? payload.agent_capabilities : [],
+      telemetry: payload.telemetry || null,
     };
   }
 
@@ -1324,10 +1404,12 @@
   function clearChatSurface() {
     closeActiveChatStream();
     state.lastResult = null;
+    state.processingTelemetry = null;
     seedWelcomeMessage();
     setSystemState("idle");
     renderIntelligence();
     renderAutonomy();
+    updateProcessingView(null);
     renderRail();
     updateHeaderMetrics();
   }
@@ -2002,6 +2084,294 @@
         `;
       })
       .join("");
+  }
+
+  function updateProcessingView(telemetry) {
+    renderProcessingPipeline(telemetry);
+    renderProcessingDetails(telemetry);
+    renderProviderHealthCards();
+    renderSystemHealthPanel();
+  }
+
+  function renderProcessingPipeline(telemetry) {
+    const stages = telemetry?.stages || {};
+    const responseStage = stages.provider?.status && stages.provider.status !== "idle"
+      ? {
+          status: stages.provider.status,
+          time_ms: stages.provider.time_ms,
+          summary: [stages.provider.provider_name, stages.provider.model].filter(Boolean).join(" · "),
+        }
+      : stages.execution?.status && stages.execution.status !== "idle"
+        ? {
+            status: stages.execution.status,
+            time_ms: null,
+            summary: "Delivered without provider telemetry",
+          }
+        : {
+            status: "idle",
+            time_ms: null,
+            summary: "No data yet",
+          };
+
+    const pipeline = [
+      {
+        name: "Understanding",
+        data: stages.understanding,
+        summary: stages.understanding?.normalized || "No data yet",
+      },
+      {
+        name: "Intent",
+        data: stages.intent,
+        summary: stages.intent?.primary_intent
+          ? `${stages.intent.primary_intent} · ${getConfidenceText(stages.intent.confidence)}`
+          : "No data yet",
+      },
+      {
+        name: "Routing",
+        data: stages.routing,
+        summary: stages.routing?.agent_selected || "No data yet",
+      },
+      {
+        name: "Execution",
+        data: stages.execution,
+        summary: stages.execution?.agent || "No data yet",
+      },
+      {
+        name: "Response",
+        data: responseStage,
+        summary: responseStage.summary,
+      },
+    ];
+
+    if (!telemetry) {
+      el.processingPipeline.innerHTML = "";
+      el.processingEmptyState.innerHTML = renderEmptyState(
+        "No data yet",
+        "Send a real request and AURA will show the actual processing pipeline here.",
+      );
+      return;
+    }
+
+    el.processingEmptyState.innerHTML = "";
+    el.processingPipeline.innerHTML = pipeline
+      .map((stage, index) => {
+        const stageStatus = normalizeStageStatus(stage.data?.status);
+        const timeLabel = formatMilliseconds(stage.data?.time_ms);
+        return `
+          <div class="pipeline-stage ${stageStatus}">
+            <span class="pipeline-stage__name">${escapeHtml(stage.name)}</span>
+            <strong class="pipeline-stage__status">${escapeHtml(stageStatus)}</strong>
+            <span class="pipeline-stage__time">${escapeHtml(timeLabel)}</span>
+            <p class="support-copy">${escapeHtml(stage.summary || "No data yet")}</p>
+          </div>
+          ${index < pipeline.length - 1 ? '<span class="pipeline-arrow" aria-hidden="true">→</span>' : ""}
+        `;
+      })
+      .join("");
+  }
+
+  function renderProcessingDetails(telemetry) {
+    const stages = telemetry?.stages || {};
+    el.processingUnderstandingDetails.innerHTML = renderStageRows(
+      [
+        { key: "Original input", value: stages.understanding?.raw_input },
+        { key: "Cleaned input", value: stages.understanding?.normalized },
+        { key: "Entities extracted", value: formatStructuredValue(stages.understanding?.entities) },
+      ],
+      "No real understanding data yet.",
+    );
+
+    el.processingIntentDetails.innerHTML = renderStageRows(
+      [
+        { key: "Primary intent", value: stages.intent?.primary_intent },
+        { key: "Confidence score", value: stages.intent?.confidence ?? null },
+        {
+          key: "Top alternatives",
+          value: formatStructuredValue((stages.intent?.alternatives || []).slice(0, 3)),
+        },
+      ],
+      "No intent telemetry yet.",
+    );
+
+    el.processingRoutingDetails.innerHTML = renderStageRows(
+      [
+        { key: "Agent selected", value: stages.routing?.agent_selected },
+        { key: "Reason", value: stages.routing?.reason },
+        { key: "Trust level", value: stages.routing?.trust_level },
+      ],
+      "No routing telemetry yet.",
+    );
+
+    el.processingExecutionDetails.innerHTML = renderStageRows(
+      [
+        { key: "Agent used", value: stages.execution?.agent },
+        { key: "Result", value: stages.execution?.result },
+        { key: "Success", value: typeof stages.execution?.success === "boolean" ? String(stages.execution.success) : null },
+        { key: "Time taken", value: formatMilliseconds(stages.execution?.time_ms) },
+      ],
+      "No execution telemetry yet.",
+    );
+
+    el.processingProviderDetails.innerHTML = renderStageRows(
+      [
+        { key: "Provider", value: stages.provider?.provider_name },
+        { key: "Model", value: stages.provider?.model },
+        { key: "Tokens used", value: stages.provider?.tokens_used ?? null },
+        { key: "Response time", value: formatMilliseconds(stages.provider?.time_ms) },
+        { key: "Error", value: stages.provider?.error },
+      ],
+      "No provider telemetry yet.",
+    );
+  }
+
+  function renderProviderHealthCards() {
+    const items = state.providerHealth?.items || [];
+    if (!items.length) {
+      el.processingProviderCards.innerHTML = renderEmptyState(
+        "No provider data yet",
+        "Provider health cards will appear after the backend runs real provider checks.",
+        true,
+      );
+      return;
+    }
+
+    el.processingProviderCards.innerHTML = items
+      .map((item) => {
+        const statusClass = item.status === "not_configured" ? "unconfigured" : item.status;
+        return `
+          <article class="provider-card">
+            <div class="panel__head panel__head--sub">
+              <div>
+                <p class="eyebrow">${escapeHtml(item.provider?.toUpperCase() || "PROVIDER")}</p>
+                <h4>${escapeHtml(item.model || "Unknown model")}</h4>
+              </div>
+              <span class="provider-status ${escapeHtml(statusClass)}">${escapeHtml((item.status || "unknown").replaceAll("_", " "))}</span>
+            </div>
+            <div class="health-metric">
+              <span>Last response time</span>
+              <strong>${escapeHtml(formatMilliseconds(item.response_time_ms))}</strong>
+            </div>
+            <div class="health-metric">
+              <span>Error</span>
+              <strong>${escapeHtml(item.error || "None")}</strong>
+            </div>
+          </article>
+        `;
+      })
+      .join("");
+  }
+
+  function renderSystemHealthPanel() {
+    const health = state.systemHealth;
+    if (!health) {
+      el.processingSystemHealth.innerHTML = renderEmptyState(
+        "No system health yet",
+        "System health will appear once the backend endpoint responds.",
+        true,
+      );
+      return;
+    }
+
+    const metrics = [
+      { key: "Brain", value: health.brain, tone: health.brain },
+      { key: "Memory", value: health.memory, tone: health.memory },
+      { key: "Vector memory", value: health.vector_memory, tone: health.vector_memory },
+      { key: "Voice STT", value: health.voice_stt, tone: health.voice_stt === "working" ? "good" : "down" },
+      { key: "Voice TTS", value: health.voice_tts, tone: health.voice_tts === "working" ? "good" : "down" },
+      { key: "Uptime", value: formatUptime(health.uptime_seconds), tone: "good" },
+      { key: "Total requests", value: health.total_requests ?? "No data yet", tone: "good" },
+      { key: "Failed requests", value: health.failed_requests ?? "No data yet", tone: health.failed_requests ? "degraded" : "good" },
+      { key: "Requests today", value: health.requests_today ?? "No data yet", tone: "good" },
+    ];
+
+    el.processingSystemHealth.innerHTML = metrics
+      .map((metric) => `
+        <div class="health-metric">
+          <span>${escapeHtml(metric.key)}</span>
+          <strong class="health-value ${escapeHtml(normalizeHealthTone(metric.tone))}">${escapeHtml(String(metric.value))}</strong>
+        </div>
+      `)
+      .join("");
+  }
+
+  function renderStageRows(rows, emptyText) {
+    const values = rows.filter((row) => row.value !== null && row.value !== undefined && String(row.value).trim() !== "");
+    if (!values.length) {
+      return renderEmptyState("No data yet", emptyText, true);
+    }
+
+    return values
+      .map((row) => `
+        <div class="stage-row">
+          <span class="stage-key">${escapeHtml(row.key)}</span>
+          <span class="stage-value">${escapeHtml(String(row.value))}</span>
+        </div>
+      `)
+      .join("");
+  }
+
+  function normalizeStageStatus(status) {
+    const normalized = String(status || "idle").trim().toLowerCase();
+    if (["idle", "active", "complete", "failed"].includes(normalized)) {
+      return normalized;
+    }
+    if (normalized === "working") {
+      return "complete";
+    }
+    if (normalized === "failing" || normalized === "error") {
+      return "failed";
+    }
+    return "idle";
+  }
+
+  function normalizeHealthTone(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (normalized === "working" || normalized === "good") {
+      return "good";
+    }
+    if (normalized === "fallback" || normalized === "degraded") {
+      return "degraded";
+    }
+    if (normalized === "down" || normalized === "unavailable" || normalized === "failing") {
+      return "down";
+    }
+    return "good";
+  }
+
+  function formatStructuredValue(value) {
+    if (value === null || value === undefined) {
+      return "";
+    }
+    if (typeof value === "string") {
+      return value;
+    }
+    try {
+      return JSON.stringify(value);
+    } catch (error) {
+      return String(value);
+    }
+  }
+
+  function formatMilliseconds(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric < 0) {
+      return "No data yet";
+    }
+    return `${Math.round(numeric)} ms`;
+  }
+
+  function formatUptime(value) {
+    const seconds = Number(value);
+    if (!Number.isFinite(seconds) || seconds < 0) {
+      return "No data yet";
+    }
+    if (seconds < 60) {
+      return `${Math.round(seconds)}s`;
+    }
+    if (seconds < 3600) {
+      return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+    }
+    return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
   }
 
   function renderTasks() {
