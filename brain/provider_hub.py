@@ -643,11 +643,13 @@ class ProviderHub:
         messages: List[Dict[str, str]],
         *,
         preferred: Optional[str] = None,
+        preferred_only: bool = False,
         max_tokens: int,
         temperature: float,
     ) -> Dict[str, Any]:
         attempts: List[Dict[str, Any]] = []
-        route_order = self._routing_order(preferred=preferred)
+        full_route_order = self._routing_order(preferred=preferred)
+        route_order = full_route_order[:1] if preferred_only and full_route_order else full_route_order
 
         for provider in route_order:
             status = get_provider_status(provider, fresh=False)
@@ -839,12 +841,14 @@ def generate_with_best_provider(
     messages: List[Dict[str, str]],
     *,
     preferred: Optional[str] = None,
+    preferred_only: bool = False,
     max_tokens: int,
     temperature: float,
 ) -> Dict[str, Any]:
     return provider_hub.generate_with_best_provider(
         messages,
         preferred=preferred,
+        preferred_only=preferred_only,
         max_tokens=max_tokens,
         temperature=temperature,
     )

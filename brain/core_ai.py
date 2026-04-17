@@ -173,12 +173,6 @@ def _jarvisize_response(
     if prefix and not re.match(r"^(certainly|analysis complete|right away|welcome back|task complete|processing your request)\b", text, flags=re.IGNORECASE):
         text = f"{prefix}{text[0].lower() + text[1:] if len(text) > 1 and text[0].isupper() else text}"
 
-    working_memory = load_working_memory(session_id)
-    last_topic = str(working_memory.active_topic or "").strip()
-    if last_topic and last_topic.lower() in command.lower() and "You mentioned earlier" not in text and len(text) < 650:
-        user_reference = _build_user_reference(user_profile)
-        text += f"\n\nYou mentioned earlier that {last_topic} matters here, {user_reference}."
-
     if user_profile is None or bool(user_profile.get("proactive_suggestions", True)):
         suggestion = _infer_proactive_suggestion(intent, command)
         if suggestion and "Would you also like me to" not in text:

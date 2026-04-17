@@ -88,6 +88,12 @@ ACTION_TRUST_MAP: Dict[str, TrustLevel] = {
     "planner_agent": TrustLevel.SAFE,
     "tool_selector": TrustLevel.SAFE,
     "debug_agent": TrustLevel.SAFE,
+    "document": TrustLevel.SAFE,
+    "document_generation": TrustLevel.SAFE,
+    "document_generator": TrustLevel.SAFE,
+    "document_export": TrustLevel.SAFE,
+    "notes": TrustLevel.SAFE,
+    "assignment": TrustLevel.SAFE,
 
     # PRIVATE
     "memory_read": TrustLevel.PRIVATE,

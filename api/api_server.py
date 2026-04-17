@@ -89,6 +89,7 @@ from voice.voice_controller import (
 )
 from voice.voice_pipeline import process_voice_text
 from voice.voice_manager import load_user_profile, save_user_profile
+from tools.document_generator import GENERATED_DIR, cleanup_generated_documents, detect_document_request, generate_document, normalize_document_format
 
 
 app = FastAPI()
@@ -104,6 +105,8 @@ PROVIDER_HEALTH_CACHE: dict[str, Any] = {
 PROVIDER_REFRESH_INTERVAL_SECONDS = 300
 
 app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
+GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/downloads", StaticFiles(directory=str(GENERATED_DIR)), name="downloads")
 
 
 class Command(BaseModel):
@@ -194,6 +197,13 @@ class VoiceSettingsUpdate(BaseModel):
 class SecurityActionRequest(BaseModel):
     action_name: str
     session_id: str = "default"
+
+
+class DocumentGenerateRequest(BaseModel):
+    type: str
+    topic: str
+    format: str = "txt"
+    page_target: Optional[int] = None
 
 
 class LockRequest(BaseModel):
@@ -391,7 +401,7 @@ def _normalize_chat_mode(requested_mode: Optional[str], execution_mode: Optional
         return "real"
 
     execution = (execution_mode or "").strip().lower()
-    if execution in {"greeting", "memory", "special_intent", "single_agent", "generated_agent", "permission_blocked"}:
+    if execution in {"greeting", "memory", "special_intent", "single_agent", "generated_agent", "permission_blocked", "document_generation"}:
         return "real"
 
     if "agent" in execution and "fallback" not in execution:
@@ -619,11 +629,16 @@ def _prepare_chat_context(
     if not cleaned_message:
         raise ValueError("message is required")
 
+    document_request = detect_document_request(cleaned_message)
     detected_intent, confidence = detect_intent_with_confidence(cleaned_message)
+    permission_action = "document_generation" if document_request is not None else detected_intent
+    if document_request is not None:
+        detected_intent = "document"
+        confidence = 1.0
     decision = build_decision_summary(detected_intent, confidence, AGENT_ROUTER)
     normalized_session_id = _normalize_session_id(session_id)
     permission = build_permission_response(
-        detected_intent,
+        permission_action,
         confirmed=False,
         session_approved=is_action_approved(normalized_session_id, detected_intent),
         pin_verified=False,
@@ -770,6 +785,9 @@ def _execute_chat_pipeline(context: dict[str, Any]) -> dict[str, Any]:
     payload["model"] = result.get("model")
     payload["providers_tried"] = result.get("providers_tried", [])
     payload["degraded"] = degraded
+    for field in ("download_url", "file_name", "file_path", "document_type", "document_format", "page_target", "document_topic", "document_source"):
+        if result.get(field) is not None:
+            payload[field] = result.get(field)
     return payload
 
 
@@ -890,6 +908,7 @@ PUBLIC_PATHS = {
     "/api/system/health",
     "/api/voice/status",
     "/api/voice/text",
+    "/api/generate/document",
 }
 
 
@@ -914,7 +933,7 @@ async def aura_request_metrics_middleware(request: Request, call_next):
 @app.middleware("http")
 async def aura_private_access_middleware(request: Request, call_next):
     path = request.url.path
-    if path.startswith("/static"):
+    if path.startswith("/static") or path.startswith("/downloads"):
         return await call_next(request)
 
     setup_required = requires_first_run_setup()
@@ -1191,6 +1210,44 @@ async def api_chat(payload: ChatApiRequest, request: Request):
                 "error": str(error),
                 "status": "error",
             },
+            headers=_cors_headers(),
+        )
+
+
+@app.post("/api/generate/document")
+async def api_generate_document(payload: DocumentGenerateRequest):
+    try:
+        cleanup_generated_documents()
+        generated = generate_document(
+            payload.type,
+            payload.topic,
+            normalize_document_format(payload.format),
+            page_target=payload.page_target,
+        )
+        return JSONResponse(
+            content={
+                "success": True,
+                "download_url": generated["download_url"],
+                "file_name": generated["file_name"],
+                "document_type": generated["document_type"],
+                "format": generated["format"],
+                "page_target": generated.get("page_target"),
+                "topic": generated["topic"],
+                "provider": generated.get("provider"),
+                "source": generated.get("source"),
+            },
+            headers=_cors_headers(),
+        )
+    except ValueError as error:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "error": str(error), "status": "error"},
+            headers=_cors_headers(),
+        )
+    except Exception as error:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(error), "status": "error"},
             headers=_cors_headers(),
         )
 

@@ -14,6 +14,8 @@ from memory.vector_memory import store_memory
 
 
 DUCKDUCKGO_API_URL = "https://api.duckduckgo.com/"
+OPENAI_STATUS_API_URL = "https://status.openai.com/api/v2/status.json"
+GROQ_MODELS_URL = "https://console.groq.com/docs/models"
 REQUEST_TIMEOUT = 10
 
 CAPABILITY_MODE = "hybrid"
@@ -58,6 +60,8 @@ SEARCH_ACTION = "web_search"
 SUMMARY_ACTION = "summarize_website"
 
 SEARCH_SOURCE = "duckduckgo_instant_answer"
+OPENAI_STATUS_SOURCE = "official_openai_status"
+GROQ_MODELS_SOURCE = "official_groq_models"
 WEBSITE_FETCH_SOURCE = "website_fetch"
 LLM_SUMMARY_SOURCE = "llm_summary"
 FALLBACK_SUMMARY_SOURCE = "extractive_fallback"
@@ -715,6 +719,163 @@ class WebSearchAgent:
         self.parser = parser or SearchResponseParser()
         self.memory_manager = memory_manager or MemoryManager(enabled=False)
 
+    def _build_search_success(
+        self,
+        *,
+        query: str,
+        parsed: SearchResultItem,
+        source: str,
+    ) -> Dict[str, Any]:
+        memory_error = self.memory_manager.maybe_store(
+            f"Web searched: {query}",
+            {
+                "type": "web_search",
+                "query": query,
+                "source": source,
+            },
+        )
+
+        return ResultFactory.build(
+            success=True,
+            action=SEARCH_ACTION,
+            message=MessageFormatter.format_search_message(
+                query,
+                parsed.heading,
+                parsed.abstract,
+                parsed.related_topics,
+            ),
+            data=MessageFormatter.build_search_data(
+                query=query,
+                heading=parsed.heading,
+                abstract=parsed.abstract,
+                related_topics=parsed.related_topics,
+                memory_error=memory_error,
+            ),
+            source=source,
+            live_data=True,
+        )
+
+    @staticmethod
+    def _extract_groq_model_prices(lines: Sequence[str]) -> List[Dict[str, str]]:
+        prices: List[Dict[str, str]] = []
+        seen_model_ids = set()
+        money_pattern = re.compile(r"^\$\d+(?:\.\d+)?$")
+
+        for index in range(len(lines) - 5):
+            display_name = TextCleaner.clean_general(lines[index])
+            model_id = TextCleaner.clean_general(lines[index + 1])
+            if not display_name or not model_id or model_id in seen_model_ids:
+                continue
+            if "/" not in model_id and "-" not in model_id:
+                continue
+
+            for cursor in range(index + 2, min(index + 10, len(lines) - 3)):
+                input_price = TextCleaner.clean_general(lines[cursor])
+                input_label = TextCleaner.clean_general(lines[cursor + 1]).lower()
+                output_price = TextCleaner.clean_general(lines[cursor + 2])
+                output_label = TextCleaner.clean_general(lines[cursor + 3]).lower()
+                if (
+                    money_pattern.fullmatch(input_price)
+                    and input_label == "input"
+                    and money_pattern.fullmatch(output_price)
+                    and output_label == "output"
+                ):
+                    prices.append(
+                        {
+                            "display_name": display_name,
+                            "model_id": model_id,
+                            "input_price": input_price,
+                            "output_price": output_price,
+                        }
+                    )
+                    seen_model_ids.add(model_id)
+                    break
+
+        return prices
+
+    def _official_live_search_fallback(self, query: str) -> Optional[Tuple[SearchResultItem, str]]:
+        normalized_query = str(query or "").strip().lower()
+        if not normalized_query:
+            return None
+
+        try:
+            if "openai" in normalized_query and "status" in normalized_query:
+                payload = self.search_client.fetch_json(OPENAI_STATUS_API_URL, {})
+                status_info = payload.get("status") if isinstance(payload.get("status"), dict) else {}
+                page_info = payload.get("page") if isinstance(payload.get("page"), dict) else {}
+                description = TextCleaner.clean_general(status_info.get("description"))
+                indicator = TextCleaner.clean_general(status_info.get("indicator"))
+                updated_at = TextCleaner.clean_general(page_info.get("updated_at"))
+                if description:
+                    related_topics = []
+                    if indicator:
+                        related_topics.append(f"Status indicator: {indicator}.")
+                    if updated_at:
+                        related_topics.append(f"Updated at: {updated_at}.")
+                    related_topics.append("Source: status.openai.com")
+                    return (
+                        SearchResultItem(
+                            heading="OpenAI API status",
+                            abstract=f"OpenAI's official status page currently reports: {description}.",
+                            related_topics=related_topics,
+                        ),
+                        OPENAI_STATUS_SOURCE,
+                    )
+        except Exception:
+            return None
+
+        try:
+            if "groq" in normalized_query and any(token in normalized_query for token in ("price", "pricing")):
+                response = self.search_client.fetch_html(GROQ_MODELS_URL)
+                soup = BeautifulSoup(response.text, "html.parser")
+                text = soup.get_text("\n", strip=True)
+                lines = [TextCleaner.clean_general(line) for line in text.splitlines()]
+                lines = [line for line in lines if line]
+                price_entries = self._extract_groq_model_prices(lines)
+                if price_entries:
+                    preferred_order = [
+                        "llama-3.3-70b-versatile",
+                        "llama-3.1-8b-instant",
+                    ]
+                    ordered_entries = sorted(
+                        price_entries,
+                        key=lambda item: (
+                            0
+                            if item["model_id"] in preferred_order
+                            else 1,
+                            preferred_order.index(item["model_id"])
+                            if item["model_id"] in preferred_order
+                            else 999,
+                        ),
+                    )
+                    featured = ordered_entries[:3]
+                    lead = featured[0]
+                    abstract = (
+                        f"Groq's official models page currently lists {lead['display_name']} "
+                        f"({lead['model_id']}) at {lead['input_price']} input and {lead['output_price']} "
+                        "output per 1M tokens on the developer plan."
+                    )
+                    related_topics = [
+                        (
+                            f"{item['display_name']} ({item['model_id']}): "
+                            f"{item['input_price']} input and {item['output_price']} output per 1M tokens."
+                        )
+                        for item in featured[1:]
+                    ]
+                    related_topics.append("Source: console.groq.com/docs/models")
+                    return (
+                        SearchResultItem(
+                            heading="Groq API pricing",
+                            abstract=abstract,
+                            related_topics=related_topics,
+                        ),
+                        GROQ_MODELS_SOURCE,
+                    )
+        except Exception:
+            return None
+
+        return None
+
     def search(self, query: str) -> Dict[str, Any]:
         normalized_query = TextCleaner.clean_query(query)
 
@@ -744,41 +905,34 @@ class WebSearchAgent:
             parsed = self.parser.parse(payload)
 
             if not any([parsed.heading, parsed.abstract, parsed.related_topics]):
-                raise NoResultsError(
-                    "No useful search results returned.",
-                    user_message=f"No useful live search results were found for '{normalized_query}'.",
+                fallback = self._official_live_search_fallback(normalized_query)
+                if fallback is None:
+                    raise NoResultsError(
+                        "No useful search results returned.",
+                        user_message=f"No useful live search results were found for '{normalized_query}'.",
+                    )
+                parsed, source = fallback
+                return self._build_search_success(
+                    query=normalized_query,
+                    parsed=parsed,
+                    source=source,
                 )
 
-            memory_error = self.memory_manager.maybe_store(
-                f"Web searched: {normalized_query}",
-                {
-                    "type": "web_search",
-                    "query": normalized_query,
-                    "source": SEARCH_SOURCE,
-                },
-            )
-
-            return ResultFactory.build(
-                success=True,
-                action=SEARCH_ACTION,
-                message=MessageFormatter.format_search_message(
-                    normalized_query,
-                    parsed.heading,
-                    parsed.abstract,
-                    parsed.related_topics,
-                ),
-                data=MessageFormatter.build_search_data(
-                    query=normalized_query,
-                    heading=parsed.heading,
-                    abstract=parsed.abstract,
-                    related_topics=parsed.related_topics,
-                    memory_error=memory_error,
-                ),
+            return self._build_search_success(
+                query=normalized_query,
+                parsed=parsed,
                 source=SEARCH_SOURCE,
-                live_data=True,
             )
 
         except NoResultsError as error:
+            fallback = self._official_live_search_fallback(normalized_query)
+            if fallback is not None:
+                parsed, source = fallback
+                return self._build_search_success(
+                    query=normalized_query,
+                    parsed=parsed,
+                    source=source,
+                )
             return ResultFactory.build(
                 success=False,
                 action=SEARCH_ACTION,
@@ -791,6 +945,14 @@ class WebSearchAgent:
             )
 
         except requests.exceptions.Timeout as error:
+            fallback = self._official_live_search_fallback(normalized_query)
+            if fallback is not None:
+                parsed, source = fallback
+                return self._build_search_success(
+                    query=normalized_query,
+                    parsed=parsed,
+                    source=source,
+                )
             return ResultFactory.build(
                 success=False,
                 action=SEARCH_ACTION,
@@ -803,6 +965,14 @@ class WebSearchAgent:
             )
 
         except requests.exceptions.RequestException as error:
+            fallback = self._official_live_search_fallback(normalized_query)
+            if fallback is not None:
+                parsed, source = fallback
+                return self._build_search_success(
+                    query=normalized_query,
+                    parsed=parsed,
+                    source=source,
+                )
             return ResultFactory.build(
                 success=False,
                 action=SEARCH_ACTION,

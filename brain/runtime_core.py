@@ -79,6 +79,7 @@ from agents.system.screenshot_agent import take_screenshot
 from security.trust_engine import build_permission_response, get_trust_level
 from agents.agent_fabric import match_generated_agent_request, run_generated_agent
 from agents.registry import build_runtime_agent_cards
+from tools.document_generator import detect_document_request, generate_document
 
 
 GREETING_INPUTS = {"hi", "hello", "hey", "hey aura", "hi aura", "hello aura"}
@@ -226,12 +227,10 @@ def _llm_response_with_provider(user_input: str, language: str) -> Dict[str, Any
 
     if not provider_response.get("success"):
         attempts = provider_response.get("providers_tried") or []
-        last_attempt = str(attempts[-1]).strip() if attempts else ""
-        provider_name = last_attempt.split(":", 1)[0].strip() if ":" in last_attempt else "unavailable"
         return {
             "success": False,
             "text": provider_response.get("degraded_reply") or build_degraded_reply(user_input, attempts),
-            "provider_name": provider_name,
+            "provider_name": None,
             "model": provider_response.get("model") or "unknown",
             "tokens_used": None,
             "time_ms": elapsed_ms,
@@ -558,6 +557,18 @@ def handle_special_intents(intent: str) -> Optional[str]:
     return None
 
 
+def handle_document_generation(raw_command: str) -> Optional[Dict[str, Any]]:
+    request = detect_document_request(raw_command)
+    if request is None:
+        return None
+    return generate_document(
+        request.document_type,
+        request.topic,
+        request.export_format,
+        page_target=request.page_target,
+    )
+
+
 def build_enhanced_input(raw_command: str, confidence: float) -> str:
     try:
         enhanced_input = build_context(raw_command)
@@ -599,6 +610,17 @@ def looks_like_direct_assistant_request(raw_command: str) -> bool:
     return normalized_command.startswith(DIRECT_ASSISTANT_STARTERS)
 
 
+def looks_like_general_comparison_request(raw_command: str) -> bool:
+    normalized_command = str(raw_command or "").strip().lower()
+    if not normalized_command:
+        return False
+    non_comparison_tool_markers = tuple(marker for marker in DIRECT_ASSISTANT_TOOL_MARKERS if marker != "compare ")
+    if any(marker in normalized_command for marker in non_comparison_tool_markers):
+        return False
+    comparison_markers = ("compare ", " vs ", " versus ", "difference between")
+    return any(marker in normalized_command for marker in comparison_markers)
+
+
 def select_fast_assistant_route(raw_command: str, detected_intent: str, confidence: float) -> str:
     if should_prefer_conversational_path(raw_command, detected_intent, confidence):
         return "conversation"
@@ -608,6 +630,8 @@ def select_fast_assistant_route(raw_command: str, detected_intent: str, confiden
 
     normalized_intent = str(detected_intent or "general").strip().lower()
     if normalized_intent == "general" and confidence < 0.55 and looks_like_direct_assistant_request(raw_command):
+        return "assistant"
+    if normalized_intent == "general" and looks_like_general_comparison_request(raw_command):
         return "assistant"
 
     return ""
@@ -1041,6 +1065,54 @@ def process_single_command_detailed(
             "permission_action": "memory_read",
             "permission": build_permission_response("memory_read", confirmed=True),
         }, active_telemetry, publish=publish_telemetry)
+
+    document_result = handle_document_generation(raw_command)
+    if document_result is not None:
+        reply = str(document_result.get("message") or "I created your document.")
+        execution_time_ms = 0.0
+        active_telemetry.record_intent("document", 1.0, [], 0.0)
+        active_telemetry.record_routing(
+            "document_generator",
+            "Document request matched the notes or assignment generation path.",
+            "safe",
+            0.0,
+        )
+        active_telemetry.record_execution("document_generator", reply, True, execution_time_ms)
+        result = build_result(
+            raw_command=raw_command,
+            detected_intent="document",
+            confidence=1.0,
+            response=reply,
+            language="english",
+            orchestration={
+                "primary_agent": "document_generator",
+                "secondary_agents": [],
+                "execution_order": ["document_generator"],
+                "requires_multiple": False,
+                "primary_selection_source": "document_request_guard",
+                "mode": "real",
+                "reason": "Document generation request was routed directly to the document generator.",
+            },
+            used_agents=["document_generator"],
+            execution_mode="document_generation",
+            plan_steps=[],
+            permission_action="document_generation",
+            permission=build_permission_response("document_generation"),
+            provider_name=document_result.get("provider"),
+            provider_model=document_result.get("model"),
+            providers_tried=document_result.get("providers_tried") or [],
+            telemetry=active_telemetry,
+            publish_telemetry=publish_telemetry,
+        )
+        result["download_url"] = document_result.get("download_url")
+        result["file_name"] = document_result.get("file_name")
+        result["file_path"] = document_result.get("file_path")
+        result["document_type"] = document_result.get("document_type")
+        result["document_format"] = document_result.get("format")
+        result["page_target"] = document_result.get("page_target")
+        result["document_topic"] = document_result.get("topic")
+        result["document_source"] = document_result.get("source")
+        return result
 
     language = detect_language(raw_command)
 

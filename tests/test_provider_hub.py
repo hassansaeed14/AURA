@@ -191,7 +191,32 @@ class ProviderHubTests(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertEqual(result["provider"], "groq")
         self.assertEqual(result["attempts"][0]["provider"], "gemini")
-        self.assertEqual(result["attempts"][0]["status"], provider_hub.STATUS_DEGRADED)
+        self.assertEqual(result["attempts"][0]["status"], provider_hub.STATUS_UNAVAILABLE)
+
+    def test_generate_with_best_provider_can_lock_to_preferred_provider_only(self):
+        statuses = {
+            "groq": provider_hub.ProviderStatus("groq", "llama-3.3-70b-versatile", "real", True, False, True, "auth failed", status=provider_hub.STATUS_AUTH_FAILED),
+            "gemini": provider_hub.ProviderStatus("gemini", "gemini-2.5-flash", "real", True, True, True, "healthy", status=provider_hub.STATUS_HEALTHY),
+            "openai": provider_hub.ProviderStatus("openai", "gpt-4o-mini", "real", True, True, True, "healthy", status=provider_hub.STATUS_HEALTHY),
+        }
+
+        with patch.object(provider_hub, "get_provider_status", side_effect=lambda provider, fresh=False: statuses[provider]), patch.object(
+            provider_hub.provider_hub,
+            "generate_with_provider",
+        ) as generate_mock:
+            result = provider_hub.provider_hub.generate_with_best_provider(
+                [{"role": "user", "content": "ping"}],
+                preferred="groq",
+                preferred_only=True,
+                max_tokens=10,
+                temperature=0.0,
+            )
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["routing_order"], ["groq"])
+        self.assertEqual(result["attempts"][0]["provider"], "groq")
+        self.assertEqual(result["attempts"][0]["status"], provider_hub.STATUS_AUTH_FAILED)
+        generate_mock.assert_not_called()
 
     def test_runtime_provider_summary_explains_fallback_route(self):
         statuses = {

@@ -130,6 +130,40 @@ class RuntimeCoreTests(unittest.TestCase):
         self.assertEqual(result["provider"], "groq")
         self.assertIn("human judgment", result["response"].lower())
 
+    def test_compare_prompt_prefers_fast_assistant_path(self):
+        with patch.object(runtime_core, "detect_language", return_value="english"), patch.object(
+            runtime_core,
+            "detect_intent_with_confidence",
+            return_value=("general", 0.20),
+        ), patch.object(
+            runtime_core,
+            "_llm_response_with_provider",
+            return_value={
+                "success": True,
+                "text": "Python is easier to move quickly with, while Rust gives better performance and memory safety.",
+                "provider_name": "groq",
+                "model": "llama-3.3-70b-versatile",
+                "providers_tried": ["groq"],
+                "tokens_used": 55,
+                "time_ms": 18.0,
+            },
+        ), patch.object(
+            runtime_core.master_orchestrator,
+            "analyze_task",
+            side_effect=AssertionError("Simple comparison prompts should bypass multi-agent orchestration."),
+        ), patch.object(
+            runtime_core,
+            "respond_in_language",
+            side_effect=lambda response, language: response,
+        ), patch.object(runtime_core, "store_and_learn"):
+            result = runtime_core.process_single_command_detailed("compare python vs rust")
+
+        self.assertEqual(result["detected_intent"], "general")
+        self.assertEqual(result["used_agents"], ["general"])
+        self.assertEqual(result["execution_mode"], "assistant_llm")
+        self.assertEqual(result["provider"], "groq")
+        self.assertIn("memory safety", result["response"].lower())
+
     def test_special_intent_returns_structured_metadata(self):
         orchestration = {
             "primary_agent": "time",

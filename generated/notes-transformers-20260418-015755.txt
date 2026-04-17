@@ -1,0 +1,8 @@
+Transformers - Notes
+====================
+
+Transformers
+* Definition: Transformers are neural network architectures introduced in 2017
+* Primary function: Handling sequential data, such as text or time series data
+* Key advantage: Ability to process input sequences in parallel, improving efficiency
+Architecture Encoder: Takes in a sequence of tokens and outputs a sequence of vectors Decoder: Generates output sequence, one token at a time, based on the outp...
