@@ -62,6 +62,38 @@ CASUAL_CONVERSATION_MARKERS = (
     "thank you",
 )
 
+COMPARISON_MARKERS = (
+    "compare",
+    "difference between",
+    "vs",
+    "versus",
+    "better than",
+    "pros and cons",
+    "tradeoff",
+    "trade-off",
+)
+
+DEEP_EXPLANATION_MARKERS = (
+    "why",
+    "how",
+    "explain",
+    "walk me through",
+    "step by step",
+    "break down",
+    "break it down",
+    "in detail",
+    "in depth",
+    "deep dive",
+)
+
+SIMPLE_EXPLANATION_MARKERS = (
+    "tell me about",
+    "what is",
+    "who is",
+    "summarize",
+    "overview",
+)
+
 JARVIS_SYSTEM_PROMPT = """
 You are AURA - Autonomous Universal Responsive Assistant.
 You are a real AI assistant, not a chatbot.
@@ -205,6 +237,75 @@ def build_system_prompt(language: str, system_override: Optional[str] = None) ->
     return JARVIS_SYSTEM_PROMPT
 
 
+def infer_explanation_mode(user_input: str) -> str:
+    normalized = str(user_input or "").strip().lower()
+    if not normalized:
+        return "direct"
+
+    if normalized.endswith("?") and len(normalized.split()) <= 14:
+        return "direct"
+
+    if any(marker in normalized for marker in COMPARISON_MARKERS):
+        return "comparison"
+
+    if any(marker in normalized for marker in DEEP_EXPLANATION_MARKERS):
+        return "deep"
+
+    if any(marker in normalized for marker in SIMPLE_EXPLANATION_MARKERS):
+        return "simple"
+
+    if len(normalized.split()) <= 7 or normalized.endswith("?"):
+        return "direct"
+
+    return "simple"
+
+
+def build_explanation_guidance(user_input: str, *, web_used: bool = False) -> Dict[str, str]:
+    mode = infer_explanation_mode(user_input)
+    instructions = {
+        "direct": (
+            "Answer directly in the first sentence. Keep it tight, clear, and useful. "
+            "Do not drift into a long preamble."
+        ),
+        "simple": (
+            "Start with the answer, then give a short clear explanation. "
+            "Use plain language and keep the structure easy to follow."
+        ),
+        "deep": (
+            "Start with the answer, then explain the reasoning in a few clear parts. "
+            "Prefer a short breakdown over a dense paragraph."
+        ),
+        "comparison": (
+            "Answer with a crisp comparison. Lead with the key difference, then cover the most important tradeoffs."
+        ),
+    }
+    guidance = instructions.get(mode, instructions["direct"])
+    if web_used:
+        guidance = (
+            f"{guidance} Use the live web findings as grounding, but synthesize them naturally. "
+            "Do not dump snippets, lists of links, or raw search output. "
+            "If the information is time-sensitive, make that clear in a natural sentence."
+        )
+    return {"mode": mode, "guidance": guidance}
+
+
+def build_runtime_system_prompt(
+    user_input: str,
+    system_prompt: str,
+    *,
+    web_used: bool = False,
+) -> tuple[str, str]:
+    prompt = str(system_prompt or "").strip()
+    guidance = build_explanation_guidance(user_input, web_used=web_used)
+    if guidance["guidance"] and guidance["guidance"] not in prompt:
+        prompt = (
+            f"{prompt}\n\n"
+            "REQUEST-SPECIFIC STYLE:\n"
+            f"{guidance['guidance']}"
+        ).strip()
+    return prompt, guidance["mode"]
+
+
 def build_messages(
     user_input: str,
     system_prompt: str,
@@ -220,6 +321,69 @@ def build_messages(
     if is_meaningful_text(user_input):
         messages.append({"role": "user", "content": str(user_input).strip()})
     return messages
+
+
+def build_web_grounding_text(search_result: Dict[str, Any]) -> str:
+    safe_result = search_result if isinstance(search_result, dict) else {}
+    data = safe_result.get("data") if isinstance(safe_result.get("data"), dict) else {}
+    lines: List[str] = []
+
+    query = str(data.get("query", "")).strip()
+    heading = str(data.get("heading", "")).strip()
+    abstract = clean_response(data.get("abstract"))
+    related_topics = [
+        clean_response(item)
+        for item in list(data.get("related_topics") or [])[:4]
+        if is_meaningful_text(item)
+    ]
+
+    if query:
+        lines.append(f"Search query: {query}")
+    if heading:
+        lines.append(f"Primary topic: {heading}")
+    if abstract:
+        lines.append(f"Key live finding: {abstract}")
+    if related_topics:
+        lines.append("Related points:")
+        lines.extend(f"- {item}" for item in related_topics)
+
+    return "\n".join(lines).strip()
+
+
+def build_local_web_summary(search_result: Dict[str, Any], user_input: str = "") -> str:
+    safe_result = search_result if isinstance(search_result, dict) else {}
+    data = safe_result.get("data") if isinstance(safe_result.get("data"), dict) else {}
+
+    abstract = clean_response(data.get("abstract"))
+    heading = clean_response(data.get("heading"))
+    related_topics = [
+        clean_response(item)
+        for item in list(data.get("related_topics") or [])[:3]
+        if is_meaningful_text(item)
+    ]
+    time_sensitive = any(
+        token in str(user_input or "").lower()
+        for token in ("latest", "current", "today", "now", "recent", "recently", "price", "version", "status", "news")
+    )
+
+    if abstract:
+        opening = f"Based on the current web result, {abstract}" if time_sensitive else abstract
+        opening = opening.rstrip(".") + "."
+        if related_topics:
+            return f"{opening} The main angles showing up are {', '.join(related_topics)}."
+        return opening
+
+    if heading:
+        summary = (
+            f"The live result centers on {heading}."
+            if time_sensitive
+            else f"The result centers on {heading}."
+        )
+        if related_topics:
+            return f"{summary} Useful related points include {', '.join(related_topics)}."
+        return summary
+
+    return build_degraded_reply(user_input, providers_tried=[])
 
 
 def get_groq_client():
@@ -499,6 +663,82 @@ def generate_with_fallback(
     }
 
 
+def generate_web_search_response_payload(
+    user_input: str,
+    search_result: Dict[str, Any],
+    *,
+    system_override: Optional[str] = None,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+    temperature: float = DEFAULT_TEMPERATURE,
+) -> Dict[str, Any]:
+    normalized_input = str(user_input or "").strip()
+    if not is_meaningful_text(normalized_input):
+        return {
+            "success": False,
+            "content": None,
+            "error": "Missing user input.",
+            "degraded_reply": FALLBACK_USER_MESSAGE,
+            "web_used": False,
+            "explanation_mode": "direct",
+        }
+
+    language = detect_language(normalized_input)
+    base_system_prompt = build_system_prompt(language, system_override=system_override)
+    system_prompt, explanation_mode = build_runtime_system_prompt(
+        normalized_input,
+        base_system_prompt,
+        web_used=True,
+    )
+    grounding_text = build_web_grounding_text(search_result)
+    if not grounding_text:
+        local_summary = build_local_web_summary(search_result, normalized_input)
+        return {
+            "success": False,
+            "content": None,
+            "error": "No usable web findings were available.",
+            "degraded_reply": local_summary,
+            "web_used": False,
+            "explanation_mode": explanation_mode,
+        }
+
+    messages = build_messages("", system_prompt)
+    messages.append(
+        {
+            "role": "user",
+            "content": (
+                f"User question: {normalized_input}\n\n"
+                "Live web findings:\n"
+                f"{grounding_text}\n\n"
+                "Answer as AURA. Lead with the answer, then explain the most important supporting facts. "
+                "Do not dump raw search results or mention searching unless it helps the user."
+            ),
+        }
+    )
+
+    payload = generate_with_fallback(
+        messages,
+        system_prompt,
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
+    content = clean_response(payload.get("content"))
+    if payload.get("success") and is_meaningful_text(content):
+        payload["content"] = polish_assistant_reply(content, user_input=normalized_input)
+        payload["web_used"] = True
+        payload["explanation_mode"] = explanation_mode
+        payload["web_grounding"] = grounding_text
+        add_to_history("user", normalized_input)
+        add_to_history("assistant", payload["content"])
+        return payload
+
+    payload["success"] = False
+    payload["content"] = None
+    payload["web_used"] = False
+    payload["explanation_mode"] = explanation_mode
+    payload["degraded_reply"] = build_local_web_summary(search_result, normalized_input)
+    return payload
+
+
 def generate_response_payload(
     user_input_or_messages: str | List[Dict[str, str]],
     *,
@@ -509,7 +749,7 @@ def generate_response_payload(
     if isinstance(user_input_or_messages, list):
         messages = [dict(item) for item in user_input_or_messages]
         existing_system = next((item.get("content", "") for item in messages if item.get("role") == "system"), "")
-        system_prompt = build_system_prompt(
+        base_system_prompt = build_system_prompt(
             "english",
             system_override=system_override or existing_system or JARVIS_SYSTEM_PROMPT,
         )
@@ -518,8 +758,8 @@ def generate_response_payload(
     else:
         user_input = str(user_input_or_messages).strip()
         language = detect_language(user_input)
-        system_prompt = build_system_prompt(language, system_override=system_override)
-        provider_messages = build_messages(user_input, system_prompt)
+        base_system_prompt = build_system_prompt(language, system_override=system_override)
+        provider_messages = build_messages(user_input, base_system_prompt)
 
     if not is_meaningful_text(user_input):
         return {
@@ -529,6 +769,7 @@ def generate_response_payload(
             "success": True,
         }
 
+    system_prompt, explanation_mode = build_runtime_system_prompt(user_input, base_system_prompt)
     payload = generate_with_fallback(
         provider_messages,
         system_prompt,
@@ -556,6 +797,7 @@ def generate_response_payload(
 
     if payload.get("success") and is_meaningful_text(content):
         payload["content"] = polish_assistant_reply(content, user_input=user_input)
+        payload["explanation_mode"] = explanation_mode
         add_to_history("user", user_input)
         add_to_history("assistant", payload["content"])
         return payload
@@ -565,6 +807,7 @@ def generate_response_payload(
         payload["error"] = payload.get("error") or "Provider returned empty content."
         payload["content"] = None
     payload["degraded_reply"] = build_degraded_reply(user_input=user_input, providers_tried=payload.get("providers_tried"))
+    payload["explanation_mode"] = explanation_mode
     return payload
 
 

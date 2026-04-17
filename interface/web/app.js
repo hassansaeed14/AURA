@@ -251,23 +251,7 @@
     el.accessMode.textContent = authPayload.authenticated ? "Authenticated" : "Public";
     el.brainState.textContent = humanizeStatus(brain);
     el.activeProvider.textContent = humanizeProviderName(activeProvider);
-    if (state.voicePhase === "wake_listening") {
-      el.wakeModeStatus.textContent = "Standby active";
-    } else if (state.voicePhase === "command_listening") {
-      el.wakeModeStatus.textContent = "Listening";
-    } else if (state.voicePhase === "interrupted") {
-      el.wakeModeStatus.textContent = "Interrupted";
-    } else if (state.voicePhase === "processing") {
-      el.wakeModeStatus.textContent = "Thinking";
-    } else if (state.voicePhase === "speaking") {
-      el.wakeModeStatus.textContent = "Speaking";
-    } else if (state.wakeModeEnabled) {
-      el.wakeModeStatus.textContent = "Wake ready";
-    } else if (state.wakeModeGestureNeeded) {
-      el.wakeModeStatus.textContent = "Needs tap";
-    } else {
-      el.wakeModeStatus.textContent = "Standby off";
-    }
+    renderWakeModeStatus();
     el.routeSummary.textContent = assistantRuntime.message || "No live routing data yet.";
     el.presenceSummary.textContent = assistantRuntime.message || "Private voice-first assistant console.";
     el.responseMetaProvider.textContent = `Provider: ${humanizeProviderName(activeProvider)}`;
@@ -439,7 +423,31 @@
     state.listening = phase === "wake_listening" || phase === "command_listening";
     state.speaking = phase === "speaking";
     state.wakeStandbyActive = phase === "wake_listening" && state.recognitionActive;
+    renderWakeModeStatus();
     renderWakeControls();
+  }
+
+  function renderWakeModeStatus() {
+    if (!el.wakeModeStatus) {
+      return;
+    }
+    if (state.voicePhase === "wake_listening") {
+      el.wakeModeStatus.textContent = "Standby active";
+    } else if (state.voicePhase === "command_listening") {
+      el.wakeModeStatus.textContent = "Listening";
+    } else if (state.voicePhase === "interrupted") {
+      el.wakeModeStatus.textContent = "Interrupted";
+    } else if (state.voicePhase === "processing") {
+      el.wakeModeStatus.textContent = "Thinking";
+    } else if (state.voicePhase === "speaking") {
+      el.wakeModeStatus.textContent = "Speaking";
+    } else if (state.wakeModeEnabled) {
+      el.wakeModeStatus.textContent = "Wake ready";
+    } else if (state.wakeModeGestureNeeded) {
+      el.wakeModeStatus.textContent = "Needs tap";
+    } else {
+      el.wakeModeStatus.textContent = "Standby off";
+    }
   }
 
   function clearBargeInState({ keepTriggered = false } = {}) {
@@ -1607,7 +1615,8 @@
       }, 0);
     });
 
-    if (resumeWakeAfter) {
+    const speechCompletedNormally = state.activeSpeechRunId === speechRunId;
+    if (resumeWakeAfter && speechCompletedNormally) {
       setIdleState();
       resumeWakeStandby();
     }

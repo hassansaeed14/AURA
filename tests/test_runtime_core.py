@@ -5,6 +5,59 @@ import brain.runtime_core as runtime_core
 
 
 class RuntimeCoreTests(unittest.TestCase):
+    def test_current_info_question_uses_web_search_answer_path(self):
+        with patch.object(runtime_core, "detect_language", return_value="english"), patch.object(
+            runtime_core,
+            "detect_intent_with_confidence",
+            return_value=("general", 0.46),
+        ), patch.object(
+            runtime_core.master_orchestrator,
+            "analyze_task",
+            side_effect=AssertionError("Live web search path should run before heavy orchestration."),
+        ), patch.object(
+            runtime_core,
+            "build_permission_response",
+            return_value={"success": True, "permission": {"reason": ""}},
+        ), patch.object(
+            runtime_core,
+            "web_search",
+            return_value={
+                "success": True,
+                "source": "duckduckgo_instant_answer",
+                "live_data": True,
+                "data": {
+                    "query": "latest groq api pricing",
+                    "heading": "Groq API pricing",
+                    "abstract": "Groq currently prices usage by model and token volume.",
+                    "related_topics": ["Pricing can change over time."],
+                },
+            },
+        ), patch.object(
+            runtime_core,
+            "generate_web_search_response_payload",
+            return_value={
+                "success": True,
+                "content": "Groq currently prices usage by model and token volume. Check the latest pricing page for the exact numbers.",
+                "provider": "groq",
+                "model": "llama-3.3-70b-versatile",
+                "providers_tried": ["groq"],
+                "explanation_mode": "direct",
+            },
+        ), patch.object(
+            runtime_core,
+            "respond_in_language",
+            side_effect=lambda response, language: response,
+        ), patch.object(runtime_core, "store_and_learn"):
+            result = runtime_core.process_single_command_detailed("What is the latest Groq API pricing?")
+
+        self.assertEqual(result["execution_mode"], "web_assistant")
+        self.assertEqual(result["used_agents"], ["web_search"])
+        self.assertEqual(result["provider"], "groq")
+        self.assertTrue(result["web_search"]["used"])
+        self.assertEqual(result["web_search"]["query"], "What is the latest Groq API pricing")
+        self.assertEqual(result["explanation_mode"], "direct")
+        self.assertIn("latest pricing page", result["response"])
+
     def test_conversational_input_stays_on_general_assistant_path(self):
         with patch.object(runtime_core, "detect_language", return_value="english"), patch.object(
             runtime_core,
@@ -22,6 +75,10 @@ class RuntimeCoreTests(unittest.TestCase):
                 "tokens_used": 42,
                 "time_ms": 20.0,
             },
+        ), patch.object(
+            runtime_core,
+            "web_search",
+            side_effect=AssertionError("Conversation should not trigger live web search."),
         ), patch.object(
             runtime_core.master_orchestrator,
             "analyze_task",

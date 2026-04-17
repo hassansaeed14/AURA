@@ -27,6 +27,7 @@ from brain.response_engine import (
     build_degraded_reply,
     clean_response,
     generate_response_payload,
+    generate_web_search_response_payload,
     is_meaningful_text,
 )
 from brain.telemetry_engine import ProcessingTelemetry, set_last_telemetry
@@ -127,6 +128,57 @@ DIRECT_ASSISTANT_TOOL_MARKERS = (
     "buy ",
     "purchase ",
 )
+
+WEB_SEARCH_SIGNAL_PATTERNS = (
+    r"\b(latest|current|today|right now|now|recent|recently|newest|breaking|live)\b",
+    r"\b(news|headline|headlines)\b",
+    r"\b(price|pricing|cost|version|release date|release notes|changelog|stock|market cap)\b",
+    r"\b(status|outage|downtime|availability|health)\b",
+)
+
+WEB_SEARCH_SUBJECT_MARKERS = (
+    "groq",
+    "gemini",
+    "openai",
+    "openrouter",
+    "claude",
+    "ollama",
+    "provider",
+    "providers",
+    "api",
+    "model",
+    "tool",
+    "tools",
+    "software",
+    "framework",
+    "library",
+    "package",
+    "product",
+    "company",
+)
+
+WEB_SEARCH_SKIP_INTENTS = {
+    "greeting",
+    "conversation",
+    "time",
+    "date",
+    "identity",
+    "memory",
+    "insights",
+    "math",
+    "dictionary",
+    "synonyms",
+    "translation",
+    "joke",
+    "quote",
+    "task",
+    "reminder",
+    "weather",
+    "news",
+    "file",
+    "list_files",
+    "screenshot",
+}
 
 try:
     from memory.vector_memory import store_memory
@@ -551,6 +603,9 @@ def select_fast_assistant_route(raw_command: str, detected_intent: str, confiden
     if should_prefer_conversational_path(raw_command, detected_intent, confidence):
         return "conversation"
 
+    if should_use_live_web_search(raw_command, detected_intent, confidence):
+        return ""
+
     normalized_intent = str(detected_intent or "general").strip().lower()
     if normalized_intent == "general" and confidence < 0.55 and looks_like_direct_assistant_request(raw_command):
         return "assistant"
@@ -573,6 +628,63 @@ def build_general_assistant_orchestration(raw_command: str, route_kind: str) -> 
         "top_score": 0,
         "mode": route_kind,
         "reason": reason,
+    }
+
+
+def should_use_live_web_search(raw_command: str, detected_intent: str, confidence: float) -> bool:
+    normalized_command = str(raw_command or "").strip().lower()
+    normalized_intent = str(detected_intent or "general").strip().lower()
+    if not normalized_command:
+        return False
+
+    if normalized_command in GREETING_INPUTS or is_conversational_input(normalized_command):
+        return False
+
+    if should_prefer_conversational_path(raw_command, detected_intent, confidence):
+        return False
+
+    if normalized_intent in WEB_SEARCH_SKIP_INTENTS:
+        return False
+
+    if any(marker in normalized_command for marker in DIRECT_ASSISTANT_TOOL_MARKERS):
+        return False
+
+    signal_hit = any(re.search(pattern, normalized_command, flags=re.IGNORECASE) for pattern in WEB_SEARCH_SIGNAL_PATTERNS)
+    subject_hit = any(marker in normalized_command for marker in WEB_SEARCH_SUBJECT_MARKERS)
+
+    if "latest" in normalized_command or "current" in normalized_command:
+        return True
+
+    if signal_hit and subject_hit:
+        return True
+
+    if any(token in normalized_command for token in ("price", "pricing", "version", "release", "status")):
+        return True
+
+    return False
+
+
+def build_live_web_search_query(raw_command: str) -> str:
+    query = str(raw_command or "").strip()
+    query = re.sub(r"^(can you|could you|would you)\s+", "", query, flags=re.IGNORECASE)
+    query = re.sub(r"^(please)\s+", "", query, flags=re.IGNORECASE)
+    query = re.sub(r"\s+", " ", query).strip(" ,.?")
+    return query
+
+
+def build_web_search_orchestration(raw_command: str, search_query: str) -> Dict[str, Any]:
+    return {
+        "primary_agent": "web_search",
+        "secondary_agents": [],
+        "execution_order": ["web_search"],
+        "requires_multiple": False,
+        "primary_selection_source": "live_search_guard",
+        "top_score": 1,
+        "mode": "web_assistant",
+        "reason": (
+            f"Used live web search for '{raw_command}' because it appears time-sensitive or likely to change. "
+            f"Search query: '{search_query}'."
+        ),
     }
 
 
@@ -670,6 +782,108 @@ def build_plan_steps(raw_command: str, intent: str, confidence: float, orchestra
     steps.extend(f"Support with {agent_name}" for agent_name in execution_order[1:])
     steps.append("Synthesize and deliver the final response")
     return steps
+
+
+def maybe_execute_web_search_answer(
+    *,
+    raw_command: str,
+    detected_intent: str,
+    confidence: float,
+    language: str,
+    permission_action: str,
+    permission: Dict[str, Any],
+    telemetry: ProcessingTelemetry,
+    publish_telemetry: bool,
+) -> Optional[Dict[str, Any]]:
+    if not should_use_live_web_search(raw_command, detected_intent, confidence):
+        return None
+
+    search_query = build_live_web_search_query(raw_command)
+    if not search_query:
+        return None
+
+    orchestration = build_web_search_orchestration(raw_command, search_query)
+    routing_started = time.perf_counter()
+    telemetry.record_routing(
+        agent_selected="web_search",
+        reason=orchestration["reason"],
+        trust_level="safe",
+        time_ms=(time.perf_counter() - routing_started) * 1000,
+    )
+
+    execution_started = time.perf_counter()
+    search_result = web_search(search_query)
+    if not search_result.get("success"):
+        telemetry.record_execution(
+            "web_search",
+            search_result.get("message") or "Live web search did not return usable results.",
+            False,
+            (time.perf_counter() - execution_started) * 1000,
+        )
+        return None
+
+    provider_payload = generate_web_search_response_payload(
+        raw_command,
+        search_result,
+        max_tokens=DEFAULT_MAX_TOKENS,
+        temperature=DEFAULT_TEMPERATURE,
+    )
+    provider_name = str(provider_payload.get("provider") or "").strip() or None
+    provider_model = str(provider_payload.get("model") or "").strip() or None
+    providers_tried = list(provider_payload.get("providers_tried") or [])
+
+    if provider_name or provider_model or providers_tried:
+        telemetry.record_provider(
+            provider_name or "web_assistant",
+            provider_model or "unknown",
+            provider_payload.get("tokens_used"),
+            provider_payload.get("latency_ms") or 0.0,
+            success=bool(provider_payload.get("success")),
+            error=provider_payload.get("error"),
+        )
+
+    response_text = str(
+        provider_payload.get("content")
+        or provider_payload.get("degraded_reply")
+        or search_result.get("message")
+        or ""
+    ).strip()
+    execution_mode = "web_assistant" if provider_payload.get("success") else "web_assistant_fallback"
+    telemetry.record_execution(
+        "web_search",
+        response_text or "Live web answer generation returned no content.",
+        bool(response_text),
+        (time.perf_counter() - execution_started) * 1000,
+    )
+    if not response_text:
+        return None
+
+    result = build_result(
+        raw_command=raw_command,
+        detected_intent=detected_intent,
+        confidence=confidence,
+        response=response_text,
+        language=language,
+        orchestration=orchestration,
+        used_agents=["web_search"],
+        execution_mode=execution_mode,
+        plan_steps=[],
+        permission_action=permission_action,
+        permission=permission,
+        provider_name=provider_name,
+        provider_model=provider_model,
+        providers_tried=providers_tried,
+        telemetry=telemetry,
+        publish_telemetry=publish_telemetry,
+    )
+    result["web_search"] = {
+        "used": True,
+        "query": search_query,
+        "source": search_result.get("source") or "live_search",
+        "live_data": bool(search_result.get("live_data")),
+    }
+    result["explanation_mode"] = provider_payload.get("explanation_mode")
+    return result
 
 
 def build_result(
@@ -916,6 +1130,19 @@ def process_single_command_detailed(
             telemetry=active_telemetry,
             publish_telemetry=publish_telemetry,
         )
+
+    web_result = maybe_execute_web_search_answer(
+        raw_command=raw_command,
+        detected_intent=detected_intent,
+        confidence=confidence,
+        language=language,
+        permission_action="general",
+        permission=build_permission_response("general"),
+        telemetry=active_telemetry,
+        publish_telemetry=publish_telemetry,
+    )
+    if web_result is not None:
+        return web_result
 
     routing_started = time.perf_counter()
     orchestration = master_orchestrator.analyze_task(raw_command, intent=detected_intent)

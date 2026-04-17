@@ -5,6 +5,46 @@ import brain.response_engine as response_engine
 
 
 class ResponseEngineTests(unittest.TestCase):
+    def test_generate_web_search_response_payload_returns_search_backed_answer(self):
+        search_result = {
+            "success": True,
+            "source": "duckduckgo_instant_answer",
+            "live_data": True,
+            "data": {
+                "query": "latest groq api pricing",
+                "heading": "Groq API pricing",
+                "abstract": "Groq currently prices usage by model and token volume.",
+                "related_topics": [
+                    "Pricing can change over time.",
+                    "Check the provider status page for the latest details.",
+                ],
+            },
+        }
+
+        with patch.object(
+            response_engine,
+            "generate_with_best_provider",
+            return_value={
+                "success": True,
+                "provider": "groq",
+                "model": "llama-3.3-70b-versatile",
+                "text": "Groq currently prices usage by model and token volume. The exact rates can change, so check their latest pricing page for the current numbers.",
+                "attempts": ["groq"],
+                "routing_order": ["groq"],
+                "latency_ms": 25.0,
+            },
+        ):
+            payload = response_engine.generate_web_search_response_payload(
+                "What is the latest Groq API pricing?",
+                search_result,
+            )
+
+        self.assertTrue(payload["success"])
+        self.assertTrue(payload["web_used"])
+        self.assertEqual(payload["provider"], "groq")
+        self.assertEqual(payload["explanation_mode"], "direct")
+        self.assertIn("current numbers", payload["content"])
+
     def test_generate_response_payload_uses_degraded_reply_when_all_providers_fail(self):
         with patch.object(
             response_engine,
@@ -133,6 +173,24 @@ class ResponseEngineTests(unittest.TestCase):
 
         self.assertTrue(payload["success"])
         self.assertTrue(payload["content"].startswith("Here's a Python function:"))
+
+    def test_generate_response_payload_sets_comparison_explanation_mode(self):
+        with patch.object(
+            response_engine,
+            "generate_with_best_provider",
+            return_value={
+                "success": True,
+                "provider": "groq",
+                "model": "llama-3.3-70b-versatile",
+                "text": "Python is simpler to learn, while Rust gives tighter control over memory and performance.",
+                "attempts": [],
+                "routing_order": ["groq"],
+            },
+        ):
+            payload = response_engine.generate_response_payload("Compare Python vs Rust")
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["explanation_mode"], "comparison")
 
 
 if __name__ == "__main__":
