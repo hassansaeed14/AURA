@@ -1,44 +1,114 @@
-venv/
-.env
-__pycache__/
-*.pyc
-memory/user_memory.json
-.venv/
-security/.secret.key
-security/whitelist.json
-security/confirmation_codes.json
-security/rate_limits.json
-security/sessions.json
+# =========================
 
-# Temp folders
+# AURA .gitignore
+
+# =========================
+
+# -------------------------
+
+# Python
+
+# -------------------------
+
+**pycache**/
+*.pyc
+*.pyo
+*.pyd
+*.so
+
+# -------------------------
+
+# Virtual Environments
+
+# -------------------------
+
+venv/
+.venv/
+env/
+
+# -------------------------
+
+# Environment Variables
+
+# -------------------------
+
+.env
+.env.*
+
+# -------------------------
+
+# Temp / Debug / Logs
+
+# -------------------------
+
+tmp_*
 tmp*/
 temp*/
-
-# Screenshot artifacts
-screenshot_*.png
-
-# Dev logs
+logs/
+*.log
 dev_log.txt
 
-# Audit files
-audit_source_inventory.json
+# -------------------------
 
-# Memory data (private)
+# Memory (Private Data)
+
+# -------------------------
+
 memory/*.json
 memory/*.db
 memory/*.sqlite3
 memory/vector_store/
 
-# Security data (private)
+# -------------------------
+
+# Security (Sensitive)
+
+# -------------------------
+
 security/*.json
 security/*.hash
 security/.secret.key
 
-# Python cache
-__pycache__/
-*.pyc
+# -------------------------
 
-# Virtual environment
-venv/
-tmp*/
-temp*/
+# Screenshots / Artifacts
+
+# -------------------------
+
+screenshot_*.png
+
+# -------------------------
+
+# OS Files
+
+# -------------------------
+
+.DS_Store
+Thumbs.db
+
+# -------------------------
+
+# Editor / IDE
+
+# -------------------------
+
+.vscode/
+.idea/
+
+# -------------------------
+
+# Build / Cache
+
+# -------------------------
+
+dist/
+build/
+
+# -------------------------
+
+# Misc
+
+# -------------------------
+
+*.tmp
+*.bak
