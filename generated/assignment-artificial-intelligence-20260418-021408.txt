@@ -1,4 +1,0 @@
-Artificial Intelligence - Assignment
-====================================
-
-Artificial intelligence (AI) refers to the development of computer systems that can perform tasks that would typically require human intelligence, such as learning, problem-solving, and decision-making. The field of AI has experienced significant growth in recent years, with applications in various industries, including healthcare, finance, and transportation. This assignment aims to provide an overview of the con...

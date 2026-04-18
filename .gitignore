@@ -112,3 +112,12 @@ build/
 
 *.tmp
 *.bak
+# Generated files
+generated/
+*.pdf
+*.docx
+*.pptx
+*.txt
+
+# AURA outputs
+AI-*
