@@ -224,7 +224,7 @@ If something is not fully implemented, it is not presented as complete.
 
 # 👨‍💻 Author
 
-**Hassan Saeed**
+**Hassan Saeed & His Team**
 BS Artificial Intelligence
 
 Building a real assistant system — not a demo.
