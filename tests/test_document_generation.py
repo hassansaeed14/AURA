@@ -598,9 +598,144 @@ class ContentExtractorTests(unittest.TestCase):
     def test_extract_unsupported_type_fails(self):
         from tools.content_extractor import extract_content
 
-        result = extract_content("data", source_type="image")
+        result = extract_content("data", source_type="video")
         self.assertFalse(result.success)
         self.assertIn("Unsupported", result.error)
+
+    def test_image_type_detection_from_filename(self):
+        from tools.content_extractor import _detect_type
+
+        self.assertEqual(_detect_type(b"", "photo.jpg"), "image_bytes")
+        self.assertEqual(_detect_type(b"", "scan.png"), "image_bytes")
+        self.assertEqual(_detect_type(b"", "figure.tiff"), "image_bytes")
+        self.assertEqual(_detect_type(b"", "notes.docx"), "docx_bytes")
+        self.assertEqual(_detect_type(b"", "notes.pdf"), "pdf_bytes")
+
+    def test_extract_content_sets_extraction_mode(self):
+        from tools.content_extractor import extract_content
+
+        result = extract_content("Some text content about AI.")
+        self.assertEqual(result.extraction_mode, "text")
+
+        txt_result = extract_content(b"Plain text content.", filename="file.txt")
+        self.assertEqual(txt_result.extraction_mode, "text")
+
+    def test_docx_structured_extraction_with_python_docx(self):
+        from tools.content_extractor import extract_content
+        import io
+        from unittest.mock import patch, MagicMock
+
+        # Simulate python-docx returning structured content
+        mock_para1 = MagicMock()
+        mock_para1.text = "Introduction to Deep Learning"
+        mock_para1.style.name = "Heading 1"
+
+        mock_para2 = MagicMock()
+        mock_para2.text = "Deep learning uses multiple layers of neural networks."
+        mock_para2.style.name = "Normal"
+
+        mock_doc = MagicMock()
+        mock_doc.paragraphs = [mock_para1, mock_para2]
+
+        # Create minimal valid zip so the fallback doesn't break import
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as archive:
+            archive.writestr("word/document.xml", "<w:document><w:body></w:body></w:document>")
+        docx_bytes = buf.getvalue()
+
+        with patch("docx.Document", return_value=mock_doc):
+            result = extract_content(docx_bytes, filename="notes.docx")
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.source_type, "docx")
+        self.assertEqual(result.extraction_mode, "structured")
+        self.assertIn("Introduction to Deep Learning", result.text)
+        self.assertIn("Deep learning", result.text)
+
+    def test_docx_fallback_to_zip_regex(self):
+        from tools.content_extractor import extract_content
+        import io
+
+        body_xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            "<w:body>"
+            "<w:p><w:r><w:t>Deep learning uses multiple layers.</w:t></w:r></w:p>"
+            "</w:body>"
+            "</w:document>"
+        )
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as archive:
+            archive.writestr("word/document.xml", body_xml)
+        docx_bytes = buf.getvalue()
+
+        result = extract_content(docx_bytes, filename="notes.docx")
+        self.assertTrue(result.success)
+        self.assertEqual(result.source_type, "docx")
+        self.assertIn("Deep learning", result.text)
+
+    def test_pdf_ocr_fallback_called_when_no_text(self):
+        from tools.content_extractor import _extract_pdf
+        from unittest.mock import patch, MagicMock
+
+        # PyPDF2 returns empty, OCR should be tried
+        mock_page = MagicMock()
+        mock_page.extract_text.return_value = ""
+
+        mock_reader = MagicMock()
+        mock_reader.pages = [mock_page]
+
+        mock_image = MagicMock()
+        mock_ocr_text = "Scanned page text about machine learning."
+
+        with patch("PyPDF2.PdfReader", return_value=mock_reader), \
+             patch("pdf2image.convert_from_bytes", return_value=[mock_image]), \
+             patch("pytesseract.image_to_string", return_value=mock_ocr_text):
+            text, mode = _extract_pdf(b"fake_pdf_bytes")
+
+        self.assertEqual(mode, "ocr")
+        self.assertIn("Scanned page text", text)
+
+    def test_youtube_extraction_mode_transcript(self):
+        from tools.content_extractor import _extract_youtube
+        from unittest.mock import patch, MagicMock
+
+        def _make_snippet(t):
+            s = MagicMock()
+            s.text = t
+            return s
+
+        snippets = [
+            _make_snippet("Hello and welcome to this video about deep learning. "),
+            _make_snippet("Today we will cover neural networks and backpropagation. "),
+            _make_snippet("This is an important topic in modern AI research. " * 3),
+        ]
+        mock_fetched = MagicMock()
+        mock_fetched.__iter__ = MagicMock(return_value=iter(snippets))
+
+        with patch("youtube_transcript_api.YouTubeTranscriptApi") as MockAPI:
+            MockAPI.return_value.fetch.return_value = mock_fetched
+            text, mode = _extract_youtube("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+        self.assertEqual(mode, "transcript")
+        self.assertIn("deep learning", text)
+        self.assertNotIn("[Note:", text)
+
+    def test_youtube_extraction_falls_back_to_metadata(self):
+        from tools.content_extractor import _extract_youtube
+        from unittest.mock import patch, MagicMock
+
+        with patch("youtube_transcript_api.YouTubeTranscriptApi") as MockAPI:
+            MockAPI.return_value.fetch.side_effect = Exception("disabled")
+            with patch("agents.integration.youtube_agent.summarize_youtube", return_value={
+                "success": True,
+                "message": "TITLE: Deep Learning Explained\nCHANNEL: AI Academy\nSUMMARY: An overview of deep learning.",
+            }):
+                text, mode = _extract_youtube("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+        self.assertEqual(mode, "metadata")
+        self.assertIn("[Note:", text)
+        self.assertIn("Deep Learning Explained", text)
 
 
 class TransformationRoutingTests(unittest.TestCase):

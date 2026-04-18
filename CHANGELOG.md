@@ -1,77 +1,228 @@
 # CHANGELOG
 
-All notable changes to AURA will be documented here.
+All notable changes to **AURA — Autonomous Universal Responsive Assistant** are documented here.
+
+This project follows a **reality-first development model**:
+only working or verified changes are recorded.
 
 ---
 
-## [v1.0-dev] - 2026-04-10
+# [v1.0-dev] — 2026-04-10
 
-### Added
-- Private web runtime using Waitress and FastAPI
-- Multi-view UI with `/api/chat` flow
-- SQLite chat history with sessions
-- Structured memory system
-- Agent catalog and capability system
-- Basic test suites
+## 🚀 Added
 
-### Known Issues
-- Provider routing still needs improvement
-- Vector memory degraded
-- Some security tests failing
-- Assistant quality still improving
+### Core System
+
+* Private local runtime using **FastAPI + Waitress**
+* Stable `/api/chat` execution path with structured response contract
+* Multi-provider routing foundation (Groq, Gemini, OpenAI fallback-ready)
+
+### Document Engine (Phase 1)
+
+* Notes and assignment generation system
+* Multi-format export:
+
+  * `.txt`
+  * `.pdf`
+  * `.docx`
+* File delivery system with direct download endpoints (`/downloads/...`)
+* Preview text support for generated documents
+* Chat-integrated document routing (natural prompts → file generation)
+
+### Memory & Persistence
+
+* SQLite-backed chat history with session tracking
+* Structured local memory system
+* Initial vector memory integration (experimental)
+
+### Security Foundation
+
+* Authentication system
+* Session handling
+* Trust-based action model (safe / private / sensitive / critical)
+
+### Interface
+
+* Web-based assistant interface
+* Real-time chat flow integration
+* Document preview and download UI support
+
+### Testing
+
+* Unit tests for:
+
+  * runtime core
+  * response engine
+  * document generation
 
 ---
 
-## [v0.19]
-- Memory recording improvements
+## ⚠️ Known Limitations
 
-## [v0.18]
-- Private runtime with auth, voice, agent bus
+* Provider reliability not yet stable (quota / fallback issues)
+* Vector memory requires repair and validation
+* Voice system partially implemented (browser-first)
+* Some agents are wrapper-based, not deep integrations
+* UI still lacks full “assistant OS” feel
+* Runtime drift exists across legacy layers
 
-## [v0.17]
-- Agent upgrades and UI improvements
+---
 
-## [v0.16]
-- Security stabilization
+# [v0.19]
 
-## [v0.15]
-- Self-improvement agent
+## Added
 
-## [v0.14]
-- Main integration pass
+* Improved structured memory recording
+* Better context persistence handling
 
-## [v0.13]
-- Integration upgrades
+---
 
-## [v0.12]
-- Core agent updates
+# [v0.18]
 
-## [v0.10]
-- Conversation memory, themes, voice controls
+## Added
 
-## [v0.9]
-- Vector memory, better responses
+* Private runtime with:
 
-## [v0.8]
-- Voice selection
+  * authentication
+  * voice infrastructure
+  * agent bus system
 
-## [v0.7]
-- Urdu support
+---
 
-## [v0.6]
-- Improved UI and chat history
+# [v0.17]
 
-## [v0.5]
-- Web interface
+## Improved
 
-## [v0.4]
-- Study and coding agents
+* Agent routing behavior
+* UI interaction flow
 
-## [v0.3]
-- Renamed to AURA, voice input/output
+---
 
-## [v0.2]
-- Voice output + memory
+# [v0.16]
 
-## [v0.1]
-- Initial terminal AI (Hey Goku)
+## Stabilized
+
+* Security system
+* Session handling reliability
+
+---
+
+# [v0.15]
+
+## Added
+
+* Self-improvement agent (early AURA Forge concept)
+
+---
+
+# [v0.14]
+
+## Added
+
+* Major system integration pass
+* Core modules connected into unified runtime
+
+---
+
+# [v0.13]
+
+## Improved
+
+* Integration layer between agents and backend
+
+---
+
+# [v0.12]
+
+## Updated
+
+* Core agent system improvements
+* Better capability structuring
+
+---
+
+# [v0.10]
+
+## Added
+
+* Conversation memory
+* UI themes
+* Voice control basics
+
+---
+
+# [v0.9]
+
+## Added
+
+* Vector memory (initial version)
+* Improved response generation
+
+---
+
+# [v0.8]
+
+## Added
+
+* Voice selection support
+
+---
+
+# [v0.7]
+
+## Added
+
+* Urdu language support
+
+---
+
+# [v0.6]
+
+## Improved
+
+* UI experience
+* Chat history handling
+
+---
+
+# [v0.5]
+
+## Added
+
+* First web interface
+
+---
+
+# [v0.4]
+
+## Added
+
+* Study agent
+* Coding agent
+
+---
+
+# [v0.3]
+
+## Changed
+
+* Project renamed to **AURA**
+* Introduced voice input/output
+
+---
+
+# [v0.2]
+
+## Added
+
+* Voice output
+* Basic memory system
+
+---
+
+# [v0.1]
+
+## Initial Release
+
+* Terminal-based assistant (Hey Goku)
+* Basic command handling

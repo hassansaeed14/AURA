@@ -1,4 +1,4 @@
-﻿# AURA Master Spec
+﻿# AURA SYSTEM AUDIT
 
 Audit date: 2026-04-10
 Project root: `D:\HeyGoku`

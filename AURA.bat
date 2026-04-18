@@ -4,6 +4,10 @@ title AURA
 color 0B
 cls
 
+:: ── ROOT DIRECTORY (AUTO DETECT) ──────────────────
+set "ROOT=%~dp0"
+cd /d "%ROOT%"
+
 echo.
 echo  ╔══════════════════════════════════════════════╗
 echo  ║                                              ║
@@ -20,82 +24,74 @@ echo.
 python --version >nul 2>&1
 if errorlevel 1 (
     echo  [CRITICAL] Python not found.
-    echo  Please install Python 3.10+ from https://python.org
-    echo.
+    echo  Install Python 3.10+ from https://python.org
     pause
     exit /b 1
 )
 
-:: ── STEP 2: Activate Virtual Environment ──────────
-if exist D:\HeyGoku\venv\Scripts\activate.bat (
-    call D:\HeyGoku\venv\Scripts\activate.bat
+:: ── STEP 2: Virtual Environment ───────────────────
+if exist "%ROOT%venv\Scripts\activate.bat" (
+    call "%ROOT%venv\Scripts\activate.bat"
 ) else (
-    echo  [SETUP] First time detected. Creating environment...
-    cd D:\HeyGoku
+    echo  [SETUP] Creating virtual environment...
     python -m venv venv
-    call D:\HeyGoku\venv\Scripts\activate.bat
+    call "%ROOT%venv\Scripts\activate.bat"
+
     echo  [SETUP] Installing dependencies...
-    pip install -r D:\HeyGoku\requirements.txt -q
-    echo  [SETUP] Done.
+    pip install -r requirements.txt -q
 )
 
-:: ── STEP 3: Check .env ────────────────────────────
-if not exist D:\HeyGoku\.env (
-    echo  [WARNING] .env file not found.
-    echo  Creating template .env file...
-    echo GROQ_API_KEY=your_key_here > D:\HeyGoku\.env
-    echo SECRET_KEY=change_this_secret >> D:\HeyGoku\.env
+:: ── STEP 3: .env Check ────────────────────────────
+if not exist "%ROOT%.env" (
+    echo  [WARNING] .env not found. Creating template...
+
+    echo GROQ_API_KEY=your_key_here > .env
+    echo SECRET_KEY=change_this_secret >> .env
+
     echo.
-    echo  [ACTION NEEDED] Open .env and add your GROQ_API_KEY
-    echo  File location: D:\HeyGoku\.env
-    echo.
-    notepad D:\HeyGoku\.env
+    echo  Open .env and add your API key.
+    notepad .env
     pause
 )
 
-:: ── STEP 4: Check Required Folders ───────────────
-for %%d in (brain agents memory api interface security config voice logs) do (
-    if not exist D:\HeyGoku\%%d\ (
-        mkdir D:\HeyGoku\%%d
-    )
+:: ── STEP 4: Ensure Folders ────────────────────────
+for %%d in (brain agents memory api interface security config voice logs generated) do (
+    if not exist "%%d" mkdir "%%d"
 )
-if not exist D:\HeyGoku\memory\locked\ mkdir D:\HeyGoku\memory\locked
 
-:: ── STEP 5: Kill anything on port 5000 ───────────
-for /f "tokens=5" %%a in (
-    'netstat -ano ^| findstr :5000 2^>nul'
-) do (
+if not exist "memory\locked" mkdir "memory\locked"
+
+:: ── STEP 5: Free Port 5000 ────────────────────────
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :5000 2^>nul') do (
     taskkill /PID %%a /F >nul 2>&1
 )
-timeout /t 1 /nobreak >nul
+timeout /t 1 >nul
 
-:: ── STEP 6: Install any missing packages ─────────
-echo  Checking packages...
-pip install -r D:\HeyGoku\requirements.txt -q 2>nul
+:: ── STEP 6: Sync Dependencies ─────────────────────
+echo  Checking dependencies...
+pip install -r requirements.txt -q 2>nul
 
 :: ── STEP 7: Launch AURA ───────────────────────────
 echo.
 echo  ╔══════════════════════════════════════════════╗
 echo  ║  AURA is starting...                         ║
-echo  ║  Opening browser in 3 seconds...             ║
+echo  ║  Opening browser shortly...                  ║
 echo  ║                                              ║
-echo  ║  URL: http://localhost:5000                  ║
-echo  ║  To stop AURA: close this window             ║
+echo  ║  http://localhost:5000                       ║
 echo  ╚══════════════════════════════════════════════╝
 echo.
 
-:: Open browser after 3 second delay in background
-start /b cmd /c "timeout /t 3 /nobreak >nul && start http://localhost:5000"
+:: Open browser (background)
+start "" cmd /c "timeout /t 3 >nul && start http://localhost:5000"
 
-:: Start AURA server
-cd D:\HeyGoku
+:: Start backend
 python run_aura.py
 
-:: ── If server crashes ─────────────────────────────
+:: ── Crash Handling ────────────────────────────────
 echo.
 echo  ╔══════════════════════════════════════════════╗
 echo  ║  AURA stopped unexpectedly.                  ║
-echo  ║  Check the error above.                      ║
+echo  ║  Check logs above.                           ║
 echo  ╚══════════════════════════════════════════════╝
 echo.
 pause

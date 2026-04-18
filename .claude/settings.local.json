@@ -7,7 +7,17 @@
       "Bash(python -m py_compile api/api_server.py)",
       "Bash(python -m py_compile tests/test_document_generation.py)",
       "Bash(python -m pytest tests/test_document_generation.py -v --tb=short)",
-      "Bash(python -m unittest tests/test_document_generation.py -v)"
+      "Bash(python -m unittest tests/test_document_generation.py -v)",
+      "Bash(python -c \"import youtube_transcript_api; print\\('youtube_transcript_api OK'\\)\")",
+      "Bash(python -c \"import pytesseract; print\\('pytesseract OK'\\)\")",
+      "Bash(python -c \"import docx; print\\('docx OK'\\)\")",
+      "Bash(python -c \"import python_docx; print\\('python_docx OK'\\)\")",
+      "Bash(python -c \"import pdf2image; print\\('pdf2image OK'\\)\")",
+      "Bash(pip install *)",
+      "Bash(pip show *)",
+      "Bash(python -m pytest tests/test_document_generation.py -v)",
+      "Bash(python -m unittest tests.test_document_generation -v)",
+      "Bash(python -c \"from youtube_transcript_api import YouTubeTranscriptApi; print\\(dir\\(YouTubeTranscriptApi\\)\\)\")"
     ]
   }
 }

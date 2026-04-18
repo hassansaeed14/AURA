@@ -1,25 +1,24 @@
 # AURA
+
 ## Autonomous Universal Responsive Assistant
 
-**A private JARVIS-style AI OS in active development.**
+**A private JARVIS-style AI assistant system (NOT a chatbot).**
 
-AURA is being built as a real personal assistant system — one that can understand, route, respond, remember, and improve through real execution paths.
-
-It is not a generic chatbot.  
-It is not a prompt wrapper.
+AURA is being built as a real assistant system — one that can understand, decide, act, and improve through structured execution pipelines.
 
 ---
 
-## Vision
+# 🧠 What AURA Is
 
-AURA is designed to become a human-quality AI assistant with:
+AURA is an **AI system**, not a prompt interface.
 
-- natural language understanding  
-- voice input and spoken replies  
-- task routing through real system layers  
-- memory and contextual recall  
-- guarded execution through a trust model  
-- continuous improvement through AURA Forge  
+It is designed to:
+
+* process real user intent
+* route tasks through system layers
+* generate structured outputs (documents, actions)
+* maintain memory and context
+* operate under a controlled trust model
 
 Core pipeline:
 
@@ -27,140 +26,207 @@ Core pipeline:
 
 ---
 
-## Current Status
+# ⚡ Current Status
 
-**Version:** `v1.0-dev`  
-**State:** private prototype / development build  
+* **Version:** `v1.0-dev`
+* **State:** Active development (private system build)
 
-AURA already includes:
-
-- local private web runtime  
-- backend chat flow  
-- structured local memory  
-- chat history persistence  
-- security system (auth, sessions, PIN)  
-- agent routing system  
-- voice infrastructure  
-
-AURA is **not yet a finished product**.
+AURA is functional but still evolving toward a full assistant experience.
 
 ---
 
-## What Is Working
+# ✅ Working Systems
 
-- local runtime  
-- web interface  
-- chat history  
-- memory layers  
-- core routing  
-- security foundation  
+### Core System
 
----
+* end-to-end chat pipeline
+* intent detection and routing
+* multi-provider LLM support
 
-## What Is Being Improved
+### Document Engine (Advanced)
 
-- provider routing and health  
-- human-like assistant responses  
-- voice input → answer quality  
-- vector memory reliability  
-- UI trust and premium feel  
-- AURA Forge system  
+* generate:
 
----
+  * PDF
+  * DOCX
+  * TXT
+  * PPTX
+* multi-output delivery
+* preview system
+* follow-up format conversion
 
-## Why AURA Exists
+### API Layer
 
-The goal is not to build another chatbot.  
+* FastAPI backend
+* session handling
+* structured response contracts
 
-The goal is to build a real assistant that feels:
+### Memory & Persistence
 
-- intelligent  
-- natural  
-- private  
-- useful  
+* chat history (SQLite)
+* structured memory layers
 
----
+### Security Foundation
 
-## Architecture
-
-AURA.bat → run_aura.py → FastAPI → brain → agents/memory/security/voice → web UI
+* authentication
+* session management
+* trust-based action gating
 
 ---
 
-## Assistant Quality
+# ⚠️ In Progress / Improving
 
-AURA is being tuned to feel like a real human assistant:
-
-- natural  
-- calm  
-- direct  
-- intelligent  
-- not robotic  
+* voice system stabilization
+* provider reliability and fallback handling
+* vector memory consistency
+* response quality and tone
+* UI experience (JARVIS-style interaction)
 
 ---
 
-## Security Model
+# 🎯 What AURA Is NOT
 
-- safe → auto allow  
-- private → confirmation  
-- sensitive → session approval  
-- critical → PIN + confirmation  
+* ❌ Not a chatbot
+* ❌ Not a prompt wrapper
+* ❌ Not fake “AI automation”
 
----
-
-## AURA Forge
-
-AURA Forge is the internal system that will:
-
-- audit AURA  
-- fix problems  
-- improve behavior  
-- evolve the system  
-
-AURA = assistant  
-Forge = builder  
+AURA avoids pretending features exist when they don’t.
 
 ---
 
-## Installation
+# 🧬 System Architecture
+
+```
+AURA.bat → run_aura.py → FastAPI → brain → agents / memory / security / tools → web UI
+```
+
+---
+
+# 🧩 Project Structure
+
+```
+/brain        → reasoning + routing
+/agents       → task handlers
+/memory       → memory system (local)
+/security     → trust + authentication
+/tools        → document + system tools
+/interface    → web UI
+/voice        → speech pipeline (in progress)
+/generated    → runtime outputs (not tracked)
+```
+
+---
+
+# 🔐 Trust Model
+
+AURA uses controlled execution levels:
+
+* **safe** → auto allow
+* **private** → confirmation
+* **sensitive** → session approval
+* **critical** → PIN + confirmation
+
+---
+
+# 🧠 Assistant Behavior
+
+AURA is tuned to be:
+
+* direct
+* calm
+* natural
+* non-robotic
+
+It avoids:
+
+* filler responses
+* over-explaining
+* fake intelligence patterns
+
+---
+
+# ⚙️ Installation
 
 ### Requirements
-- Python 3.10+  
-- Windows 10/11  
+
+* Python 3.10+
+* Windows 10/11
 
 ### Setup
-1. Clone the repo  
-2. Install dependencies  
-3. Configure `.env`  
-4. Run `AURA.bat`  
-5. Open browser at `http://localhost:5000`  
+
+```bash
+git clone <repo>
+cd AURA
+pip install -r requirements.txt
+```
+
+Create `.env` file:
+
+```env
+GROQ_API_KEY=your_key_here
+```
+
+Run:
+
+```bash
+AURA.bat
+```
+
+Open:
+
+```
+http://localhost:5000
+```
 
 ---
 
-## Project Structure
+# 📦 Example Capabilities
 
-- brain/ — reasoning + routing  
-- agents/ — task handlers  
-- memory/ — memory system  
-- security/ — auth + trust  
-- voice/ — speech system  
-- interface/web/ — UI  
-- forge/ — future upgrade engine  
+* “make notes on transformers as pdf”
+* “write assignment on AI and also slides”
+* “convert this text into notes”
+* “summarize this document”
+
+AURA responds with **real downloadable outputs**, not just text.
 
 ---
 
-## Important Note
+# 🧪 Development Status
+
+AURA is currently:
+
+🟡 **Partially real system**
+
+* Core pipeline → real
+* Document system → strong
+* Intelligence layer → evolving
+
+---
+
+# 🛠️ Roadmap
+
+1. Document / Content System (current)
+2. Security System
+3. Interface Upgrade (JARVIS experience)
+4. Brain / Intelligence System
+
+---
+
+# ⚠️ Important Principle
 
 AURA follows one rule:
 
-**No fake capability claims**
+> **No fake capability claims**
 
-If something is not fully built, it will not be presented as fully working.
+If something is not fully implemented, it is not presented as complete.
 
 ---
 
-## Built By
+# 👨‍💻 Author
 
-Hassan Saeed  
+**Hassan Saeed**
+BS Artificial Intelligence
 
-Building a real assistant. Not a demo.
+Building a real assistant system — not a demo.
+
+---

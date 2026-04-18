@@ -122,18 +122,35 @@ DOCUMENT_ASSIGNMENT_PROMPT = (
 )
 
 TRANSFORMATION_NOTES_PROMPT = (
-    "You are converting provided source material into structured study notes. "
-    "Use plain-text section headings (no # symbols) followed by bullet points starting with '-'. "
-    "Preserve key facts and information from the source. "
-    "Do not invent details not present in the source material. "
-    "Do not include chat-style preamble or filler."
+    "You are a professional academic content specialist converting source material into structured study notes.\n\n"
+    "OUTPUT FORMAT:\n"
+    "- Start with a concise, informative title for the topic\n"
+    "- Use PLAIN-TEXT SECTION HEADINGS in title case (no # symbols, no markdown formatting)\n"
+    "- Under each heading, write bullet points starting with '- '\n"
+    "- Bullets must be concise but information-dense — capture the key fact, not a vague summary\n"
+    "- Group related concepts under logical headings\n\n"
+    "QUALITY STANDARDS:\n"
+    "- Extract ALL key concepts, definitions, data, and examples from the source\n"
+    "- Preserve technical vocabulary and terminology from the source\n"
+    "- If source material has lists or tables, convert them into clean bullet points\n"
+    "- Never invent details absent from the source\n"
+    "- Begin directly with the title — no preamble, no 'Here are your notes:', no chatbot phrases"
 )
 
 TRANSFORMATION_ASSIGNMENT_PROMPT = (
-    "You are converting provided source material into a structured academic assignment. "
-    "Use plain-text section headings followed by explanatory paragraphs. "
-    "Build on the key information from the source and maintain academic tone. "
-    "Do not use robotic filler phrases or chatbot-style opening lines."
+    "You are a professional academic writer converting source material into a structured assignment.\n\n"
+    "OUTPUT FORMAT:\n"
+    "- Introduction: Establish context and scope clearly in 1–2 focused paragraphs\n"
+    "- 3–5 analytical sections with plain-text headings appropriate to the topic\n"
+    "- Each section: 1–3 paragraphs of formal academic prose developing a single argument\n"
+    "- Conclusion: Synthesize the main findings — no new information\n\n"
+    "QUALITY STANDARDS:\n"
+    "- Build the assignment from key information in the source material\n"
+    "- Write in formal academic tone: precise, analytical, and well-structured\n"
+    "- Each paragraph must develop a coherent point with explanation and where relevant, evidence\n"
+    "- Connect sections logically — use transitional framing\n"
+    "- Do not invent facts, statistics, or claims not supported by the source\n"
+    "- Begin directly with the Introduction — no chatbot opening, no 'In this assignment I will' sentence"
 )
 
 TECHNICAL_ASSIGNMENT_MARKERS = (
@@ -1527,15 +1544,23 @@ def generate_transformation_content_payload(
     if normalized_type == "notes":
         system_prompt = TRANSFORMATION_NOTES_PROMPT
         prompt = (
-            f"Convert the following source material into structured study notes on: {topic}.\n"
-            f"{style_guidance}{page_hint}\n\nSOURCE MATERIAL:\n{truncated}"
+            f"Topic: {topic}\n"
+            f"Task: Convert the source material below into professional structured study notes.\n"
+            f"Style: {style_guidance}{page_hint}\n"
+            f"Important: Use only information present in the source. Begin with the topic title "
+            f"then organize under clear section headings with bullet points.\n\n"
+            f"SOURCE MATERIAL:\n{truncated}"
         )
         tokens = 1800
     else:
         system_prompt = TRANSFORMATION_ASSIGNMENT_PROMPT
         prompt = (
-            f"Convert the following source material into a structured academic assignment on: {topic}.\n"
-            f"{style_guidance}{page_hint}\n\nSOURCE MATERIAL:\n{truncated}"
+            f"Topic: {topic}\n"
+            f"Task: Convert the source material below into a structured academic assignment.\n"
+            f"Style: {style_guidance}{page_hint}\n"
+            f"Important: Use information from the source as your foundation. Write in formal "
+            f"academic prose with clear section headings. Do not open with 'In this assignment'.\n\n"
+            f"SOURCE MATERIAL:\n{truncated}"
         )
         tokens = 2800
 

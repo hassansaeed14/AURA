@@ -1446,7 +1446,7 @@ async def api_transform_file(
     include_references: bool = Form(False),
     citation_style: Optional[str] = Form(None),
 ):
-    """Transform an uploaded .txt, .pdf, or .docx file into a structured document."""
+    """Transform an uploaded file (.txt, .pdf, .docx, or image) into a structured document."""
     try:
         cleanup_generated_documents()
         file_bytes = await file.read()
