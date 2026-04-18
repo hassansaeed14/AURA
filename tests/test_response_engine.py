@@ -217,7 +217,8 @@ class ResponseEngineTests(unittest.TestCase):
         self.assertIn("Historical Development", content)
         self.assertIn("Ethical and Social Impact", content)
         self.assertIn("Comparative Perspective", content)
-        self.assertIn("A stronger long-form section should move beyond definition", content)
+        self.assertIn("Architecture and Mechanism", content)
+        self.assertIn("This section should stay centered on practical use and visible outcomes", content)
 
     def test_assignment_depth_profile_scales_by_page_band(self):
         compact = response_engine._build_assignment_depth_profile(4)
@@ -225,48 +226,141 @@ class ResponseEngineTests(unittest.TestCase):
         extended = response_engine._build_assignment_depth_profile(10)
 
         self.assertEqual(compact["band"], "compact")
-        self.assertEqual(compact["paragraph_range"], "1 to 2")
+        self.assertEqual(compact["base_paragraph_target"], 2)
+        self.assertEqual(compact["paragraph_ceiling"], 2)
         self.assertEqual(compact["max_tokens"], 480)
 
         self.assertEqual(expanded["band"], "expanded")
-        self.assertEqual(expanded["paragraph_range"], "2 to 3")
+        self.assertEqual(expanded["base_paragraph_target"], 2)
+        self.assertEqual(expanded["paragraph_ceiling"], 3)
         self.assertEqual(expanded["max_tokens"], 620)
 
         self.assertEqual(extended["band"], "extended")
-        self.assertEqual(extended["paragraph_range"], "3 to 4")
+        self.assertEqual(extended["base_paragraph_target"], 3)
+        self.assertEqual(extended["paragraph_ceiling"], 4)
         self.assertEqual(extended["max_tokens"], 760)
+
+    def test_assignment_section_weighting_makes_intro_lighter_than_core(self):
+        intro = response_engine._resolve_assignment_section_depth("Introduction", 10)
+        core = response_engine._resolve_assignment_section_depth("Core Concepts", 10)
+        conclusion = response_engine._resolve_assignment_section_depth("Conclusion", 10)
+
+        self.assertEqual(intro["weight_label"], "light")
+        self.assertEqual(core["weight_label"], "high")
+        self.assertLess(intro["paragraph_target"], core["paragraph_target"])
+        self.assertLess(intro["token_budget"], core["token_budget"])
+        self.assertLess(conclusion["token_budget"], core["token_budget"])
+
+    def test_assignment_section_weighting_scales_core_depth_in_extended_mode(self):
+        compact_core = response_engine._resolve_assignment_section_depth("Core Concepts", 4)
+        extended_core = response_engine._resolve_assignment_section_depth("Core Concepts", 10)
+
+        self.assertLess(compact_core["paragraph_target"], extended_core["paragraph_target"])
+        self.assertLess(compact_core["token_budget"], extended_core["token_budget"])
+
+    def test_assignment_section_plan_uses_technical_style_variants_for_technical_topics(self):
+        plan = response_engine._build_assignment_section_plan("transformers", 10)
+        titles = [section["title"] for section in plan]
+        kinds = [section["kind"] for section in plan]
+        purposes = {section["title"]: section["purpose"] for section in plan}
+
+        self.assertIn("Architecture and Mechanism", titles)
+        self.assertIn("Applications and Use Cases", titles)
+        self.assertIn("implementation considerations", kinds)
+        self.assertLess(titles.index("Architecture and Mechanism"), titles.index("Applications and Use Cases"))
+        self.assertIn("without moving into full definitions or mechanism detail", purposes["Technical Background and Context"])
+        self.assertIn("without re-explaining the mechanism in full", purposes["Applications and Use Cases"])
+
+    def test_assignment_section_plan_uses_comparative_style_for_comparison_topics(self):
+        plan = response_engine._build_assignment_section_plan("python vs rust", 7)
+        titles = [section["title"] for section in plan]
+        kinds = [section["kind"] for section in plan]
+
+        self.assertIn("Comparison Context", titles)
+        self.assertIn("Comparative Analysis", titles)
+        self.assertIn("Best-Fit Use Cases", titles)
+        self.assertIn("Tradeoffs and Limitations", titles)
+        self.assertIn("comparative perspective", kinds)
+        self.assertNotIn("How It Works", titles)
+
+    def test_assignment_domain_guidance_uses_topic_sensitive_terminology(self):
+        technical = response_engine._build_assignment_domain_guidance("transformers", "how it works", "technical")
+        social = response_engine._build_assignment_domain_guidance("climate change", "background and context", "standard")
+        comparative = response_engine._build_assignment_domain_guidance("python vs rust", "comparative perspective", "comparative")
+
+        self.assertEqual(technical["domain"], "technical")
+        self.assertIn("system components", technical["prompt_terminology"])
+        self.assertIn("data flow", technical["prompt_examples"])
+
+        self.assertEqual(social["domain"], "social")
+        self.assertIn("institutions, communities, policy", social["prompt_terminology"])
+        self.assertIn("policy environments", social["prompt_examples"])
+
+        self.assertEqual(comparative["domain"], "comparative")
+        self.assertIn("criteria, tradeoffs, alternatives", comparative["prompt_terminology"])
+        self.assertIn("side-by-side scenarios", comparative["prompt_examples"])
 
     def test_assignment_section_prompt_reflects_page_band_depth(self):
         compact_prompt = response_engine._build_assignment_section_prompt(
             "transformers",
+            "core concepts",
             "Core Concepts",
             "Define the main ideas clearly.",
             4,
         )
         extended_prompt = response_engine._build_assignment_section_prompt(
             "transformers",
+            "core concepts",
             "Core Concepts",
             "Define the main ideas clearly.",
             10,
         )
+        intro_prompt = response_engine._build_assignment_section_prompt(
+            "transformers",
+            "introduction",
+            "Introduction",
+            "Introduce the topic.",
+            10,
+        )
 
-        self.assertIn("1 to 2 coherent paragraphs", compact_prompt)
+        self.assertIn("Section weight: high.", compact_prompt)
+        self.assertIn("2 coherent paragraphs", compact_prompt)
         self.assertIn("Keep the section concise and focused", compact_prompt)
-        self.assertIn("3 to 4 coherent paragraphs", extended_prompt)
+        self.assertIn("Focus on the main concepts, principles, definitions, and relationships", compact_prompt)
+        self.assertIn("Do not repeat background history, a full mechanism walkthrough, or use-case examples", compact_prompt)
+        self.assertIn("system components, architecture, data flow", compact_prompt)
+        self.assertIn("4 coherent paragraphs", extended_prompt)
+        self.assertIn("Section weight: high.", extended_prompt)
         self.assertIn("Use fuller academic depth", extended_prompt)
+        self.assertIn("2 coherent paragraphs", intro_prompt)
+        self.assertIn("Section weight: light.", intro_prompt)
+        self.assertIn("Keep this section brief", intro_prompt)
+
+    def test_assignment_section_prompt_uses_social_domain_terminology_for_social_topics(self):
+        social_prompt = response_engine._build_assignment_section_prompt(
+            "climate change",
+            "background and context",
+            "Background and Context",
+            "Explain the wider context around the topic.",
+            7,
+        )
+
+        self.assertIn("institutions, communities, policy", social_prompt)
+        self.assertIn("policy environments", social_prompt)
 
     def test_generate_document_content_payload_uses_chunked_sections_for_large_assignments(self):
         captured_calls = []
 
         def fake_generate(prompt, system_override=None, max_tokens=0, temperature=0.0):
+            heading = prompt.split("Write only the '", 1)[1].split("'", 1)[0]
             captured_calls.append(
                 {
+                    "heading": heading,
                     "prompt": prompt,
                     "max_tokens": max_tokens,
                     "temperature": temperature,
                 }
             )
-            heading = prompt.split("Write only the '", 1)[1].split("'", 1)[0]
             return {
                 "success": True,
                 "content": f"{heading}\nThis is the {heading.lower()} section.",
@@ -289,21 +383,28 @@ class ResponseEngineTests(unittest.TestCase):
         self.assertIn("Implementation Considerations", payload["content"])
         self.assertIn("Comparative Perspective", payload["content"])
         self.assertGreaterEqual(payload_mock.call_count, 10)
-        self.assertTrue(all(call["max_tokens"] == 760 for call in captured_calls))
+        intro_call = next(call for call in captured_calls if call["heading"] == "Introduction")
+        core_call = next(call for call in captured_calls if call["heading"] == "Core Concepts")
+        comparison_call = next(call for call in captured_calls if call["heading"] == "Comparative Perspective")
+        self.assertEqual(intro_call["max_tokens"], 418)
+        self.assertEqual(core_call["max_tokens"], 760)
+        self.assertEqual(comparison_call["max_tokens"], 745)
+        self.assertLess(intro_call["max_tokens"], core_call["max_tokens"])
         self.assertTrue(all(call["temperature"] == 0.35 for call in captured_calls))
 
     def test_generate_document_content_payload_uses_lighter_chunk_depth_for_mid_size_assignments(self):
         captured_calls = []
 
         def fake_generate(prompt, system_override=None, max_tokens=0, temperature=0.0):
+            heading = prompt.split("Write only the '", 1)[1].split("'", 1)[0]
             captured_calls.append(
                 {
+                    "heading": heading,
                     "prompt": prompt,
                     "max_tokens": max_tokens,
                     "temperature": temperature,
                 }
             )
-            heading = prompt.split("Write only the '", 1)[1].split("'", 1)[0]
             return {
                 "success": True,
                 "content": f"{heading}\nThis is the {heading.lower()} section.",
@@ -322,9 +423,91 @@ class ResponseEngineTests(unittest.TestCase):
         self.assertTrue(payload["success"])
         self.assertEqual(payload["source"], "provider_chunked")
         self.assertGreaterEqual(payload_mock.call_count, 8)
-        self.assertTrue(all(call["max_tokens"] == 480 for call in captured_calls))
+        intro_call = next(call for call in captured_calls if call["heading"] == "Introduction")
+        core_call = next(call for call in captured_calls if call["heading"] == "Core Concepts")
+        self.assertEqual(intro_call["max_tokens"], 264)
+        self.assertEqual(core_call["max_tokens"], 480)
+        self.assertLess(intro_call["max_tokens"], core_call["max_tokens"])
         self.assertTrue(all(call["temperature"] == 0.33 for call in captured_calls))
-        self.assertTrue(any("1 to 2 coherent paragraphs" in call["prompt"] for call in captured_calls))
+        self.assertTrue(any("2 coherent paragraphs" in call["prompt"] for call in captured_calls))
+
+    def test_local_assignment_section_body_respects_weighting(self):
+        intro_body = response_engine._build_local_assignment_section_body(
+            "transformers",
+            "introduction",
+            page_target=10,
+            display_title="Introduction",
+        )
+        core_body = response_engine._build_local_assignment_section_body(
+            "transformers",
+            "core concepts",
+            page_target=10,
+            display_title="Core Concepts",
+        )
+
+        intro_paragraphs = intro_body.split("\n\n")
+        core_paragraphs = core_body.split("\n\n")
+
+        self.assertEqual(len(intro_paragraphs), 2)
+        self.assertEqual(len(core_paragraphs), 4)
+        self.assertLess(len(intro_paragraphs), len(core_paragraphs))
+
+    def test_local_assignment_section_body_adds_distinctness_guidance_for_adjacent_sections(self):
+        background_body = response_engine._build_local_assignment_section_body(
+            "transformers",
+            "background and context",
+            page_target=10,
+            display_title="Technical Background and Context",
+        )
+        mechanism_body = response_engine._build_local_assignment_section_body(
+            "transformers",
+            "how it works",
+            page_target=10,
+            display_title="Architecture and Mechanism",
+        )
+        applications_body = response_engine._build_local_assignment_section_body(
+            "transformers",
+            "applications",
+            page_target=10,
+            display_title="Applications and Use Cases",
+        )
+
+        self.assertIn("rather than define every technical idea or explain the full internal workflow", background_body)
+        self.assertIn("understanding the mechanism in motion", mechanism_body)
+        self.assertIn("practical use and visible outcomes", applications_body)
+
+    def test_local_assignment_section_body_uses_topic_sensitive_domain_support(self):
+        technical_body = response_engine._build_local_assignment_section_body(
+            "transformers",
+            "how it works",
+            page_target=10,
+            display_title="Architecture and Mechanism",
+        )
+        social_body = response_engine._build_local_assignment_section_body(
+            "climate change",
+            "background and context",
+            page_target=10,
+            display_title="Background and Context",
+        )
+        comparative_body = response_engine._build_local_assignment_section_body(
+            "python vs rust",
+            "comparative perspective",
+            page_target=10,
+            display_title="Comparative Analysis",
+        )
+
+        self.assertIn("data flow, processing stages, architectural roles", technical_body)
+        self.assertIn("institutions, communities, policy environments", social_body)
+        self.assertIn("alternatives, suitability, tradeoffs", comparative_body)
+
+    def test_local_assignment_content_uses_style_variant_titles(self):
+        technical_content = response_engine._build_local_assignment_content("transformers", page_target=10)
+        comparative_content = response_engine._build_local_assignment_content("python vs rust", page_target=7)
+
+        self.assertIn("Architecture and Mechanism", technical_content)
+        self.assertIn("Applications and Use Cases", technical_content)
+        self.assertIn("Comparison Context", comparative_content)
+        self.assertIn("Comparative Analysis", comparative_content)
 
     def test_infer_explanation_mode_prefers_simple_when_user_says_simply(self):
         mode = response_engine.infer_explanation_mode("Explain artificial intelligence simply")

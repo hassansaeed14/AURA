@@ -1,11 +1,13 @@
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 import api.api_server as api_server
+import brain.core_ai as core_ai
 import brain.runtime_core as runtime_core
 from security.trust_engine import build_permission_response
 import tools.document_generator as document_generator
@@ -19,6 +21,7 @@ class DocumentGeneratorTests(unittest.TestCase):
         inline_format_notes_request = document_generator.detect_document_request("make notes in pdf on transformers")
         inferred_assignment_request = document_generator.detect_document_request("make me a 10 page pdf on transformers")
         inline_assignment_request = document_generator.detect_document_request("write assignment in pdf on artificial intelligence")
+        multi_output_request = document_generator.detect_document_request("make assignment on artificial intelligence and also slides with references in apa style")
 
         self.assertIsNotNone(notes_request)
         self.assertEqual(notes_request.document_type, "notes")
@@ -52,6 +55,13 @@ class DocumentGeneratorTests(unittest.TestCase):
         self.assertEqual(inline_assignment_request.topic, "artificial intelligence")
         self.assertEqual(inline_assignment_request.export_format, "pdf")
 
+        self.assertIsNotNone(multi_output_request)
+        self.assertEqual(multi_output_request.topic, "artificial intelligence")
+        self.assertEqual(multi_output_request.requested_formats, ("txt", "pptx"))
+        self.assertEqual(multi_output_request.style, "professional")
+        self.assertTrue(multi_output_request.include_references)
+        self.assertEqual(multi_output_request.citation_style, "apa")
+
     def test_generate_document_writes_requested_export_file(self):
         with tempfile.TemporaryDirectory() as tmp_dir, patch.object(
             document_generator,
@@ -71,16 +81,61 @@ class DocumentGeneratorTests(unittest.TestCase):
             },
         ):
             txt_result = document_generator.generate_document("notes", "artificial intelligence", "txt")
-            pdf_result = document_generator.generate_document("assignment", "machine learning", "pdf")
+            pdf_result = document_generator.generate_document("assignment", "machine learning", "pdf", formats=("pdf", "pptx"), include_references=True, citation_style="apa")
             docx_result = document_generator.generate_document("assignment", "deep learning", "docx", page_target=6)
 
             self.assertTrue(Path(txt_result["file_path"]).exists())
             self.assertTrue(Path(pdf_result["file_path"]).exists())
             self.assertTrue(Path(docx_result["file_path"]).exists())
+            self.assertTrue(Path(pdf_result["artifacts"]["pptx"]["file_path"]).exists())
             self.assertTrue(txt_result["download_url"].startswith("/downloads/"))
             self.assertEqual(Path(pdf_result["file_path"]).suffix.lower(), ".pdf")
             self.assertEqual(Path(docx_result["file_path"]).suffix.lower(), ".docx")
             self.assertEqual(docx_result["page_target"], 6)
+            self.assertEqual(txt_result["message"], "Done. Your notes are ready.")
+            self.assertEqual(pdf_result["message"], "Done. Your document set is ready.")
+            self.assertEqual(sorted(txt_result["available_formats"]), ["docx", "pdf", "pptx", "txt"])
+            self.assertIn("pdf", txt_result["alternate_format_links"])
+            self.assertIn("docx", txt_result["alternate_format_links"])
+            self.assertIn("document_delivery", txt_result)
+            self.assertEqual(txt_result["document_delivery"]["download_url"], txt_result["download_url"])
+            self.assertEqual(txt_result["document_delivery"]["format"], "txt")
+            self.assertEqual(pdf_result["requested_formats"], ["pdf", "pptx"])
+            self.assertEqual([item["format"] for item in pdf_result["files"]], ["pdf", "pptx"])
+            self.assertEqual(txt_result["file_name"], "AI-Notes.txt")
+            self.assertEqual(pdf_result["file_name"], "ML-Assignment.pdf")
+            self.assertEqual(docx_result["file_name"], "DL-Assignment.docx")
+            self.assertEqual(pdf_result["artifacts"]["pptx"]["file_name"], "ML-Assignment-Slides.pptx")
+            self.assertTrue(txt_result["preview_text"].startswith("Introduction") or txt_result["preview_text"].startswith("Overview"))
+            self.assertEqual(txt_result["document_delivery"]["preview_text"], txt_result["preview_text"])
+            txt_content = Path(txt_result["file_path"]).read_text(encoding="utf-8")
+            self.assertIn("ARTIFICIAL INTELLIGENCE", txt_content)
+            self.assertIn("DOCUMENT DETAILS", txt_content)
+            assignment_txt = Path(pdf_result["artifacts"]["txt"]["file_path"]).read_text(encoding="utf-8")
+            self.assertIn("Topic: Machine Learning", assignment_txt)
+            self.assertIn("1. Introduction", assignment_txt)
+            self.assertIn("References", assignment_txt)
+            with zipfile.ZipFile(pdf_result["artifacts"]["pptx"]["file_path"]) as presentation_archive:
+                archived_names = set(presentation_archive.namelist())
+            self.assertIn("ppt/presentation.xml", archived_names)
+            self.assertIn("ppt/slides/slide1.xml", archived_names)
+
+    def test_resolve_document_request_supports_format_followup(self):
+        first_request = document_generator.resolve_document_request(
+            "write assignment on artificial intelligence",
+            session_id="session-doc",
+        )
+        followup_request = document_generator.resolve_document_request(
+            "as pdf and ppt",
+            session_id="session-doc",
+        )
+
+        self.assertIsNotNone(first_request)
+        self.assertIsNotNone(followup_request)
+        self.assertEqual(followup_request.document_type, "assignment")
+        self.assertEqual(followup_request.topic, "artificial intelligence")
+        self.assertEqual(followup_request.export_format, "pdf")
+        self.assertEqual(followup_request.requested_formats, ("pdf", "pptx"))
 
 
 class RuntimeDocumentRoutingTests(unittest.TestCase):
@@ -96,7 +151,7 @@ class RuntimeDocumentRoutingTests(unittest.TestCase):
             "handle_document_generation",
             return_value={
                 "success": True,
-                "message": "I created the notes on transformers. You can download them here: /downloads/notes-transformers.txt",
+                "message": "Done. Your notes are ready.",
                 "download_url": "/downloads/notes-transformers.txt",
                 "file_name": "notes-transformers.txt",
                 "file_path": "D:/HeyGoku/generated/notes-transformers.txt",
@@ -108,12 +163,62 @@ class RuntimeDocumentRoutingTests(unittest.TestCase):
                 "provider": "local",
                 "model": "template",
                 "providers_tried": [],
+                "available_formats": ["txt", "pdf", "docx"],
+                "requested_formats": ["txt", "pdf"],
+                "files": [
+                    {
+                        "format": "txt",
+                        "file_name": "notes-transformers.txt",
+                        "download_url": "/downloads/notes-transformers.txt",
+                        "primary": True,
+                    },
+                    {
+                        "format": "pdf",
+                        "file_name": "notes-transformers.pdf",
+                        "download_url": "/downloads/notes-transformers.pdf",
+                        "primary": False,
+                    },
+                ],
+                "format_links": {
+                    "txt": "/downloads/notes-transformers.txt",
+                    "pdf": "/downloads/notes-transformers.pdf",
+                    "docx": "/downloads/notes-transformers.docx",
+                },
+                "alternate_format_links": {
+                    "pdf": "/downloads/notes-transformers.pdf",
+                    "docx": "/downloads/notes-transformers.docx",
+                },
+                "document_delivery": {
+                    "kind": "document_delivery",
+                    "delivery_message": "Done. Your notes are ready.",
+                    "document_type": "notes",
+                    "format": "txt",
+                    "file_name": "notes-transformers.txt",
+                    "download_url": "/downloads/notes-transformers.txt",
+                    "preview_text": "Overview: Key ideas about transformers.",
+                    "requested_formats": ["txt", "pdf"],
+                    "files": [
+                        {
+                            "format": "txt",
+                            "file_name": "notes-transformers.txt",
+                            "download_url": "/downloads/notes-transformers.txt",
+                            "primary": True,
+                        },
+                        {
+                            "format": "pdf",
+                            "file_name": "notes-transformers.pdf",
+                            "download_url": "/downloads/notes-transformers.pdf",
+                            "primary": False,
+                        },
+                    ],
+                },
+                "preview_text": "Overview: Key ideas about transformers.",
             },
         ), patch.object(runtime_core, "respond_in_language", side_effect=lambda response, language: response), patch.object(
             runtime_core,
             "store_and_learn",
         ):
-            result = runtime_core.process_single_command_detailed("make notes on transformers")
+            result = runtime_core.process_single_command_detailed("make notes on transformers", session_id="session-doc")
 
         self.assertEqual(result["execution_mode"], "document_generation")
         self.assertEqual(result["download_url"], "/downloads/notes-transformers.txt")
@@ -122,6 +227,12 @@ class RuntimeDocumentRoutingTests(unittest.TestCase):
         self.assertEqual(result["permission_action"], "document_generation")
         self.assertTrue(result["permission"]["success"])
         self.assertEqual(result["page_target"], 4)
+        self.assertEqual(result["response"], "Done. Your notes are ready.")
+        self.assertEqual(result["document_delivery"]["download_url"], "/downloads/notes-transformers.txt")
+        self.assertIn("pdf", result["alternate_format_links"])
+        self.assertEqual(result["document_preview"], "Overview: Key ideas about transformers.")
+        self.assertEqual(result["requested_formats"], ["txt", "pdf"])
+        self.assertEqual(len(result["document_files"]), 2)
 
 
 class ApiDocumentEndpointTests(unittest.TestCase):
@@ -144,6 +255,29 @@ class ApiDocumentEndpointTests(unittest.TestCase):
         self.assertTrue(context["permission"]["success"])
         self.assertEqual(context["permission"]["permission"]["trust_level"], "safe")
 
+    def test_prepare_chat_context_preserves_document_followup_format(self):
+        with patch.object(api_server, "load_user_profile", return_value={}), patch.object(
+            api_server,
+            "detect_intent_with_confidence",
+            return_value=("content", 0.91),
+        ):
+            first_context = api_server._prepare_chat_context(
+                "write assignment on artificial intelligence",
+                "hybrid",
+                session_id="session-doc",
+                user=None,
+            )
+            followup_context = api_server._prepare_chat_context(
+                "as pdf",
+                "hybrid",
+                session_id="session-doc",
+                user=None,
+            )
+
+        self.assertEqual(first_context["detected_intent"], "document")
+        self.assertEqual(followup_context["detected_intent"], "document")
+        self.assertEqual(followup_context["document_request"].export_format, "pdf")
+
     def test_generate_document_endpoint_returns_download_url(self):
         with patch.object(api_server, "requires_first_run_setup", return_value=False), patch.object(
             api_server,
@@ -158,11 +292,78 @@ class ApiDocumentEndpointTests(unittest.TestCase):
                 "topic": "artificial intelligence",
                 "provider": "local",
                 "source": "local_template",
+                "title": "Artificial Intelligence",
+                "subtitle": "Study Notes",
+                "preview_text": "Overview: Artificial intelligence in simple terms.",
+                "available_formats": ["txt", "pdf", "docx"],
+                "requested_formats": ["txt", "pptx"],
+                "files": [
+                    {
+                        "format": "txt",
+                        "file_name": "notes-ai.txt",
+                        "download_url": "/downloads/notes-ai.txt",
+                        "primary": True,
+                    },
+                    {
+                        "format": "pptx",
+                        "file_name": "notes-ai-slides.pptx",
+                        "download_url": "/downloads/notes-ai-slides.pptx",
+                        "primary": False,
+                    },
+                ],
+                "style": "detailed",
+                "include_references": True,
+                "citation_style": "apa",
+                "format_links": {
+                    "txt": "/downloads/notes-ai.txt",
+                    "pdf": "/downloads/notes-ai.pdf",
+                    "docx": "/downloads/notes-ai.docx",
+                    "pptx": "/downloads/notes-ai-slides.pptx",
+                },
+                "alternate_format_links": {
+                    "pdf": "/downloads/notes-ai.pdf",
+                    "docx": "/downloads/notes-ai.docx",
+                    "pptx": "/downloads/notes-ai-slides.pptx",
+                },
+                "document_delivery": {
+                    "kind": "document_delivery",
+                    "delivery_message": "Done. Your document set is ready.",
+                    "document_type": "notes",
+                    "format": "txt",
+                    "file_name": "notes-ai.txt",
+                    "download_url": "/downloads/notes-ai.txt",
+                    "preview_text": "Overview: Artificial intelligence in simple terms.",
+                    "requested_formats": ["txt", "pptx"],
+                    "files": [
+                        {
+                            "format": "txt",
+                            "file_name": "notes-ai.txt",
+                            "download_url": "/downloads/notes-ai.txt",
+                            "primary": True,
+                        },
+                        {
+                            "format": "pptx",
+                            "file_name": "notes-ai-slides.pptx",
+                            "download_url": "/downloads/notes-ai-slides.pptx",
+                            "primary": False,
+                        },
+                    ],
+                },
+                "message": "Done. Your document set is ready.",
             },
         ) as generate_mock:
             response = self.client.post(
                 "/api/generate/document",
-                json={"type": "notes", "topic": "artificial intelligence", "format": "txt", "page_target": 3},
+                json={
+                    "type": "notes",
+                    "topic": "artificial intelligence",
+                    "format": "txt",
+                    "formats": ["txt", "pptx"],
+                    "page_target": 3,
+                    "style": "detailed",
+                    "include_references": True,
+                    "citation_style": "apa",
+                },
             )
 
         self.assertEqual(response.status_code, 200)
@@ -170,7 +371,15 @@ class ApiDocumentEndpointTests(unittest.TestCase):
         self.assertTrue(payload["success"])
         self.assertEqual(payload["download_url"], "/downloads/notes-ai.txt")
         self.assertEqual(payload["page_target"], 3)
+        self.assertEqual(payload["kind"], "document_delivery")
+        self.assertEqual(payload["reply"], "Done. Your document set is ready.")
+        self.assertIn("pptx", payload["alternate_format_links"])
+        self.assertEqual(payload["document_delivery"]["download_url"], "/downloads/notes-ai.txt")
+        self.assertEqual(payload["preview_text"], "Overview: Artificial intelligence in simple terms.")
+        self.assertEqual(payload["requested_formats"], ["txt", "pptx"])
+        self.assertEqual(len(payload["files"]), 2)
         self.assertEqual(generate_mock.call_args.kwargs["page_target"], 3)
+        self.assertEqual(generate_mock.call_args.kwargs["formats"], ("txt", "pptx"))
 
     def test_api_chat_document_request_bypasses_permission_block(self):
         with patch.object(api_server, "requires_first_run_setup", return_value=False), patch.object(
@@ -192,7 +401,7 @@ class ApiDocumentEndpointTests(unittest.TestCase):
                 "intent": "document",
                 "detected_intent": "document",
                 "confidence": 1.0,
-                "response": "I created the assignment on artificial intelligence. You can download it here: /downloads/assignment-ai.txt",
+                "response": "Done. Your assignment is ready.",
                 "used_agents": ["document_generator"],
                 "agent_capabilities": [],
                 "execution_mode": "document_generation",
@@ -210,6 +419,58 @@ class ApiDocumentEndpointTests(unittest.TestCase):
                 "page_target": 5,
                 "document_topic": "artificial intelligence",
                 "document_source": "local_template",
+                "document_preview": "Introduction: Artificial intelligence connects intelligent behaviour with practical applications.",
+                "alternate_format_links": {
+                    "pdf": "/downloads/assignment-ai.pdf",
+                    "docx": "/downloads/assignment-ai.docx",
+                    "pptx": "/downloads/assignment-ai-slides.pptx",
+                },
+                "format_links": {
+                    "txt": "/downloads/assignment-ai.txt",
+                    "pdf": "/downloads/assignment-ai.pdf",
+                    "docx": "/downloads/assignment-ai.docx",
+                    "pptx": "/downloads/assignment-ai-slides.pptx",
+                },
+                "available_formats": ["txt", "pdf", "docx", "pptx"],
+                "requested_formats": ["txt", "pptx"],
+                "document_files": [
+                    {
+                        "format": "txt",
+                        "file_name": "assignment-ai.txt",
+                        "download_url": "/downloads/assignment-ai.txt",
+                        "primary": True,
+                    },
+                    {
+                        "format": "pptx",
+                        "file_name": "assignment-ai-slides.pptx",
+                        "download_url": "/downloads/assignment-ai-slides.pptx",
+                        "primary": False,
+                    },
+                ],
+                "document_delivery": {
+                    "kind": "document_delivery",
+                    "delivery_message": "Done. Your document set is ready.",
+                    "document_type": "assignment",
+                    "format": "txt",
+                    "file_name": "assignment-ai.txt",
+                    "download_url": "/downloads/assignment-ai.txt",
+                    "preview_text": "Introduction: Artificial intelligence connects intelligent behaviour with practical applications.",
+                    "requested_formats": ["txt", "pptx"],
+                    "files": [
+                        {
+                            "format": "txt",
+                            "file_name": "assignment-ai.txt",
+                            "download_url": "/downloads/assignment-ai.txt",
+                            "primary": True,
+                        },
+                        {
+                            "format": "pptx",
+                            "file_name": "assignment-ai-slides.pptx",
+                            "download_url": "/downloads/assignment-ai-slides.pptx",
+                            "primary": False,
+                        },
+                    ],
+                },
                 "degraded": False,
             },
         ), patch.object(
@@ -228,7 +489,207 @@ class ApiDocumentEndpointTests(unittest.TestCase):
         self.assertEqual(payload["execution_mode"], "document_generation")
         self.assertEqual(payload["download_url"], "/downloads/assignment-ai.txt")
         self.assertEqual(payload["page_target"], 5)
+        self.assertEqual(payload["kind"], "document_delivery")
+        self.assertEqual(payload["reply"], "Done. Your document set is ready.")
+        self.assertIn("pdf", payload["alternate_format_links"])
+        self.assertEqual(payload["document_delivery"]["download_url"], "/downloads/assignment-ai.txt")
+        self.assertEqual(payload["document_preview"], "Introduction: Artificial intelligence connects intelligent behaviour with practical applications.")
+        self.assertEqual(payload["requested_formats"], ["txt", "pptx"])
         self.assertNotIn("Approval is required", payload["reply"])
+
+
+class CoreAiDocumentDeliveryTests(unittest.TestCase):
+    def test_core_ai_keeps_document_delivery_reply_clean(self):
+        with patch.object(core_ai, "_sync_context_into_response_engine"), patch.object(
+            core_ai.runtime_core_module,
+            "process_command_detailed",
+            return_value={
+                "intent": "document",
+                "detected_intent": "document",
+                "confidence": 1.0,
+                "response": "Done. Your assignment is ready.",
+                "provider": "local",
+                "model": "template",
+                "providers_tried": [],
+                "used_agents": ["document_generator"],
+                "execution_mode": "document_generation",
+                "decision": {"intent": "document"},
+                "orchestration": {"primary_agent": "document_generator"},
+                "permission_action": "document_generation",
+                "permission": build_permission_response("document_generation"),
+                "document_delivery": {
+                    "kind": "document_delivery",
+                    "delivery_message": "Done. Your assignment is ready.",
+                    "download_url": "/downloads/assignment-ai.pdf",
+                },
+            },
+        ), patch.object(core_ai, "_record_exchange"), patch.object(
+            core_ai.agent_bus,
+            "publish",
+        ):
+            result = core_ai.process_command_detailed(
+                "write assignment on artificial intelligence",
+                session_id="session-doc",
+                user_profile={"proactive_suggestions": True},
+            )
+
+        self.assertEqual(result["response"], "Done. Your assignment is ready.")
+        self.assertEqual(result["document_delivery"]["download_url"], "/downloads/assignment-ai.pdf")
+
+
+class ContentExtractorTests(unittest.TestCase):
+    def test_extract_text_passthrough(self):
+        from tools.content_extractor import extract_content
+
+        result = extract_content("Machine learning is a subset of AI.")
+        self.assertTrue(result.success)
+        self.assertEqual(result.source_type, "text")
+        self.assertEqual(result.source_label, "pasted text")
+        self.assertIn("Machine learning", result.text)
+
+    def test_extract_txt_bytes(self):
+        from tools.content_extractor import extract_content
+
+        content = b"Transformers are a type of neural network architecture."
+        result = extract_content(content, filename="notes.txt")
+        self.assertTrue(result.success)
+        self.assertEqual(result.source_type, "txt")
+        self.assertIn("Transformers", result.text)
+
+    def test_extract_empty_text_fails(self):
+        from tools.content_extractor import extract_content
+
+        result = extract_content("   ")
+        self.assertFalse(result.success)
+        self.assertIsNotNone(result.error)
+
+    def test_extract_docx_bytes(self):
+        from tools.content_extractor import extract_content
+        import zipfile
+        import io
+
+        body_xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            "<w:body>"
+            "<w:p><w:r><w:t>Deep learning uses multiple layers.</w:t></w:r></w:p>"
+            "</w:body>"
+            "</w:document>"
+        )
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as archive:
+            archive.writestr("word/document.xml", body_xml)
+        docx_bytes = buf.getvalue()
+
+        result = extract_content(docx_bytes, filename="notes.docx")
+        self.assertTrue(result.success)
+        self.assertEqual(result.source_type, "docx")
+        self.assertIn("Deep learning", result.text)
+
+    def test_is_youtube_url_detection(self):
+        from tools.content_extractor import is_youtube_url
+
+        self.assertTrue(is_youtube_url("https://www.youtube.com/watch?v=abc123"))
+        self.assertTrue(is_youtube_url("https://youtu.be/abc123"))
+        self.assertTrue(is_youtube_url("https://www.youtube.com/shorts/abc123"))
+        self.assertFalse(is_youtube_url("https://vimeo.com/12345"))
+        self.assertFalse(is_youtube_url("make notes on transformers"))
+
+    def test_extract_unsupported_type_fails(self):
+        from tools.content_extractor import extract_content
+
+        result = extract_content("data", source_type="image")
+        self.assertFalse(result.success)
+        self.assertIn("Unsupported", result.error)
+
+
+class TransformationRoutingTests(unittest.TestCase):
+    def test_handle_transformation_returns_none_without_source(self):
+        from brain.runtime_core import handle_transformation
+
+        result = handle_transformation("make notes on machine learning")
+        self.assertIsNone(result)
+
+    def test_handle_transformation_returns_none_without_trigger(self):
+        from brain.runtime_core import handle_transformation
+
+        result = handle_transformation("what is machine learning?", source_content="ML is about algorithms.")
+        self.assertIsNone(result)
+
+    def test_handle_transformation_with_inline_content(self):
+        from brain.runtime_core import handle_transformation
+        from unittest.mock import patch
+        import tools.document_generator as document_generator
+
+        with patch.object(
+            document_generator,
+            "generate_document_content_payload",
+            return_value={
+                "success": True,
+                "content": "Overview\n- Key machine learning concepts.",
+                "provider": "local",
+                "model": "template",
+                "source": "transformation",
+                "degraded": False,
+                "providers_tried": [],
+            },
+        ), tempfile.TemporaryDirectory() as tmp_dir, patch.object(
+            document_generator, "GENERATED_DIR", Path(tmp_dir)
+        ):
+            result = handle_transformation(
+                "convert this into notes:",
+                source_content="Machine learning is a method of data analysis.",
+            )
+
+        self.assertIsNotNone(result)
+        self.assertTrue(result.get("success"))
+        self.assertEqual(result.get("document_type"), "notes")
+        self.assertIn("download_url", result)
+
+    def test_inline_source_splitting(self):
+        from brain.runtime_core import _extract_inline_source_content
+
+        long_content = (
+            "Neural networks learn from data. They have multiple layers that process "
+            "information hierarchically, allowing them to detect patterns in complex datasets."
+        )
+        cmd, content = _extract_inline_source_content(f"make notes from this:  {long_content}")
+        self.assertIn("make notes", cmd)
+        self.assertIn("Neural networks", content)
+
+    def test_no_inline_split_for_short_content(self):
+        from brain.runtime_core import _extract_inline_source_content
+
+        cmd, content = _extract_inline_source_content("make notes from this: short")
+        self.assertEqual(content, "")
+
+    def test_youtube_url_detection_in_command(self):
+        from brain.runtime_core import _find_youtube_url_in_text
+
+        url = _find_youtube_url_in_text(
+            "make notes from https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        )
+        self.assertIsNotNone(url)
+        self.assertIn("youtube.com", url)
+
+    def test_detect_transformation_doc_type(self):
+        from brain.runtime_core import _detect_transformation_doc_type
+
+        self.assertEqual(_detect_transformation_doc_type("convert this into notes"), "notes")
+        self.assertEqual(_detect_transformation_doc_type("turn this into an assignment"), "assignment")
+        self.assertEqual(_detect_transformation_doc_type("summarize this text"), "notes")
+
+    def test_transformation_topic_extraction(self):
+        from brain.runtime_core import _extract_transformation_topic
+
+        topic = _extract_transformation_topic("make notes on deep learning from this", "uploaded_file.pdf")
+        self.assertEqual(topic, "deep learning")
+
+        topic = _extract_transformation_topic("convert this into notes", "lecture.pdf")
+        self.assertEqual(topic, "lecture")
+
+        topic = _extract_transformation_topic("summarize this", "pasted text")
+        self.assertEqual(topic, "Source Material")
 
 
 if __name__ == "__main__":

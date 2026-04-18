@@ -27,6 +27,7 @@ from brain.response_engine import (
     build_degraded_reply,
     clean_response,
     generate_response_payload,
+    generate_transformation_content_payload,
     generate_web_search_response_payload,
     is_meaningful_text,
 )
@@ -79,7 +80,16 @@ from agents.system.screenshot_agent import take_screenshot
 from security.trust_engine import build_permission_response, get_trust_level
 from agents.agent_fabric import match_generated_agent_request, run_generated_agent
 from agents.registry import build_runtime_agent_cards
-from tools.document_generator import detect_document_request, generate_document
+from tools.document_generator import (
+    DocumentRequest,
+    generate_document,
+    normalize_document_formats,
+    normalize_document_style,
+    normalize_citation_style,
+    remember_document_request,
+    resolve_document_request,
+)
+from tools.content_extractor import extract_content, is_youtube_url
 
 
 GREETING_INPUTS = {"hi", "hello", "hey", "hey aura", "hi aura", "hello aura"}
@@ -180,6 +190,25 @@ WEB_SEARCH_SKIP_INTENTS = {
     "list_files",
     "screenshot",
 }
+
+_YOUTUBE_URL_RE = re.compile(
+    r"(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=[\w-]+|youtu\.be/[\w-]+|youtube\.com/shorts/[\w-]+)",
+    flags=re.IGNORECASE,
+)
+
+_TRANSFORMATION_TRIGGER_RE = re.compile(
+    r"\b(?:convert|transform|turn|change)\b.{0,60}\b(?:into|to|as)\b.{0,40}\b(?:notes|assignment|slides|summary|summaries)\b"
+    r"|\b(?:make|create|generate)\b.{0,40}\b(?:notes|assignment|summary)\b.{0,60}\b(?:from|out of|based on)\b"
+    r"|\b(?:summarize|summarise)\b.{0,40}\b(?:this|the|my|following)\b"
+    r"|\b(?:notes|assignment)\b.{0,40}\b(?:from|out of|based on)\b(?:this|the|my|following)"
+    r"|\b(?:extract|pull out)\b.{0,40}\b(?:notes|key points|summary)\b"
+    r"|\b(?:make|create)\b.{0,30}\b(?:notes|assignment)\b.{0,30}\b(?:from|of)\b",
+    flags=re.IGNORECASE,
+)
+
+_INLINE_CONTENT_SPLIT_RE = re.compile(
+    r"[:\uff1a]\s*\n|[:\uff1a]\s{2,}",
+)
 
 try:
     from memory.vector_memory import store_memory
@@ -557,16 +586,181 @@ def handle_special_intents(intent: str) -> Optional[str]:
     return None
 
 
-def handle_document_generation(raw_command: str) -> Optional[Dict[str, Any]]:
-    request = detect_document_request(raw_command)
+def handle_document_generation(raw_command: str, *, session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    request = resolve_document_request(raw_command, session_id=session_id)
     if request is None:
         return None
     return generate_document(
         request.document_type,
         request.topic,
         request.export_format,
+        formats=request.requested_formats,
         page_target=request.page_target,
+        style=request.style,
+        include_references=request.include_references,
+        citation_style=request.citation_style,
     )
+
+
+def _find_youtube_url_in_text(text: str) -> Optional[str]:
+    match = _YOUTUBE_URL_RE.search(str(text or ""))
+    return match.group(0) if match else None
+
+
+def _detect_transformation_doc_type(command: str) -> str:
+    lowered = command.lower()
+    if re.search(r"\b(assignment)\b", lowered):
+        return "assignment"
+    return "notes"
+
+
+def _extract_transformation_formats(command: str, doc_type: str) -> tuple[str, ...]:
+    lowered = command.lower()
+    format_map = (
+        (r"\b(docx|word)\b", "docx"),
+        (r"\b(pdf)\b", "pdf"),
+        (r"\b(txt|text file|plain text)\b", "txt"),
+        (r"\b(pptx|ppt|slides?|presentation)\b", "pptx"),
+    )
+    found = []
+    for pattern, fmt in format_map:
+        if re.search(pattern, lowered, flags=re.IGNORECASE) and fmt not in found:
+            found.append(fmt)
+    return normalize_document_formats(found or ["txt"])
+
+
+def _extract_transformation_page_target(command: str) -> Optional[int]:
+    match = re.search(r"\b(\d{1,2})\s*(?:page|pages)\b", command.lower())
+    if not match:
+        return None
+    return max(1, min(int(match.group(1)), 20))
+
+
+def _extract_transformation_style(command: str, doc_type: str) -> str:
+    lowered = command.lower()
+    for s in ("detailed", "simple", "professional"):
+        if re.search(rf"\b{s}\b", lowered):
+            return s
+    return "simple" if doc_type == "notes" else "professional"
+
+
+def _extract_transformation_references(command: str) -> bool:
+    lowered = command.lower()
+    return bool(re.search(r"\b(reference|references|bibliography|works cited|citations?)\b", lowered))
+
+
+def _extract_transformation_citation_style(command: str) -> Optional[str]:
+    lowered = command.lower()
+    for style in ("apa", "mla", "chicago", "harvard", "ieee"):
+        if re.search(rf"\b{style}\b", lowered):
+            return style
+    return None
+
+
+def _extract_transformation_topic(command: str, source_label: str) -> str:
+    topic_match = re.search(
+        r"\b(?:on|about|for)\s+([^,\n]+?)(?:\s+from\b|\s+using\b|\s+based on\b|[,\n]|$)",
+        command,
+        flags=re.IGNORECASE,
+    )
+    if topic_match:
+        candidate = topic_match.group(1).strip().rstrip(".,:;")
+        if candidate.lower() not in {"this", "the", "my", "following", "it", "that"}:
+            return candidate[:80]
+    if source_label and source_label not in {"pasted text", "uploaded file", "text"}:
+        clean = re.sub(r"\.\w+$", "", source_label).strip()
+        if clean:
+            return clean[:60]
+    return "Source Material"
+
+
+def _extract_inline_source_content(command: str) -> tuple[str, str]:
+    """Split 'make notes from this: [content]' into (command_part, content_part)."""
+    parts = _INLINE_CONTENT_SPLIT_RE.split(command, maxsplit=1)
+    if len(parts) == 2 and len(parts[1].strip()) > 50:
+        return parts[0].strip(), parts[1].strip()
+    return command, ""
+
+
+def handle_transformation(
+    raw_command: str,
+    *,
+    source_content: Optional[str] = None,
+    session_id: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Handle transformation requests: convert source material into structured documents.
+    Supports YouTube URLs in the command, pasted inline content, or explicit source_content.
+    Returns the same shape as generate_document(), or None if not a transformation request.
+    """
+    command = str(raw_command or "").strip()
+
+    clean_command, inline_content = _extract_inline_source_content(command)
+    if inline_content and not source_content:
+        source_content = inline_content
+        command = clean_command
+
+    youtube_url = _find_youtube_url_in_text(command)
+    has_source = bool(source_content) or bool(youtube_url)
+    is_transform = bool(_TRANSFORMATION_TRIGGER_RE.search(command)) or bool(youtube_url)
+
+    if not is_transform or not has_source:
+        return None
+
+    doc_type = _detect_transformation_doc_type(command)
+    requested_formats = _extract_transformation_formats(command, doc_type)
+    page_target = _extract_transformation_page_target(command)
+    style = _extract_transformation_style(command, doc_type)
+    include_references = _extract_transformation_references(command)
+    citation_style = _extract_transformation_citation_style(command)
+
+    if youtube_url:
+        extracted = extract_content(youtube_url, source_type="youtube")
+    else:
+        extracted = extract_content(str(source_content), source_type="text")
+
+    if not extracted.success or not extracted.text.strip():
+        return None
+
+    topic = _extract_transformation_topic(command, extracted.source_label)
+
+    transformation_payload = generate_transformation_content_payload(
+        extracted.text,
+        doc_type,
+        topic,
+        page_target=page_target,
+        style=style,
+        include_references=include_references,
+        citation_style=citation_style,
+    )
+
+    structured_content = transformation_payload.get("content") or extracted.text
+
+    result = generate_document(
+        doc_type,
+        topic,
+        formats=requested_formats,
+        page_target=page_target,
+        style=style,
+        include_references=include_references,
+        citation_style=citation_style,
+        prebuilt_content=structured_content,
+    )
+
+    if session_id and result.get("success"):
+        dr = DocumentRequest(
+            document_type=doc_type,
+            topic=topic,
+            export_format=requested_formats[0],
+            requested_formats=requested_formats,
+            page_target=page_target,
+            style=normalize_document_style(style),
+            include_references=include_references,
+            citation_style=normalize_citation_style(citation_style),
+        )
+        remember_document_request(session_id, dr)
+
+    return result
 
 
 def build_enhanced_input(raw_command: str, confidence: float) -> str:
@@ -988,6 +1182,7 @@ def process_single_command_detailed(
     telemetry: Optional[ProcessingTelemetry] = None,
     *,
     publish_telemetry: bool = True,
+    session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     active_telemetry = telemetry or ProcessingTelemetry()
     raw_input = str(command or "")
@@ -1066,9 +1261,9 @@ def process_single_command_detailed(
             "permission": build_permission_response("memory_read", confirmed=True),
         }, active_telemetry, publish=publish_telemetry)
 
-    document_result = handle_document_generation(raw_command)
+    document_result = handle_document_generation(raw_command, session_id=session_id)
     if document_result is not None:
-        reply = str(document_result.get("message") or "I created your document.")
+        reply = str(document_result.get("message") or "Your document is ready.")
         execution_time_ms = 0.0
         active_telemetry.record_intent("document", 1.0, [], 0.0)
         active_telemetry.record_routing(
@@ -1112,6 +1307,77 @@ def process_single_command_detailed(
         result["page_target"] = document_result.get("page_target")
         result["document_topic"] = document_result.get("topic")
         result["document_source"] = document_result.get("source")
+        result["document_delivery"] = document_result.get("document_delivery")
+        result["alternate_format_links"] = document_result.get("alternate_format_links") or {}
+        result["format_links"] = document_result.get("format_links") or {}
+        result["available_formats"] = document_result.get("available_formats") or []
+        result["document_files"] = document_result.get("files") or []
+        result["requested_formats"] = document_result.get("requested_formats") or []
+        result["document_style"] = document_result.get("style")
+        result["include_references"] = document_result.get("include_references")
+        result["citation_style"] = document_result.get("citation_style")
+        result["document_title"] = document_result.get("title")
+        result["document_subtitle"] = document_result.get("subtitle")
+        result["document_preview"] = document_result.get("preview_text")
+        return result
+
+    transformation_result = handle_transformation(raw_command, session_id=session_id)
+    if transformation_result is not None:
+        reply = str(transformation_result.get("message") or "Your transformed document is ready.")
+        active_telemetry.record_intent("transformation", 1.0, [], 0.0)
+        active_telemetry.record_routing(
+            "transformation_engine",
+            "Transformation request routed to content extractor and document generator.",
+            "safe",
+            0.0,
+        )
+        active_telemetry.record_execution("transformation_engine", reply, True, 0.0)
+        result = build_result(
+            raw_command=raw_command,
+            detected_intent="transformation",
+            confidence=1.0,
+            response=reply,
+            language="english",
+            orchestration={
+                "primary_agent": "transformation_engine",
+                "secondary_agents": [],
+                "execution_order": ["transformation_engine"],
+                "requires_multiple": False,
+                "primary_selection_source": "transformation_guard",
+                "mode": "real",
+                "reason": "Source content transformation routed directly to the transformation engine.",
+            },
+            used_agents=["transformation_engine"],
+            execution_mode="document_transformation",
+            plan_steps=[],
+            permission_action="document_generation",
+            permission=build_permission_response("document_generation"),
+            provider_name=transformation_result.get("provider"),
+            provider_model=transformation_result.get("model"),
+            providers_tried=transformation_result.get("providers_tried") or [],
+            telemetry=active_telemetry,
+            publish_telemetry=publish_telemetry,
+        )
+        result["download_url"] = transformation_result.get("download_url")
+        result["file_name"] = transformation_result.get("file_name")
+        result["file_path"] = transformation_result.get("file_path")
+        result["document_type"] = transformation_result.get("document_type")
+        result["document_format"] = transformation_result.get("format")
+        result["page_target"] = transformation_result.get("page_target")
+        result["document_topic"] = transformation_result.get("topic")
+        result["document_source"] = transformation_result.get("source")
+        result["document_delivery"] = transformation_result.get("document_delivery")
+        result["alternate_format_links"] = transformation_result.get("alternate_format_links") or {}
+        result["format_links"] = transformation_result.get("format_links") or {}
+        result["available_formats"] = transformation_result.get("available_formats") or []
+        result["document_files"] = transformation_result.get("files") or []
+        result["requested_formats"] = transformation_result.get("requested_formats") or []
+        result["document_style"] = transformation_result.get("style")
+        result["include_references"] = transformation_result.get("include_references")
+        result["citation_style"] = transformation_result.get("citation_style")
+        result["document_title"] = transformation_result.get("title")
+        result["document_subtitle"] = transformation_result.get("subtitle")
+        result["document_preview"] = transformation_result.get("preview_text")
         return result
 
     language = detect_language(raw_command)
@@ -1404,17 +1670,20 @@ def process_single_command(command: str) -> tuple[str, str]:
     return result["intent"], result["response"]
 
 
-def process_command_detailed(command: str) -> Dict[str, Any]:
+def process_command_detailed(command: str, *, session_id: Optional[str] = None) -> Dict[str, Any]:
     raw_input = str(command or "")
     raw_command = clean_user_input(command)
 
     if not raw_command:
-        return process_single_command_detailed(raw_command)
+        return process_single_command_detailed(raw_command, session_id=session_id)
+
+    if resolve_document_request(raw_input, session_id=session_id) is not None or resolve_document_request(raw_command, session_id=session_id) is not None:
+        return process_single_command_detailed(raw_command, session_id=session_id)
 
     sub_commands = split_commands(raw_command)
 
     if not should_treat_as_multi_command(sub_commands):
-        return process_single_command_detailed(raw_command)
+        return process_single_command_detailed(raw_command, session_id=session_id)
 
     aggregate_telemetry = ProcessingTelemetry()
     understanding_started = time.perf_counter()
@@ -1426,7 +1695,7 @@ def process_command_detailed(command: str) -> Dict[str, Any]:
     )
 
     results = [
-        process_single_command_detailed(sub_command, publish_telemetry=False)
+        process_single_command_detailed(sub_command, publish_telemetry=False, session_id=session_id)
         for sub_command in sub_commands
     ]
     responses = [item["response"] for item in results]

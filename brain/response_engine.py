@@ -94,6 +94,21 @@ SIMPLE_EXPLANATION_MARKERS = (
     "overview",
 )
 
+DOCUMENT_STYLE_ALIASES = {
+    "professional": "professional",
+    "simple": "simple",
+    "detailed": "detailed",
+}
+
+CITATION_STYLE_ALIASES = {
+    "apa": "apa",
+    "mla": "mla",
+    "chicago": "chicago",
+    "harvard": "harvard",
+    "ieee": "ieee",
+    "basic": "basic",
+}
+
 DOCUMENT_NOTES_PROMPT = (
     "Create clear study notes. Use a short title, then concise headings with bullet points. "
     "Keep the content organized, accurate, and easy to revise from. "
@@ -104,6 +119,64 @@ DOCUMENT_ASSIGNMENT_PROMPT = (
     "Write a structured academic-style assignment in plain readable language. "
     "Include an introduction, clear section headings, explanatory paragraphs, and a conclusion. "
     "Do not use robotic filler or chatty phrases."
+)
+
+TRANSFORMATION_NOTES_PROMPT = (
+    "You are converting provided source material into structured study notes. "
+    "Use plain-text section headings (no # symbols) followed by bullet points starting with '-'. "
+    "Preserve key facts and information from the source. "
+    "Do not invent details not present in the source material. "
+    "Do not include chat-style preamble or filler."
+)
+
+TRANSFORMATION_ASSIGNMENT_PROMPT = (
+    "You are converting provided source material into a structured academic assignment. "
+    "Use plain-text section headings followed by explanatory paragraphs. "
+    "Build on the key information from the source and maintain academic tone. "
+    "Do not use robotic filler phrases or chatbot-style opening lines."
+)
+
+TECHNICAL_ASSIGNMENT_MARKERS = (
+    "artificial intelligence",
+    "machine learning",
+    "deep learning",
+    "transformer",
+    "transformers",
+    "neural",
+    "language model",
+    "llm",
+    "algorithm",
+    "system",
+    "software",
+    "computer",
+    "computing",
+    "data",
+    "database",
+    "network",
+    "api",
+    "cybersecurity",
+    "cloud",
+)
+
+SOCIAL_ASSIGNMENT_MARKERS = (
+    "education",
+    "poverty",
+    "inequality",
+    "gender",
+    "human rights",
+    "social justice",
+    "mental health",
+    "public health",
+    "climate change",
+    "migration",
+    "unemployment",
+    "community",
+    "communities",
+    "society",
+    "policy",
+    "governance",
+    "labor",
+    "healthcare",
 )
 
 JARVIS_SYSTEM_PROMPT = """
@@ -402,9 +475,16 @@ def build_local_web_summary(search_result: Dict[str, Any], user_input: str = "")
     return build_degraded_reply(user_input, providers_tried=[])
 
 
-def _build_local_notes_content(topic: str) -> str:
+def _build_local_notes_content(
+    topic: str,
+    *,
+    style: Optional[str] = None,
+    include_references: bool = False,
+    citation_style: Optional[str] = None,
+) -> str:
     title_topic = topic.title()
-    return clean_response(
+    normalized_style = normalize_document_style(style)
+    content = clean_response(
         f"""Overview
 - {title_topic} refers to an important concept area that should be understood through definition, structure, uses, and limits.
 - A strong set of notes should focus on what it is, how it works, where it is used, and why it matters.
@@ -436,6 +516,100 @@ Quick Summary
 - {title_topic} is best understood by combining definition, mechanism, applications, strengths, and limitations.
 - For revision, remember the core concept first, then the real-world uses and tradeoffs."""
     )
+    if normalized_style == "detailed":
+        content = clean_response(
+            f"{content}\n\nRevision Focus\n- Connect the main definition of {topic} to its mechanism, practical value, and limitations.\n"
+            "- Review not only what the topic does, but also why it matters in academic and real-world settings."
+        )
+    elif normalized_style == "simple":
+        content = clean_response(
+            f"{content}\n\nFast Review\n- Remember the definition first.\n- Then recall how it works and where it is used."
+        )
+    if include_references:
+        content = _append_references_section(content, topic, citation_style)
+    return content
+
+
+def normalize_document_style(style: Optional[str]) -> str:
+    normalized = str(style or "professional").strip().lower()
+    return DOCUMENT_STYLE_ALIASES.get(normalized, "professional")
+
+
+def normalize_citation_style(style: Optional[str]) -> Optional[str]:
+    if style is None:
+        return None
+    normalized = str(style).strip().lower()
+    return CITATION_STYLE_ALIASES.get(normalized)
+
+
+def _build_document_style_guidance(document_type: str, style: Optional[str]) -> str:
+    normalized_style = normalize_document_style(style)
+    if normalized_style == "simple":
+        return (
+            "Use straightforward language, short paragraphs, and clear explanation without unnecessary jargon."
+            if document_type == "assignment"
+            else "Keep the notes concise, revision-friendly, and easy to scan quickly."
+        )
+    if normalized_style == "detailed":
+        return (
+            "Use fuller academic depth, stronger explanation, and clearer development of examples, implications, and structure."
+            if document_type == "assignment"
+            else "Make the notes fuller and more instructive, with slightly deeper explanation under each heading."
+        )
+    return (
+        "Keep the writing polished, structured, and academically professional."
+        if document_type == "assignment"
+        else "Keep the notes polished, organized, and professionally structured for study use."
+    )
+
+
+def _build_reference_template_lines(topic: str, citation_style: Optional[str]) -> list[str]:
+    normalized_style = normalize_citation_style(citation_style) or "basic"
+    title_topic = topic.title()
+    templates = {
+        "apa": [
+            f"- Author or institution. (Year). Title related to {title_topic}. Publisher or journal.",
+            f"- Course-approved textbook chapters and review articles focused on {title_topic}.",
+            "- Replace these template entries with verified academic sources before final submission.",
+        ],
+        "mla": [
+            f"- Author or institution. \"Title Related to {title_topic}.\" Publisher or Journal, Year.",
+            f"- Course-approved books, articles, and reports directly connected to {title_topic}.",
+            "- Replace these template entries with verified academic sources before final submission.",
+        ],
+        "chicago": [
+            f"- Author or institution. Year. Title related to {title_topic}. Place: Publisher.",
+            f"- Academic books, journal articles, and institutional reports about {title_topic}.",
+            "- Replace these template entries with verified academic sources before final submission.",
+        ],
+        "harvard": [
+            f"- Author or institution (Year) Title related to {title_topic}, Publisher or Journal.",
+            f"- Use relevant scholarly books, articles, and institutional reports on {title_topic}.",
+            "- Replace these template entries with verified academic sources before final submission.",
+        ],
+        "ieee": [
+            f"- [1] Author or institution, \"Title related to {title_topic},\" Publisher or Journal, Year.",
+            f"- [2] Verified technical or academic sources directly relevant to {title_topic}.",
+            "- Replace these template entries with verified academic sources before final submission.",
+        ],
+        "basic": [
+            f"- Use course-approved textbooks, review articles, and institutional sources related to {title_topic}.",
+            "- Keep the reference entries consistent in author, year, title, and source formatting.",
+            "- Replace these guidance lines with verified academic sources before final submission.",
+        ],
+    }
+    return templates.get(normalized_style, templates["basic"])
+
+
+def _append_references_section(content: str, topic: str, citation_style: Optional[str]) -> str:
+    cleaned = clean_response(content)
+    if re.search(r"(?im)^references\s*$", cleaned) or re.search(r"(?im)^works cited\s*$", cleaned):
+        return cleaned
+    reference_heading = "References"
+    if normalize_citation_style(citation_style):
+        reference_heading = f"References ({normalize_citation_style(citation_style).upper()} Style)"
+    reference_lines = "\n".join(_build_reference_template_lines(topic, citation_style))
+    return clean_response(f"{cleaned}\n\n{reference_heading}\n{reference_lines}")
 
 
 def _normalize_assignment_page_target(page_target: Optional[int]) -> Optional[int]:
@@ -452,77 +626,509 @@ def _build_assignment_depth_profile(page_target: Optional[int]) -> Dict[str, Any
     if normalized_pages and normalized_pages >= 10:
         return {
             "band": "extended",
-            "paragraph_range": "3 to 4",
+            "base_paragraph_target": 3,
+            "paragraph_ceiling": 4,
             "max_tokens": 760,
             "temperature": 0.35,
             "depth_guidance": (
                 "Use fuller academic depth. Add explanation, evaluation, and concrete implications where they fit, "
-                "but keep the section controlled and readable."
+                "but keep the section controlled, readable, and academically organized."
             ),
-            "local_depth_sentences": [
-                "A stronger long-form section should move beyond definition into interpretation, evidence, and practical significance.",
-                "It should also connect this discussion to the broader assignment so the reader sees how the section supports the overall argument.",
-            ],
         }
     if normalized_pages and normalized_pages >= 7:
         return {
             "band": "expanded",
-            "paragraph_range": "2 to 3",
+            "base_paragraph_target": 2,
+            "paragraph_ceiling": 3,
             "max_tokens": 620,
             "temperature": 0.34,
             "depth_guidance": (
                 "Use clear academic depth with a little more explanation than a short assignment. "
                 "Include at least one concrete implication, example, or evaluative point where it helps."
             ),
-            "local_depth_sentences": [
-                "In a mid-length assignment, this section should do more than define the idea; it should also explain why it matters in context.",
-            ],
         }
     return {
         "band": "compact",
-        "paragraph_range": "1 to 2",
+        "base_paragraph_target": 2,
+        "paragraph_ceiling": 2,
         "max_tokens": 480,
         "temperature": 0.33,
         "depth_guidance": (
             "Keep the section concise and focused. Explain the essential point clearly without padding it into a long discussion."
         ),
-        "local_depth_sentences": [],
+    }
+
+
+def _build_assignment_section_weight(section_title: str) -> Dict[str, Any]:
+    normalized_title = str(section_title or "").strip().lower()
+    section_profiles: Dict[str, Dict[str, Any]] = {
+        "introduction": {
+            "weight_label": "light",
+            "token_multiplier": 0.55,
+            "paragraph_delta": -1,
+            "prompt_focus": "Keep this section brief, focused, and framing-oriented.",
+            "local_support": [
+                "It should quickly establish the scope of the discussion without expanding into details that belong in later analytical sections.",
+            ],
+        },
+        "background and context": {
+            "weight_label": "moderate",
+            "token_multiplier": 0.72,
+            "paragraph_delta": 0,
+            "prompt_focus": "Give enough context to orient the reader before moving into analysis.",
+            "local_support": [
+                "A good background section explains the surrounding field, assumptions, and prior conditions that make the topic meaningful.",
+                "It should help the reader understand how the topic fits into a wider academic or practical landscape.",
+            ],
+        },
+        "historical development": {
+            "weight_label": "moderate",
+            "token_multiplier": 0.72,
+            "paragraph_delta": 0,
+            "prompt_focus": "Focus on the most relevant stages of development rather than turning this into a long chronology.",
+            "local_support": [
+                "The strongest historical discussion highlights the turning points that changed how the topic was understood or applied.",
+                "This helps the reader see development as a progression of ideas rather than a disconnected timeline.",
+            ],
+        },
+        "core concepts": {
+            "weight_label": "high",
+            "token_multiplier": 1.0,
+            "paragraph_delta": 1,
+            "prompt_focus": "Treat this as a major analytical section and go beyond basic definition into structure, relationships, and significance.",
+            "local_support": [
+                "A strong concepts section should clarify how the major ideas connect instead of listing them in isolation.",
+                "It should also explain which ideas are foundational and which ones depend on earlier theoretical assumptions.",
+            ],
+        },
+        "how it works": {
+            "weight_label": "high",
+            "token_multiplier": 1.0,
+            "paragraph_delta": 1,
+            "prompt_focus": "Treat this as a major analytical section and explain the mechanism clearly, step by step.",
+            "local_support": [
+                "The explanation becomes more convincing when each stage of the mechanism is linked to the result it produces.",
+                "It is also useful to clarify where inputs, internal processes, and outputs interact so the section feels logically complete.",
+            ],
+        },
+        "applications": {
+            "weight_label": "high",
+            "token_multiplier": 1.0,
+            "paragraph_delta": 1,
+            "prompt_focus": "Treat this as a major applied section and use concrete real-world use cases rather than broad claims.",
+            "local_support": [
+                "A strong applications section should show where the topic creates practical value in specific domains or industries.",
+                "It should also distinguish between theoretical potential and evidence of real adoption or usefulness.",
+            ],
+        },
+        "case studies and practical examples": {
+            "weight_label": "high",
+            "token_multiplier": 0.96,
+            "paragraph_delta": 1,
+            "prompt_focus": "Treat this as a major evidence section and ground the discussion in realistic examples.",
+            "local_support": [
+                "Case studies strengthen the assignment by showing how abstract ideas perform when they meet real constraints and goals.",
+                "Well-chosen examples also make evaluation easier because the reader can see practical outcomes instead of only theory.",
+            ],
+        },
+        "comparative perspective": {
+            "weight_label": "high",
+            "token_multiplier": 0.98,
+            "paragraph_delta": 1,
+            "prompt_focus": "Treat this as a major evaluative section and compare the topic with credible alternatives in a balanced way.",
+            "local_support": [
+                "A useful comparison should explain not only differences but also the contexts in which one approach is more suitable than another.",
+                "This makes the assignment sound more academic because it evaluates tradeoffs instead of assuming a single best answer.",
+            ],
+        },
+        "advantages and importance": {
+            "weight_label": "moderate",
+            "token_multiplier": 0.72,
+            "paragraph_delta": 0,
+            "prompt_focus": "Keep the discussion balanced and explain why these strengths matter, not just what they are.",
+            "local_support": [
+                "The best way to discuss advantages is to link each strength to a meaningful outcome such as efficiency, accuracy, accessibility, or impact.",
+                "This prevents the section from sounding promotional and keeps it grounded in academic reasoning.",
+            ],
+        },
+        "challenges and limitations": {
+            "weight_label": "moderate_high",
+            "token_multiplier": 0.86,
+            "paragraph_delta": 1,
+            "prompt_focus": "Give this section serious analytical weight and explain the implications of each limitation clearly.",
+            "local_support": [
+                "A stronger limitations section does more than list problems; it explains how those problems affect adoption, performance, or trust.",
+                "It should also show whether the weaknesses are temporary, structural, or dependent on context.",
+            ],
+        },
+        "ethical and social impact": {
+            "weight_label": "moderate_high",
+            "token_multiplier": 0.84,
+            "paragraph_delta": 1,
+            "prompt_focus": "Give this section analytical depth and discuss social consequences, fairness, safety, or policy implications with balance.",
+            "local_support": [
+                "This section becomes stronger when it connects ethical issues to real stakeholders rather than treating ethics as an abstract side note.",
+                "A balanced academic discussion should also recognize that social impact depends on how the topic is designed, governed, and deployed.",
+            ],
+        },
+        "implementation considerations": {
+            "weight_label": "moderate_high",
+            "token_multiplier": 0.88,
+            "paragraph_delta": 1,
+            "prompt_focus": "Give this section practical depth and connect theory to cost, skills, infrastructure, and deployment realities.",
+            "local_support": [
+                "Implementation is not only technical; it also depends on resources, expertise, maintenance, and organizational readiness.",
+                "That practical framing helps the assignment explain why good ideas do not always translate directly into successful use.",
+            ],
+        },
+        "future scope and trends": {
+            "weight_label": "moderate",
+            "token_multiplier": 0.7,
+            "paragraph_delta": 0,
+            "prompt_focus": "Keep this forward-looking but grounded in realistic development paths and open questions.",
+            "local_support": [
+                "The strongest future discussion identifies likely directions of growth while acknowledging uncertainty and unresolved challenges.",
+                "It should show why the topic remains relevant for future study instead of relying on vague optimism.",
+            ],
+        },
+        "conclusion": {
+            "weight_label": "light",
+            "token_multiplier": 0.58,
+            "paragraph_delta": -1,
+            "prompt_focus": "Keep this section brief but decisive, and end with a strong synthesis rather than new information.",
+            "local_support": [
+                "A strong conclusion should unite the major points of the assignment and leave the reader with a clear final judgement about the topic.",
+            ],
+        },
+    }
+    return section_profiles.get(
+        normalized_title,
+        {
+            "weight_label": "moderate",
+            "token_multiplier": 0.72,
+            "paragraph_delta": 0,
+            "prompt_focus": "Keep the section clear, useful, and academically grounded.",
+            "local_support": [
+                "This section should connect its ideas clearly to the larger assignment so the discussion feels coherent rather than isolated.",
+            ],
+        },
+    )
+
+
+def _build_assignment_section_distinction(section_title: str) -> Dict[str, str]:
+    normalized_title = str(section_title or "").strip().lower()
+    distinctions: Dict[str, Dict[str, str]] = {
+        "introduction": {
+            "focus": "the scope, relevance, and direction of the assignment",
+            "avoid": "detailed theory, long history, or section-by-section analysis",
+            "local_boundary": "Its job is to frame the discussion, not to perform the full explanation that belongs in later analytical sections.",
+        },
+        "background and context": {
+            "focus": "the broader field, origins, assumptions, and problem space surrounding the topic",
+            "avoid": "full concept definitions, step-by-step mechanism detail, or long application lists",
+            "local_boundary": "This section should orient the reader to the setting of the topic rather than define every technical idea or explain the full internal workflow.",
+        },
+        "historical development": {
+            "focus": "the progression of the topic over time and the key turning points in its development",
+            "avoid": "deep mechanism explanation or a fresh list of modern applications",
+            "local_boundary": "The emphasis here should stay on change over time, not on reteaching theory or expanding into present-day implementation details.",
+        },
+        "core concepts": {
+            "focus": "the main concepts, principles, definitions, and relationships that make the topic understandable",
+            "avoid": "background history, a full mechanism walkthrough, or use-case examples",
+            "local_boundary": "This section should clarify what the core ideas mean and how they relate, rather than drift back into background narrative or forward into applications.",
+        },
+        "how it works": {
+            "focus": "the internal process, structure, sequence, and mechanism by which the topic operates",
+            "avoid": "broad background recap, repeated term definitions, or a shift into an applications section",
+            "local_boundary": "The reader should come away understanding the mechanism in motion, not just the surrounding context or the list of real-world uses.",
+        },
+        "applications": {
+            "focus": "real-world adoption, use cases, outcomes, and where the topic creates value",
+            "avoid": "a full internal mechanism retelling, repeated theory explanation, or generic strengths without examples",
+            "local_boundary": "This section should stay centered on practical use and visible outcomes rather than slipping back into theory or process explanation.",
+        },
+        "case studies and practical examples": {
+            "focus": "specific examples that show how the topic behaves in realistic conditions",
+            "avoid": "abstract theory-only discussion or repeating the general applications list",
+            "local_boundary": "The goal here is to ground the assignment in examples, not to restate the broader applications section in more general terms.",
+        },
+        "comparative perspective": {
+            "focus": "tradeoffs, contrasts, and best-fit comparisons with relevant alternatives",
+            "avoid": "retelling the full background or repeating the basic applications section without evaluation",
+            "local_boundary": "This section should evaluate differences and tradeoffs, not just describe the topic again in slightly different words.",
+        },
+        "advantages and importance": {
+            "focus": "why the topic matters and what meaningful strengths it brings",
+            "avoid": "a simple feature list, repeated application examples, or promotional language",
+            "local_boundary": "The emphasis should be on significance and meaningful strengths, not on repeating use cases or sounding like advocacy.",
+        },
+        "challenges and limitations": {
+            "focus": "the main constraints, weaknesses, barriers, and their practical consequences",
+            "avoid": "generic negativity or a repeat of the strengths section with opposite wording",
+            "local_boundary": "This section should explain why limitations matter in practice instead of listing drawbacks without analysis.",
+        },
+        "ethical and social impact": {
+            "focus": "the wider human, institutional, fairness, safety, and policy implications of the topic",
+            "avoid": "repeating technical mechanism details or collapsing into a general limitations section",
+            "local_boundary": "The discussion should stay on broader consequences and stakeholders rather than circling back to purely technical constraints.",
+        },
+        "implementation considerations": {
+            "focus": "deployment realities such as infrastructure, cost, skills, maintenance, and organizational readiness",
+            "avoid": "pure theory recap or a duplicate of the mechanism section",
+            "local_boundary": "This section should connect the topic to real deployment conditions instead of re-explaining how the mechanism works in theory.",
+        },
+        "future scope and trends": {
+            "focus": "likely future developments, unresolved questions, and emerging directions",
+            "avoid": "repeating the current-state applications section or making vague predictions without context",
+            "local_boundary": "It should look forward in a grounded way, not simply restate what the topic already does today.",
+        },
+        "conclusion": {
+            "focus": "final synthesis and the central takeaway of the assignment",
+            "avoid": "introducing fresh evidence, new arguments, or another full explanation",
+            "local_boundary": "A conclusion should unify the assignment rather than reopen sections that were already explained in detail.",
+        },
+    }
+    return distinctions.get(
+        normalized_title,
+        {
+            "focus": "the specific purpose of this section within the larger assignment",
+            "avoid": "repeating the surrounding sections in different words",
+            "local_boundary": "This section should make a distinct contribution to the assignment instead of echoing nearby sections.",
+        },
+    )
+
+
+def _infer_assignment_style(topic: str) -> str:
+    normalized = str(topic or "").strip().lower()
+    if not normalized:
+        return "standard"
+    if any(marker in normalized for marker in COMPARISON_MARKERS):
+        return "comparative"
+    if any(marker in normalized for marker in TECHNICAL_ASSIGNMENT_MARKERS):
+        return "technical"
+    return "standard"
+
+
+def _infer_assignment_domain(topic: str, style: str) -> str:
+    normalized = str(topic or "").strip().lower()
+    if style == "comparative":
+        return "comparative"
+    if any(marker in normalized for marker in TECHNICAL_ASSIGNMENT_MARKERS):
+        return "technical"
+    if any(marker in normalized for marker in SOCIAL_ASSIGNMENT_MARKERS):
+        return "social"
+    return "general"
+
+
+def _build_assignment_domain_guidance(topic: str, section_kind: str, style: str) -> Dict[str, str]:
+    domain = _infer_assignment_domain(topic, style)
+    normalized_kind = str(section_kind or "").strip().lower()
+
+    if domain == "technical":
+        example_map = {
+            "background and context": "When examples help, frame them around technical problem spaces, research development, engineering constraints, or system requirements.",
+            "core concepts": "When examples help, use precise references to system components, representations, workflows, abstractions, or model behavior.",
+            "how it works": "When examples help, refer to inputs, outputs, data flow, processing stages, architecture, or infrastructure interaction.",
+            "applications": "When examples help, use concrete cases such as automation, analytics, software systems, prediction, deployment settings, or operational workflows.",
+            "implementation considerations": "When examples help, refer to deployment infrastructure, maintenance, scalability, monitoring, resource cost, or engineering skills.",
+        }
+        local_map = {
+            "background and context": "In a technical topic, the background should connect the subject to system requirements, research development, or engineering constraints rather than staying abstract.",
+            "core concepts": "The terminology here should feel technically precise, with attention to components, representations, abstractions, and how the major ideas relate inside a system.",
+            "how it works": "A strong technical explanation should make the mechanism feel concrete by referring to data flow, processing stages, architectural roles, or infrastructure interaction.",
+            "applications": "Domain-aware examples here should point to automation, analytics, software systems, deployment environments, or operational workflows where the topic creates value.",
+        }
+        return {
+            "domain": domain,
+            "prompt_terminology": "Use domain-aware technical terminology such as system components, architecture, data flow, model behavior, deployment, performance, and engineering constraints where relevant.",
+            "prompt_examples": example_map.get(normalized_kind, "Use examples and terminology that sound native to technical systems, engineering workflows, and implementation realities."),
+            "local_domain_support": local_map.get(normalized_kind, "The wording should remain technically grounded, using examples and terminology that fit systems, engineering workflows, or implementation realities."),
+        }
+
+    if domain == "social":
+        example_map = {
+            "background and context": "When examples help, frame them around communities, institutions, policy environments, historical conditions, or public life.",
+            "core concepts": "When examples help, use terminology tied to institutions, social structures, access, inequality, governance, rights, or collective outcomes.",
+            "how it works": "When examples help, explain the social mechanism through incentives, institutions, actors, power relations, public behavior, or policy processes.",
+            "applications": "When examples help, refer to schools, healthcare systems, workplaces, civic institutions, social programs, or community-level outcomes.",
+            "ethical and social impact": "When examples help, discuss fairness, access, rights, stakeholder impact, governance choices, or long-term public consequences.",
+        }
+        local_map = {
+            "background and context": "In a social topic, the background should connect the subject to institutions, communities, policy environments, or historical conditions that shape the issue.",
+            "core concepts": "The terminology should feel socially grounded, referring to institutions, stakeholders, inequality, access, governance, rights, or collective outcomes where relevant.",
+            "how it works": "A strong social explanation should show how people, institutions, incentives, or policy processes interact rather than treating the topic like a technical pipeline.",
+            "applications": "Domain-aware examples here should point to communities, schools, workplaces, healthcare systems, public programs, or civic institutions where real effects are visible.",
+        }
+        return {
+            "domain": domain,
+            "prompt_terminology": "Use domain-aware social terminology such as institutions, communities, policy, access, inequality, governance, incentives, rights, and public outcomes where relevant.",
+            "prompt_examples": example_map.get(normalized_kind, "Use examples and terminology that feel grounded in institutions, communities, public life, and social consequences."),
+            "local_domain_support": local_map.get(normalized_kind, "The wording should remain socially grounded, using examples and terminology that fit institutions, communities, public life, and social consequences."),
+        }
+
+    if domain == "comparative":
+        example_map = {
+            "background and context": "When examples help, frame them around the decision context, evaluation criteria, and why the comparison matters.",
+            "core concepts": "When examples help, define the comparison criteria, baseline differences, and terms that make the tradeoffs understandable.",
+            "comparative perspective": "When examples help, use side-by-side scenarios that show tradeoffs, alternatives, suitability, and best-fit conditions.",
+            "applications": "When examples help, compare which option fits which environment, user need, deployment context, or performance goal.",
+        }
+        local_map = {
+            "background and context": "In a comparison topic, the framing should clarify why these alternatives belong in the same discussion and what criteria make the comparison meaningful.",
+            "core concepts": "The terminology should feel evaluative, helping the reader distinguish criteria, tradeoffs, baseline differences, and conditions for best fit.",
+            "comparative perspective": "A strong comparative section should sound naturally side-by-side, using alternatives, suitability, tradeoffs, and best-fit conditions rather than generic description.",
+            "applications": "Domain-aware examples here should show which option works better in which scenario instead of listing uses without comparative judgment.",
+        }
+        return {
+            "domain": domain,
+            "prompt_terminology": "Use comparative terminology such as criteria, tradeoffs, alternatives, suitability, performance, constraints, and best-fit conditions where relevant.",
+            "prompt_examples": example_map.get(normalized_kind, "Use examples and terminology that feel natural for comparison, evaluation, alternatives, and tradeoff reasoning."),
+            "local_domain_support": local_map.get(normalized_kind, "The wording should remain comparative, using examples and terminology that fit criteria, alternatives, tradeoffs, and best-fit reasoning."),
+        }
+
+    return {
+        "domain": "general",
+        "prompt_terminology": "Use subject-appropriate terminology and examples where they help the reader understand the topic clearly.",
+        "prompt_examples": "Keep the examples concrete and relevant to the topic instead of relying on vague general statements.",
+        "local_domain_support": "The wording should stay aligned with the topic itself, using concrete examples and terminology where they improve clarity.",
+    }
+
+
+def _resolve_assignment_section_depth(section_title: str, page_target: Optional[int]) -> Dict[str, Any]:
+    depth_profile = _build_assignment_depth_profile(page_target)
+    weight_profile = _build_assignment_section_weight(section_title)
+    distinction_profile = _build_assignment_section_distinction(section_title)
+
+    paragraph_target = max(
+        1,
+        min(
+            int(depth_profile["paragraph_ceiling"]),
+            int(depth_profile["base_paragraph_target"]) + int(weight_profile["paragraph_delta"]),
+        ),
+    )
+    token_budget = max(
+        240,
+        min(
+            int(depth_profile["max_tokens"]),
+            int(round(int(depth_profile["max_tokens"]) * float(weight_profile["token_multiplier"]))),
+        ),
+    )
+
+    return {
+        "band": depth_profile["band"],
+        "weight_label": weight_profile["weight_label"],
+        "paragraph_target": paragraph_target,
+        "token_budget": token_budget,
+        "temperature": float(depth_profile["temperature"]),
+        "depth_guidance": str(depth_profile["depth_guidance"]).strip(),
+        "prompt_focus": str(weight_profile["prompt_focus"]).strip(),
+        "local_support": list(weight_profile.get("local_support") or []),
+        "distinct_focus": str(distinction_profile["focus"]).strip(),
+        "distinct_avoid": str(distinction_profile["avoid"]).strip(),
+        "local_boundary": str(distinction_profile["local_boundary"]).strip(),
     }
 
 
 def _build_assignment_section_plan(topic: str, page_target: Optional[int] = None) -> List[Dict[str, str]]:
-    _ = topic
     normalized_pages = _normalize_assignment_page_target(page_target)
-    sections: List[Dict[str, str]] = [
-        {"title": "Introduction", "purpose": "Introduce the topic, its importance, and the direction of the assignment."},
-        {"title": "Background and Context", "purpose": "Explain the context, origins, or broader field around the topic."},
-        {"title": "Core Concepts", "purpose": "Define the main ideas, terms, and foundational concepts clearly."},
-        {"title": "How It Works", "purpose": "Explain the process, structure, or mechanism step by step."},
-        {"title": "Applications", "purpose": "Describe real-world uses, adoption areas, or practical relevance."},
-        {"title": "Advantages and Importance", "purpose": "Explain the main strengths, benefits, and academic importance."},
-        {"title": "Challenges and Limitations", "purpose": "Present key limitations, risks, costs, or implementation barriers."},
+    style = _infer_assignment_style(topic)
+
+    def make_section(kind: str, title: str, purpose: str) -> Dict[str, str]:
+        return {"kind": kind, "title": title, "purpose": purpose, "style": style}
+
+    if style == "comparative":
+        sections: List[Dict[str, str]] = [
+            make_section("introduction", "Introduction", "Introduce the comparison, why it matters, and what the assignment will evaluate."),
+            make_section("background and context", "Comparison Context", "Frame the broader context, decision environment, and why these topics belong in the same comparison without turning this section into a full analysis."),
+            make_section("core concepts", "Key Criteria and Core Differences", "Define the main criteria, concepts, and baseline differences clearly before deeper evaluation begins."),
+            make_section("comparative perspective", "Comparative Analysis", "Evaluate the most important differences, tradeoffs, and best-fit conditions instead of repeating basic definitions."),
+            make_section("applications", "Best-Fit Use Cases", "Show where each side of the comparison is most useful in practice without re-running the full comparison logic."),
+            make_section("advantages and importance", "Relative Strengths", "Present the strongest advantages of each side and why they matter."),
+            make_section("challenges and limitations", "Tradeoffs and Limitations", "Explain practical weaknesses, limitations, and adoption tradeoffs."),
+        ]
+
+        if normalized_pages and normalized_pages >= 4:
+            sections.insert(2, make_section("historical development", "Development Paths", "Summarize how each side of the comparison developed over time."))
+            sections.append(make_section("case studies and practical examples", "Illustrative Examples", "Use practical examples to show where the comparison becomes clearer."))
+
+        if normalized_pages and normalized_pages >= 7:
+            sections.append(make_section("future scope and trends", "Future Outlook and Trends", "Explain how the comparison may shift as tools, methods, or needs evolve."))
+
+        if normalized_pages and normalized_pages >= 10:
+            sections.append(make_section("implementation considerations", "Adoption and Implementation Considerations", "Explain what real-world implementation or adoption looks like for each side."))
+            sections.append(make_section("ethical and social impact", "Broader Social and Ethical Impact", "Discuss wider consequences, fairness, access, or policy implications where relevant."))
+
+        sections.append(make_section("conclusion", "Conclusion", "Conclude the comparison with a clear final judgement and best-fit summary."))
+        return sections
+
+    if style == "technical":
+        sections = [
+            make_section("introduction", "Introduction", "Introduce the topic, its importance, and the direction of the assignment."),
+            make_section("background and context", "Technical Background and Context", "Explain the technical field, origins, and problem space around the topic without moving into full definitions or mechanism detail."),
+            make_section("core concepts", "Core Concepts", "Define the main ideas, terms, and foundational relationships clearly before the assignment moves into mechanism or use cases."),
+            make_section("how it works", "Architecture and Mechanism", "Explain the structure, internal mechanism, or workflow step by step without drifting back into background or forward into use-case discussion."),
+            make_section("applications", "Applications and Use Cases", "Describe real-world uses, adoption areas, and outcomes without re-explaining the mechanism in full."),
+            make_section("advantages and importance", "Advantages and Importance", "Explain the main strengths, benefits, and academic importance."),
+            make_section("challenges and limitations", "Challenges and Limitations", "Present key limitations, risks, costs, or implementation barriers."),
+        ]
+
+        if normalized_pages and normalized_pages >= 4:
+            sections.insert(2, make_section("historical development", "Historical Development", "Summarize how the topic developed or evolved over time."))
+            sections.append(make_section("case studies and practical examples", "Case Studies and Practical Examples", "Add concrete examples or realistic use cases that ground the discussion."))
+
+        if normalized_pages and normalized_pages >= 7:
+            sections.append(make_section("ethical and social impact", "Ethical and Social Impact", "Discuss wider effects on people, society, fairness, safety, or policy."))
+            sections.append(make_section("future scope and trends", "Future Scope and Trends", "Explain likely future directions, open problems, and upcoming developments."))
+
+        if normalized_pages and normalized_pages >= 10:
+            sections.insert(-2, make_section("implementation considerations", "Implementation Considerations", "Discuss resources, infrastructure, skills, cost, and deployment considerations."))
+            sections.append(make_section("comparative perspective", "Comparative Perspective", "Compare the topic with related methods, systems, or alternatives."))
+
+        sections.append(make_section("conclusion", "Conclusion", "Conclude the assignment by restating the central idea and final significance."))
+        return sections
+
+    sections = [
+        make_section("introduction", "Introduction", "Introduce the topic, its importance, and the direction of the assignment."),
+        make_section("background and context", "Background and Context", "Explain the context, origins, or broader field around the topic without turning this section into a full theory or mechanism discussion."),
+        make_section("core concepts", "Core Concepts", "Define the main ideas, terms, and foundational concepts clearly before the assignment moves into process or application."),
+        make_section("how it works", "How It Works", "Explain the process, structure, or mechanism step by step without repeating the broader background or drifting into use cases."),
+        make_section("applications", "Applications", "Describe real-world uses, adoption areas, or practical relevance without re-teaching the mechanism."),
+        make_section("advantages and importance", "Advantages and Importance", "Explain the main strengths, benefits, and academic importance."),
+        make_section("challenges and limitations", "Challenges and Limitations", "Present key limitations, risks, costs, or implementation barriers."),
     ]
 
     if normalized_pages and normalized_pages >= 4:
-        sections.insert(2, {"title": "Historical Development", "purpose": "Summarize how the topic developed or evolved over time."})
-        sections.append({"title": "Case Studies and Practical Examples", "purpose": "Add concrete examples or realistic use cases that ground the discussion."})
+        sections.insert(2, make_section("historical development", "Historical Development", "Summarize how the topic developed or evolved over time."))
+        sections.append(make_section("case studies and practical examples", "Case Studies and Practical Examples", "Add concrete examples or realistic use cases that ground the discussion."))
 
     if normalized_pages and normalized_pages >= 7:
-        sections.append({"title": "Ethical and Social Impact", "purpose": "Discuss wider effects on people, society, fairness, safety, or policy."})
-        sections.append({"title": "Future Scope and Trends", "purpose": "Explain likely future directions, open problems, and upcoming developments."})
+        sections.append(make_section("ethical and social impact", "Ethical and Social Impact", "Discuss wider effects on people, society, fairness, safety, or policy."))
+        sections.append(make_section("future scope and trends", "Future Scope and Trends", "Explain likely future directions, open problems, and upcoming developments."))
 
     if normalized_pages and normalized_pages >= 10:
-        sections.append({"title": "Implementation Considerations", "purpose": "Discuss resources, infrastructure, skills, cost, and deployment considerations."})
-        sections.append({"title": "Comparative Perspective", "purpose": "Compare the topic with related methods, systems, or alternatives."})
+        sections.append(make_section("implementation considerations", "Implementation Considerations", "Discuss resources, infrastructure, skills, cost, and deployment considerations."))
+        sections.append(make_section("comparative perspective", "Comparative Perspective", "Compare the topic with related methods, systems, or alternatives."))
 
-    sections.append({"title": "Conclusion", "purpose": "Conclude the assignment by restating the central idea and final significance."})
+    sections.append(make_section("conclusion", "Conclusion", "Conclude the assignment by restating the central idea and final significance."))
     return sections
 
 
-def _build_local_assignment_section_body(topic: str, section_title: str, page_target: Optional[int] = None) -> str:
+def _build_local_assignment_section_body(
+    topic: str,
+    section_kind: str,
+    page_target: Optional[int] = None,
+    *,
+    display_title: Optional[str] = None,
+    style: Optional[str] = None,
+) -> str:
     title_topic = topic.title()
-    normalized_title = str(section_title or "").strip().lower()
-    depth_profile = _build_assignment_depth_profile(page_target)
+    normalized_title = str(section_kind or "").strip().lower()
+    visible_title = str(display_title or section_kind or "").strip() or "Section"
+    section_depth = _resolve_assignment_section_depth(section_kind, page_target)
+    assignment_style = _infer_assignment_style(topic)
+    domain_guidance = _build_assignment_domain_guidance(topic, section_kind, assignment_style)
+    document_style = normalize_document_style(style)
     page_hint = (
         f" This section is part of a longer assignment target of about {page_target} pages, so it is written with extra depth in mind."
         if page_target
@@ -591,34 +1197,93 @@ def _build_local_assignment_section_body(topic: str, section_title: str, page_ta
         normalized_title,
         f"{title_topic} can be explained clearly by relating this section to the broader meaning, use, and significance of {topic}.{page_hint}",
     )
-    supporting_paragraphs = list(depth_profile.get("local_depth_sentences") or [])
-    if not supporting_paragraphs:
+    supporting_paragraphs = list(section_depth.get("local_support") or [])
+    domain_support = str(domain_guidance.get("local_domain_support") or "").strip()
+    boundary_support = section_depth["local_boundary"] if page_target and page_target >= 7 else ""
+    merged_domain_support = " ".join(part for part in [domain_support, boundary_support] if part).strip()
+    if merged_domain_support:
+        if supporting_paragraphs:
+            supporting_paragraphs = [supporting_paragraphs[0], merged_domain_support, *supporting_paragraphs[1:]]
+        else:
+            supporting_paragraphs = [merged_domain_support]
+    if page_target and page_target >= 10:
+        supporting_paragraphs.append(
+            f"In a longer assignment, the reader should come away with both explanation and evaluation, so the '{visible_title}' discussion should connect its ideas to evidence, implications, or broader academic significance."
+        )
+    if document_style == "detailed":
+        supporting_paragraphs.append(
+            f"To keep the work academically detailed, the '{visible_title}' section should not only explain its main point but also connect that point to broader implications, practical significance, or evaluative judgement."
+        )
+    elif document_style == "simple":
+        supporting_paragraphs.append(
+            f"This section should stay easy to follow, using plain academic language so the reader can understand the main point without unnecessary complexity."
+        )
+
+    target_support_count = max(0, int(section_depth["paragraph_target"]) - 1)
+    selected_supporting_paragraphs = supporting_paragraphs[:target_support_count]
+    if not selected_supporting_paragraphs:
         return base_paragraph
-    return "\n\n".join([base_paragraph, *supporting_paragraphs])
+    return "\n\n".join([base_paragraph, *selected_supporting_paragraphs])
 
 
-def _build_local_assignment_content(topic: str, page_target: Optional[int] = None) -> str:
+def _build_local_assignment_content(
+    topic: str,
+    page_target: Optional[int] = None,
+    *,
+    style: Optional[str] = None,
+    include_references: bool = False,
+    citation_style: Optional[str] = None,
+) -> str:
     section_blocks = []
     for section in _build_assignment_section_plan(topic, page_target):
         section_blocks.append(
-            f"{section['title']}\n{_build_local_assignment_section_body(topic, section['title'], page_target)}"
+            f"{section['title']}\n{_build_local_assignment_section_body(topic, section['kind'], page_target, display_title=section['title'], style=style)}"
         )
-    return clean_response("\n\n".join(section_blocks))
+    content = clean_response("\n\n".join(section_blocks))
+    if include_references:
+        content = _append_references_section(content, topic, citation_style)
+    return content
 
 
-def _build_assignment_section_prompt(topic: str, section_title: str, section_purpose: str, page_target: Optional[int]) -> str:
-    depth_profile = _build_assignment_depth_profile(page_target)
+def _build_assignment_section_prompt(
+    topic: str,
+    section_kind: str,
+    section_title: str,
+    section_purpose: str,
+    page_target: Optional[int],
+    style: Optional[str] = None,
+    include_references: bool = False,
+    citation_style: Optional[str] = None,
+) -> str:
+    section_depth = _resolve_assignment_section_depth(section_kind, page_target)
+    assignment_style = _infer_assignment_style(topic)
+    domain_guidance = _build_assignment_domain_guidance(topic, section_kind, assignment_style)
+    document_style = normalize_document_style(style)
     page_hint = (
         f"The full assignment should feel deep enough for about {page_target} pages, so write this section with solid academic depth."
         if page_target
         else "Write this section with clear academic depth."
     )
+    style_hint = _build_document_style_guidance("assignment", document_style)
+    references_hint = (
+        f" The full assignment will include a references section in basic {normalize_citation_style(citation_style).upper() if normalize_citation_style(citation_style) else 'academic'} style."
+        if include_references
+        else ""
+    )
     return (
         f"Write only the '{section_title}' section for an assignment on {topic}. "
         f"Purpose: {section_purpose} "
         f"{page_hint} "
-        f"{depth_profile['depth_guidance']} "
-        f"Start with the exact heading '{section_title}' on its own line, then provide {depth_profile['paragraph_range']} coherent paragraphs. "
+        f"{style_hint} "
+        f"Section weight: {section_depth['weight_label']}. "
+        f"{section_depth['depth_guidance']} "
+        f"{section_depth['prompt_focus']} "
+        f"Focus on {section_depth['distinct_focus']}. "
+        f"Do not repeat {section_depth['distinct_avoid']}. "
+        f"{domain_guidance['prompt_terminology']} "
+        f"{domain_guidance['prompt_examples']} "
+        f"{references_hint} "
+        f"Start with the exact heading '{section_title}' on its own line, then provide {section_depth['paragraph_target']} coherent paragraphs. "
         "Do not add other section headings."
     )
 
@@ -633,9 +1298,15 @@ def _normalize_assignment_section_output(section_title: str, content: str) -> st
     return f"{section_title}\n{cleaned}"
 
 
-def _generate_assignment_chunked_content_payload(topic: str, page_target: Optional[int]) -> Dict[str, Any]:
+def _generate_assignment_chunked_content_payload(
+    topic: str,
+    page_target: Optional[int],
+    *,
+    style: Optional[str] = None,
+    include_references: bool = False,
+    citation_style: Optional[str] = None,
+) -> Dict[str, Any]:
     normalized_pages = _normalize_assignment_page_target(page_target)
-    depth_profile = _build_assignment_depth_profile(normalized_pages)
     section_plan = _build_assignment_section_plan(topic, normalized_pages)
     combined_sections: List[str] = []
     providers_tried: List[Any] = []
@@ -645,11 +1316,21 @@ def _generate_assignment_chunked_content_payload(topic: str, page_target: Option
     degraded = False
 
     for section in section_plan:
+        section_depth = _resolve_assignment_section_depth(section["kind"], normalized_pages)
         payload = generate_response_payload(
-            _build_assignment_section_prompt(topic, section["title"], section["purpose"], normalized_pages),
+            _build_assignment_section_prompt(
+                topic,
+                section["kind"],
+                section["title"],
+                section["purpose"],
+                normalized_pages,
+                style=style,
+                include_references=include_references,
+                citation_style=citation_style,
+            ),
             system_override=DOCUMENT_ASSIGNMENT_PROMPT,
-            max_tokens=int(depth_profile["max_tokens"]),
-            temperature=float(depth_profile["temperature"]),
+            max_tokens=int(section_depth["token_budget"]),
+            temperature=float(section_depth["temperature"]),
         )
         providers_tried.extend(list(payload.get("providers_tried") or []))
         content = _normalize_assignment_section_output(section["title"], str(payload.get("content") or ""))
@@ -663,7 +1344,7 @@ def _generate_assignment_chunked_content_payload(topic: str, page_target: Option
 
         degraded = True
         combined_sections.append(
-            f"{section['title']}\n{_build_local_assignment_section_body(topic, section['title'], normalized_pages)}"
+            f"{section['title']}\n{_build_local_assignment_section_body(topic, section['kind'], normalized_pages, display_title=section['title'], style=style)}"
         )
 
     source = "provider_chunked"
@@ -672,9 +1353,13 @@ def _generate_assignment_chunked_content_payload(topic: str, page_target: Option
     elif not used_provider:
         source = "local_template"
 
+    content = clean_response("\n\n".join(combined_sections))
+    if include_references:
+        content = _append_references_section(content, topic, citation_style)
+
     return {
         "success": True,
-        "content": clean_response("\n\n".join(combined_sections)),
+        "content": content,
         "provider": provider_name if used_provider else "local",
         "model": provider_model if used_provider else "template",
         "source": source,
@@ -684,11 +1369,25 @@ def _generate_assignment_chunked_content_payload(topic: str, page_target: Option
     }
 
 
-def _build_document_generation_prompt(document_type: str, topic: str, page_target: Optional[int]) -> str:
+def _build_document_generation_prompt(
+    document_type: str,
+    topic: str,
+    page_target: Optional[int],
+    *,
+    style: Optional[str] = None,
+    include_references: bool = False,
+    citation_style: Optional[str] = None,
+) -> str:
+    style_guidance = _build_document_style_guidance(document_type, style)
+    references_hint = (
+        f" Include a final References section using basic {normalize_citation_style(citation_style).upper() if normalize_citation_style(citation_style) else 'academic'} style."
+        if include_references
+        else ""
+    )
     if document_type == "notes":
-        return f"Create structured notes on {topic}."
+        return f"Create structured notes on {topic}. {style_guidance}{references_hint}"
     page_hint = f" Aim for enough detail to support about {page_target} pages." if page_target else ""
-    return f"Write a structured assignment on {topic}.{page_hint}"
+    return f"Write a structured assignment on {topic}.{page_hint} {style_guidance}{references_hint}"
 
 
 def generate_document_content_payload(
@@ -696,6 +1395,9 @@ def generate_document_content_payload(
     topic: str,
     *,
     page_target: Optional[int] = None,
+    style: Optional[str] = None,
+    include_references: bool = False,
+    citation_style: Optional[str] = None,
 ) -> Dict[str, Any]:
     normalized_type = str(document_type or "").strip().lower()
     normalized_topic = str(topic or "").strip()
@@ -722,13 +1424,34 @@ def generate_document_content_payload(
             "error": "Topic is required.",
         }
 
+    normalized_style = normalize_document_style(style)
+    normalized_citation_style = normalize_citation_style(citation_style)
     normalized_pages = _normalize_assignment_page_target(page_target)
+    if normalized_type == "assignment" and normalized_pages is None and normalized_style == "detailed":
+        normalized_pages = 4
     if normalized_type == "assignment" and normalized_pages and normalized_pages >= 4:
-        return _generate_assignment_chunked_content_payload(normalized_topic, normalized_pages)
+        return _generate_assignment_chunked_content_payload(
+            normalized_topic,
+            normalized_pages,
+            style=normalized_style,
+            include_references=include_references,
+            citation_style=normalized_citation_style,
+        )
 
     system_prompt = DOCUMENT_NOTES_PROMPT if normalized_type == "notes" else DOCUMENT_ASSIGNMENT_PROMPT
-    prompt = _build_document_generation_prompt(normalized_type, normalized_topic, page_target)
+    prompt = _build_document_generation_prompt(
+        normalized_type,
+        normalized_topic,
+        normalized_pages,
+        style=normalized_style,
+        include_references=include_references,
+        citation_style=normalized_citation_style,
+    )
     max_tokens = 1500 if normalized_type == "notes" else 2600
+    if normalized_style == "detailed":
+        max_tokens += 300 if normalized_type == "assignment" else 180
+    elif normalized_style == "simple":
+        max_tokens -= 180 if normalized_type == "assignment" else 120
     payload = generate_response_payload(
         prompt,
         system_override=system_prompt,
@@ -737,6 +1460,8 @@ def generate_document_content_payload(
     )
     content = clean_response(payload.get("content"))
     if payload.get("success") and is_meaningful_text(content):
+        if include_references:
+            content = _append_references_section(content, normalized_topic, normalized_citation_style)
         return {
             "success": True,
             "content": content,
@@ -749,9 +1474,20 @@ def generate_document_content_payload(
         }
 
     local_content = (
-        _build_local_notes_content(normalized_topic)
+        _build_local_notes_content(
+            normalized_topic,
+            style=normalized_style,
+            include_references=include_references,
+            citation_style=normalized_citation_style,
+        )
         if normalized_type == "notes"
-        else _build_local_assignment_content(normalized_topic, page_target)
+        else _build_local_assignment_content(
+            normalized_topic,
+            normalized_pages,
+            style=normalized_style,
+            include_references=include_references,
+            citation_style=normalized_citation_style,
+        )
     )
     return {
         "success": True,
@@ -759,6 +1495,86 @@ def generate_document_content_payload(
         "provider": "local",
         "model": "template",
         "source": "local_template",
+        "degraded": True,
+        "providers_tried": list(payload.get("providers_tried") or []),
+        "error": payload.get("error"),
+    }
+
+
+def generate_transformation_content_payload(
+    source_text: str,
+    document_type: str,
+    topic: str,
+    *,
+    page_target: Optional[int] = None,
+    style: Optional[str] = None,
+    include_references: bool = False,
+    citation_style: Optional[str] = None,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+) -> Dict[str, Any]:
+    """Transform extracted source text into structured document content via LLM."""
+    normalized_type = str(document_type or "notes").strip().lower()
+    if normalized_type not in {"notes", "assignment"}:
+        normalized_type = "notes"
+
+    normalized_style = normalize_document_style(style)
+    normalized_citation = normalize_citation_style(citation_style)
+    style_guidance = _build_document_style_guidance(normalized_type, normalized_style)
+    page_hint = f" Aim for approximately {page_target} pages of content." if page_target else ""
+
+    truncated = source_text[:6000] if len(source_text) > 6000 else source_text
+
+    if normalized_type == "notes":
+        system_prompt = TRANSFORMATION_NOTES_PROMPT
+        prompt = (
+            f"Convert the following source material into structured study notes on: {topic}.\n"
+            f"{style_guidance}{page_hint}\n\nSOURCE MATERIAL:\n{truncated}"
+        )
+        tokens = 1800
+    else:
+        system_prompt = TRANSFORMATION_ASSIGNMENT_PROMPT
+        prompt = (
+            f"Convert the following source material into a structured academic assignment on: {topic}.\n"
+            f"{style_guidance}{page_hint}\n\nSOURCE MATERIAL:\n{truncated}"
+        )
+        tokens = 2800
+
+    if normalized_style == "detailed":
+        tokens += 300
+    elif normalized_style == "simple":
+        tokens = max(tokens - 200, 600)
+
+    payload = generate_response_payload(
+        prompt,
+        system_override=system_prompt,
+        max_tokens=min(tokens, max_tokens),
+        temperature=0.4,
+    )
+
+    content = clean_response(payload.get("content"))
+    if payload.get("success") and is_meaningful_text(content):
+        if include_references:
+            content = _append_references_section(content, topic, normalized_citation)
+        return {
+            "success": True,
+            "content": content,
+            "provider": payload.get("provider"),
+            "model": payload.get("model"),
+            "source": "transformation",
+            "degraded": False,
+            "providers_tried": list(payload.get("providers_tried") or []),
+            "error": None,
+        }
+
+    fallback_content = source_text[:4000].strip()
+    if include_references:
+        fallback_content = _append_references_section(fallback_content, topic, normalized_citation)
+    return {
+        "success": False,
+        "content": fallback_content,
+        "provider": "local",
+        "model": "passthrough",
+        "source": "transformation_fallback",
         "degraded": True,
         "providers_tried": list(payload.get("providers_tried") or []),
         "error": payload.get("error"),

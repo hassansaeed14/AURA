@@ -92,6 +92,11 @@ ACTION_TRUST_MAP: Dict[str, TrustLevel] = {
     "document_generation": TrustLevel.SAFE,
     "document_generator": TrustLevel.SAFE,
     "document_export": TrustLevel.SAFE,
+    "content_transformation": TrustLevel.SAFE,
+    "content_transform": TrustLevel.SAFE,
+    "media_transform": TrustLevel.SAFE,
+    "diagram_generation": TrustLevel.SAFE,
+    "slides": TrustLevel.SAFE,
     "notes": TrustLevel.SAFE,
     "assignment": TrustLevel.SAFE,
 

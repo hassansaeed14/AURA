@@ -269,14 +269,18 @@ def _enrich_result(
     elapsed_ms: float,
 ) -> dict[str, Any]:
     enriched = dict(result)
-    enriched["response"] = _jarvisize_response(
-        str(result.get("response") or ""),
-        intent=str(result.get("detected_intent") or result.get("intent") or "general"),
-        execution_mode=str(result.get("execution_mode") or "chat"),
-        user_profile=user_profile,
-        session_id=session_id,
-        command=command,
-    )
+    execution_mode = str(result.get("execution_mode") or "chat")
+    if execution_mode == "document_generation":
+        enriched["response"] = clean_response(str(result.get("response") or "")) or "Your document is ready."
+    else:
+        enriched["response"] = _jarvisize_response(
+            str(result.get("response") or ""),
+            intent=str(result.get("detected_intent") or result.get("intent") or "general"),
+            execution_mode=execution_mode,
+            user_profile=user_profile,
+            session_id=session_id,
+            command=command,
+        )
     enriched["mode"] = current_mode
     enriched["reasoning_trace"] = _build_reasoning_trace(enriched, elapsed_ms)
     orchestration = dict(enriched.get("orchestration") or {})
@@ -315,7 +319,7 @@ def process_single_command_detailed(
     _sync_context_into_response_engine(normalized_session)
     started = time.perf_counter()
     try:
-        result = runtime_core_module.process_single_command_detailed(command)
+        result = runtime_core_module.process_single_command_detailed(command, session_id=normalized_session)
     except Exception as error:
         print(f"[BRAIN ERROR] Runtime pipeline failed: {error}")
         raise
@@ -362,7 +366,7 @@ def process_command_detailed(
     _sync_context_into_response_engine(normalized_session)
     started = time.perf_counter()
     try:
-        result = runtime_core_module.process_command_detailed(command)
+        result = runtime_core_module.process_command_detailed(command, session_id=normalized_session)
     except Exception as error:
         print(f"[BRAIN ERROR] Runtime pipeline failed: {error}")
         raise

@@ -102,6 +102,7 @@
       "stateDescription",
       "liveTranscript",
       "liveResponse",
+      "documentDeliveryPanel",
       "responseMetaProvider",
       "responseMetaMode",
       "detailsDrawer",
@@ -1318,7 +1319,11 @@
 
       state.currentProvider = provider;
       updateLiveTranscript(commandText);
-      updateLiveResponse(answer, { provider, mode: "voice" });
+      updateLiveResponse(answer, {
+        provider,
+        mode: assistantPayload.documentDelivery ? "document delivery" : "voice",
+        documentDelivery: assistantPayload.documentDelivery,
+      });
       addActivity("Voice request", commandText, "neutral");
       addActivity("Answer ready", answer.slice(0, 140), assistantPayload.success === false ? "warn" : "good");
       await speakAssistant(answer, { resumeWakeAfter: true });
@@ -1362,7 +1367,11 @@
       const answer = assistantPayload.answer || FALLBACK_REPLY;
       const provider = assistantPayload.provider || "local";
       state.currentProvider = provider;
-      updateLiveResponse(answer, { provider, mode: assistantPayload.mode || "text" });
+      updateLiveResponse(answer, {
+        provider,
+        mode: assistantPayload.documentDelivery ? "document delivery" : (assistantPayload.mode || "text"),
+        documentDelivery: assistantPayload.documentDelivery,
+      });
       addActivity("Text command", text, "neutral");
       addActivity("Answer ready", answer.slice(0, 140), assistantPayload.success === false ? "warn" : "good");
 
@@ -1482,6 +1491,7 @@
         || nestedResult.response
         || "",
     );
+    const documentDelivery = normalizeDocumentDeliveryPayload(safePayload, nestedResult);
 
     return {
       answer,
@@ -1490,6 +1500,7 @@
       success: safePayload.success !== false && nestedResult.success !== false,
       degraded: Boolean(safePayload.degraded || nestedResult.degraded || safePayload.status === "degraded"),
       error: safePayload.error || nestedResult.error || "",
+      documentDelivery,
     };
   }
 
@@ -1672,8 +1683,222 @@
     el.liveTranscript.textContent = text || "Waiting for your voice or text command.";
   }
 
-  function updateLiveResponse(text, { provider = null, mode = null } = {}) {
+  function normalizeDocumentDeliveryPayload(payload, nestedResult = {}) {
+    const rawDelivery = payload.document_delivery && typeof payload.document_delivery === "object"
+      ? payload.document_delivery
+      : nestedResult.document_delivery && typeof nestedResult.document_delivery === "object"
+        ? nestedResult.document_delivery
+        : null;
+
+    const primaryFormat = String(
+      payload.document_format
+        || payload.format
+        || rawDelivery?.format
+        || nestedResult.document_format
+        || nestedResult.format
+        || "txt",
+    ).trim().toLowerCase();
+
+    const downloadUrl = rawDelivery?.download_url || payload.download_url || nestedResult.download_url || "";
+    const fileName = rawDelivery?.file_name || payload.file_name || nestedResult.file_name || "";
+    if (!downloadUrl || !fileName) {
+      return null;
+    }
+
+    const formatLinks = {
+      ...(nestedResult.format_links && typeof nestedResult.format_links === "object" ? nestedResult.format_links : {}),
+      ...(payload.format_links && typeof payload.format_links === "object" ? payload.format_links : {}),
+      ...(rawDelivery?.format_links && typeof rawDelivery.format_links === "object" ? rawDelivery.format_links : {}),
+    };
+    if (!formatLinks[primaryFormat]) {
+      formatLinks[primaryFormat] = downloadUrl;
+    }
+
+    const alternateFormatLinks = {
+      ...(nestedResult.alternate_format_links && typeof nestedResult.alternate_format_links === "object" ? nestedResult.alternate_format_links : {}),
+      ...(payload.alternate_format_links && typeof payload.alternate_format_links === "object" ? payload.alternate_format_links : {}),
+      ...(rawDelivery?.alternate_format_links && typeof rawDelivery.alternate_format_links === "object" ? rawDelivery.alternate_format_links : {}),
+    };
+
+    const rawFiles = []
+      .concat(Array.isArray(nestedResult.files) ? nestedResult.files : [])
+      .concat(Array.isArray(payload.files) ? payload.files : [])
+      .concat(Array.isArray(rawDelivery?.files) ? rawDelivery.files : []);
+    const files = rawFiles
+      .map((item) => ({
+        format: String(item?.format || "").trim().toLowerCase(),
+        fileName: String(item?.file_name || item?.fileName || "").trim(),
+        downloadUrl: String(item?.download_url || item?.downloadUrl || "").trim(),
+        primary: Boolean(item?.primary),
+      }))
+      .filter((item) => item.format && item.fileName && item.downloadUrl);
+    if (!files.length) {
+      files.push({
+        format: primaryFormat,
+        fileName,
+        downloadUrl,
+        primary: true,
+      });
+    }
+
+    const availableFormats = Array.from(
+      new Set([
+        ...(Array.isArray(rawDelivery?.available_formats) ? rawDelivery.available_formats : []),
+        ...(Array.isArray(payload.available_formats) ? payload.available_formats : []),
+        ...(Array.isArray(nestedResult.available_formats) ? nestedResult.available_formats : []),
+        ...Object.keys(formatLinks),
+      ].filter(Boolean).map((item) => String(item).trim().toLowerCase())),
+    );
+
+    return {
+      kind: "document_delivery",
+      deliveryMessage: rawDelivery?.delivery_message || payload.reply || payload.content || "Your document is ready.",
+      title: rawDelivery?.title || payload.document_title || nestedResult.document_title || "Document ready",
+      subtitle: rawDelivery?.subtitle || payload.document_subtitle || nestedResult.document_subtitle || "",
+      previewText: rawDelivery?.preview_text || payload.document_preview || payload.preview_text || nestedResult.document_preview || nestedResult.preview_text || "",
+      documentType: rawDelivery?.document_type || payload.document_type || nestedResult.document_type || "document",
+      format: primaryFormat,
+      primaryFormat: String(rawDelivery?.primary_format || payload.primary_format || nestedResult.primary_format || primaryFormat).trim().toLowerCase(),
+      fileName,
+      downloadUrl,
+      topic: rawDelivery?.topic || payload.document_topic || nestedResult.document_topic || "",
+      pageTarget: rawDelivery?.page_target || payload.page_target || nestedResult.page_target || null,
+      style: rawDelivery?.style || payload.document_style || payload.style || nestedResult.document_style || nestedResult.style || "",
+      includeReferences: Boolean(rawDelivery?.include_references || payload.include_references || nestedResult.include_references),
+      citationStyle: rawDelivery?.citation_style || payload.citation_style || nestedResult.citation_style || "",
+      requestedFormats: Array.from(
+        new Set([
+          ...(Array.isArray(rawDelivery?.requested_formats) ? rawDelivery.requested_formats : []),
+          ...(Array.isArray(payload.requested_formats) ? payload.requested_formats : []),
+          ...(Array.isArray(nestedResult.requested_formats) ? nestedResult.requested_formats : []),
+          ...files.map((item) => item.format),
+        ].filter(Boolean).map((item) => String(item).trim().toLowerCase())),
+      ),
+      files,
+      availableFormats,
+      formatLinks,
+      alternateFormatLinks,
+    };
+  }
+
+  function clearDocumentDelivery() {
+    if (!el.documentDeliveryPanel) {
+      return;
+    }
+    el.documentDeliveryPanel.hidden = true;
+    el.documentDeliveryPanel.innerHTML = "";
+  }
+
+  function buildDocumentLink(label, href, { primary = false } = {}) {
+    const link = document.createElement("a");
+    link.className = `document-link${primary ? " document-link--primary" : ""}`;
+    link.href = href;
+    link.textContent = label;
+    link.setAttribute("target", "_blank");
+    link.setAttribute("rel", "noopener noreferrer");
+    return link;
+  }
+
+  function renderDocumentDelivery(delivery) {
+    if (!el.documentDeliveryPanel || !delivery) {
+      clearDocumentDelivery();
+      return;
+    }
+
+    const panel = el.documentDeliveryPanel;
+    panel.innerHTML = "";
+    panel.hidden = false;
+
+    const header = document.createElement("div");
+    header.className = "document-delivery__header";
+
+    const title = document.createElement("p");
+    title.className = "document-delivery__title";
+    title.textContent = delivery.title || `${humanizeProviderName(delivery.documentType)} ready`;
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "document-delivery__subtitle";
+    subtitle.textContent = delivery.deliveryMessage || delivery.subtitle || delivery.fileName;
+
+    const meta = document.createElement("p");
+    meta.className = "document-delivery__meta";
+    const metaParts = [
+      `Primary format: ${String(delivery.primaryFormat || delivery.format || "txt").toUpperCase()}`,
+      delivery.pageTarget ? `Target length: ~${delivery.pageTarget} pages` : "",
+      delivery.style ? `Style: ${String(delivery.style).replace(/^\w/, (letter) => letter.toUpperCase())}` : "",
+      delivery.includeReferences ? `References${delivery.citationStyle ? `: ${String(delivery.citationStyle).toUpperCase()}` : ""}` : "",
+      delivery.subtitle ? delivery.subtitle : "",
+    ].filter(Boolean);
+    meta.textContent = metaParts.join(" | ");
+
+    header.append(title, subtitle, meta);
+
+    if (delivery.previewText) {
+      const preview = document.createElement("div");
+      preview.className = "document-delivery__preview";
+      preview.textContent = delivery.previewText;
+      panel.appendChild(header);
+      panel.appendChild(preview);
+    } else {
+      panel.appendChild(header);
+    }
+
+    const links = document.createElement("div");
+    links.className = "document-links";
+
+    const fileEntries = Array.isArray(delivery.files) && delivery.files.length
+      ? delivery.files
+      : [{
+        format: delivery.format,
+        downloadUrl: delivery.downloadUrl,
+        primary: true,
+      }];
+
+    const primaryLabel = document.createElement("p");
+    primaryLabel.className = "document-links__label";
+    primaryLabel.textContent = fileEntries.length > 1 ? "Files ready" : "Download";
+
+    const primaryRow = document.createElement("div");
+    primaryRow.className = "document-links__row";
+    fileEntries.forEach((item, index) => {
+      const isPrimary = Boolean(item.primary) || index === 0;
+      primaryRow.appendChild(
+        buildDocumentLink(
+          `Download ${String(item.format || delivery.format || "txt").toUpperCase()}`,
+          item.downloadUrl || delivery.downloadUrl,
+          { primary: isPrimary },
+        ),
+      );
+    });
+
+    links.append(primaryLabel, primaryRow);
+
+    const deliveredFormats = new Set(fileEntries.map((item) => String(item.format || "").trim().toLowerCase()).filter(Boolean));
+    const alternateEntries = Object.entries(delivery.alternateFormatLinks || {})
+      .filter(([format]) => !deliveredFormats.has(String(format || "").trim().toLowerCase()));
+    if (alternateEntries.length) {
+      const alternateLabel = document.createElement("p");
+      alternateLabel.className = "document-links__label";
+      alternateLabel.textContent = "Also available";
+
+      const alternateRow = document.createElement("div");
+      alternateRow.className = "document-links__row";
+      alternateEntries.forEach(([format, href]) => {
+        alternateRow.appendChild(buildDocumentLink(`Download ${String(format).toUpperCase()}`, href));
+      });
+      links.append(alternateLabel, alternateRow);
+    }
+
+    panel.appendChild(links);
+  }
+
+  function updateLiveResponse(text, { provider = null, mode = null, documentDelivery = null } = {}) {
     el.liveResponse.textContent = text || "AURA is standing by.";
+    if (documentDelivery) {
+      renderDocumentDelivery(documentDelivery);
+    } else {
+      clearDocumentDelivery();
+    }
     if (provider) {
       el.responseMetaProvider.textContent = `Provider: ${humanizeProviderName(provider)}`;
     }

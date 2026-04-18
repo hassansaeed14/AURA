@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 import re
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
@@ -89,7 +89,18 @@ from voice.voice_controller import (
 )
 from voice.voice_pipeline import process_voice_text
 from voice.voice_manager import load_user_profile, save_user_profile
-from tools.document_generator import GENERATED_DIR, cleanup_generated_documents, detect_document_request, generate_document, normalize_document_format
+from tools.document_generator import (
+    GENERATED_DIR,
+    cleanup_generated_documents,
+    generate_document,
+    normalize_citation_style,
+    normalize_document_format,
+    normalize_document_formats,
+    normalize_document_style,
+    resolve_document_request,
+)
+from tools.content_extractor import extract_content
+from brain.response_engine import generate_transformation_content_payload
 
 
 app = FastAPI()
@@ -203,7 +214,23 @@ class DocumentGenerateRequest(BaseModel):
     type: str
     topic: str
     format: str = "txt"
+    formats: Optional[list[str]] = None
     page_target: Optional[int] = None
+    style: Optional[str] = None
+    include_references: bool = False
+    citation_style: Optional[str] = None
+
+
+class TransformRequest(BaseModel):
+    content: str
+    document_type: str = "notes"
+    topic: Optional[str] = None
+    format: str = "txt"
+    formats: Optional[list[str]] = None
+    page_target: Optional[int] = None
+    style: Optional[str] = None
+    include_references: bool = False
+    citation_style: Optional[str] = None
 
 
 class LockRequest(BaseModel):
@@ -461,10 +488,12 @@ def _build_chat_success_payload(
     success: bool = True,
     provider: Optional[str] = None,
     error: Optional[str] = None,
+    response_kind: str = "chat",
 ) -> dict[str, Any]:
     content = clean_response(reply) or "Something went wrong on my side. Try again."
     return {
         "success": bool(success),
+        "kind": response_kind,
         "content": content,
         "reply": content,
         "intent": intent,
@@ -475,6 +504,39 @@ def _build_chat_success_payload(
         "error": error,
         "status": "ok" if success else "degraded",
     }
+
+
+DOCUMENT_PAYLOAD_FIELDS = (
+    "download_url",
+    "file_name",
+    "file_path",
+    "document_type",
+    "document_format",
+    "page_target",
+    "document_topic",
+    "document_source",
+    "document_delivery",
+    "document_files",
+    "requested_formats",
+    "document_style",
+    "include_references",
+    "citation_style",
+    "alternate_format_links",
+    "format_links",
+    "available_formats",
+    "document_title",
+    "document_subtitle",
+    "document_preview",
+)
+
+
+def _append_document_payload_fields(payload: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
+    for field in DOCUMENT_PAYLOAD_FIELDS:
+        if source.get(field) is not None:
+            payload[field] = source.get(field)
+    if payload.get("document_delivery"):
+        payload["kind"] = "document_delivery"
+    return payload
 
 
 def _normalize_casual_conversation_input(message: str) -> str:
@@ -629,14 +691,14 @@ def _prepare_chat_context(
     if not cleaned_message:
         raise ValueError("message is required")
 
-    document_request = detect_document_request(cleaned_message)
+    normalized_session_id = _normalize_session_id(session_id)
+    document_request = resolve_document_request(cleaned_message, session_id=normalized_session_id)
     detected_intent, confidence = detect_intent_with_confidence(cleaned_message)
     permission_action = "document_generation" if document_request is not None else detected_intent
     if document_request is not None:
         detected_intent = "document"
         confidence = 1.0
     decision = build_decision_summary(detected_intent, confidence, AGENT_ROUTER)
-    normalized_session_id = _normalize_session_id(session_id)
     permission = build_permission_response(
         permission_action,
         confirmed=False,
@@ -677,6 +739,7 @@ def _prepare_chat_context(
         "requested_mode": mode,
         "session_id": normalized_session_id,
         "cleaned_message": cleaned_message,
+        "document_request": document_request,
         "detected_intent": detected_intent,
         "confidence": confidence,
         "decision": decision,
@@ -737,6 +800,11 @@ def _execute_chat_pipeline(context: dict[str, Any]) -> dict[str, Any]:
         return payload
 
     reply_text = clean_response(result.get("response"))
+    if execution_mode == "document_generation":
+        document_delivery = result.get("document_delivery") or {}
+        delivery_message = clean_response(document_delivery.get("delivery_message"))
+        if delivery_message:
+            reply_text = delivery_message
     if _is_unusable_reply_text(reply_text):
         fallback_payload = generate_response_payload(context["cleaned_message"])
         if fallback_payload.get("success"):
@@ -772,6 +840,7 @@ def _execute_chat_pipeline(context: dict[str, Any]) -> dict[str, Any]:
         success=not degraded,
         provider=provider_name,
         error=error_message,
+        response_kind="document_delivery" if execution_mode == "document_generation" else "chat",
     )
     payload["decision"] = result.get("decision") or context["decision"]
     payload["permission"] = runtime_permission or context["permission"]
@@ -785,10 +854,7 @@ def _execute_chat_pipeline(context: dict[str, Any]) -> dict[str, Any]:
     payload["model"] = result.get("model")
     payload["providers_tried"] = result.get("providers_tried", [])
     payload["degraded"] = degraded
-    for field in ("download_url", "file_name", "file_path", "document_type", "document_format", "page_target", "document_topic", "document_source"):
-        if result.get(field) is not None:
-            payload[field] = result.get(field)
-    return payload
+    return _append_document_payload_fields(payload, result)
 
 
 def _now_string() -> str:
@@ -909,6 +975,8 @@ PUBLIC_PATHS = {
     "/api/voice/status",
     "/api/voice/text",
     "/api/generate/document",
+    "/api/transform",
+    "/api/transform/file",
 }
 
 
@@ -1218,26 +1286,219 @@ async def api_chat(payload: ChatApiRequest, request: Request):
 async def api_generate_document(payload: DocumentGenerateRequest):
     try:
         cleanup_generated_documents()
+        requested_formats = normalize_document_formats(payload.formats or [payload.format])
         generated = generate_document(
             payload.type,
             payload.topic,
             normalize_document_format(payload.format),
+            formats=requested_formats,
             page_target=payload.page_target,
+            style=normalize_document_style(payload.style),
+            include_references=payload.include_references,
+            citation_style=normalize_citation_style(payload.citation_style),
         )
+        response_payload = {
+            "success": True,
+            "kind": "document_delivery",
+            "download_url": generated["download_url"],
+            "file_name": generated["file_name"],
+            "document_type": generated["document_type"],
+            "format": generated["format"],
+            "page_target": generated.get("page_target"),
+            "topic": generated["topic"],
+            "provider": generated.get("provider"),
+            "source": generated.get("source"),
+            "title": generated.get("title"),
+            "subtitle": generated.get("subtitle"),
+            "preview_text": generated.get("preview_text"),
+            "files": generated.get("files") or [],
+            "requested_formats": generated.get("requested_formats") or [],
+            "style": generated.get("style"),
+            "include_references": generated.get("include_references"),
+            "citation_style": generated.get("citation_style"),
+            "available_formats": generated.get("available_formats") or [],
+            "format_links": generated.get("format_links") or {},
+            "alternate_format_links": generated.get("alternate_format_links") or {},
+            "document_delivery": generated.get("document_delivery"),
+            "reply": generated.get("message"),
+            "content": generated.get("message"),
+            "status": "ok",
+        }
         return JSONResponse(
-            content={
-                "success": True,
-                "download_url": generated["download_url"],
-                "file_name": generated["file_name"],
-                "document_type": generated["document_type"],
-                "format": generated["format"],
-                "page_target": generated.get("page_target"),
-                "topic": generated["topic"],
-                "provider": generated.get("provider"),
-                "source": generated.get("source"),
-            },
+            content=response_payload,
             headers=_cors_headers(),
         )
+    except ValueError as error:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "error": str(error), "status": "error"},
+            headers=_cors_headers(),
+        )
+    except Exception as error:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(error), "status": "error"},
+            headers=_cors_headers(),
+        )
+
+
+def _build_transform_response(generated: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "success": True,
+        "kind": "document_delivery",
+        "download_url": generated["download_url"],
+        "file_name": generated["file_name"],
+        "document_type": generated["document_type"],
+        "format": generated["format"],
+        "page_target": generated.get("page_target"),
+        "topic": generated["topic"],
+        "provider": generated.get("provider"),
+        "source": generated.get("source"),
+        "title": generated.get("title"),
+        "subtitle": generated.get("subtitle"),
+        "preview_text": generated.get("preview_text"),
+        "files": generated.get("files") or [],
+        "requested_formats": generated.get("requested_formats") or [],
+        "style": generated.get("style"),
+        "include_references": generated.get("include_references"),
+        "citation_style": generated.get("citation_style"),
+        "available_formats": generated.get("available_formats") or [],
+        "format_links": generated.get("format_links") or {},
+        "alternate_format_links": generated.get("alternate_format_links") or {},
+        "document_delivery": generated.get("document_delivery"),
+        "reply": generated.get("message"),
+        "content": generated.get("message"),
+        "status": "ok",
+    }
+
+
+@app.post("/api/transform")
+async def api_transform(payload: TransformRequest):
+    """Transform pasted text or a YouTube URL into a structured document."""
+    try:
+        cleanup_generated_documents()
+        extracted = extract_content(payload.content.strip())
+        if not extracted.success or not extracted.text.strip():
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": extracted.error or "Could not extract content.", "status": "error"},
+                headers=_cors_headers(),
+            )
+
+        topic = (payload.topic or "").strip() or extracted.source_label or "Source Material"
+        doc_type = str(payload.document_type or "notes").strip().lower()
+        if doc_type not in {"notes", "assignment"}:
+            doc_type = "notes"
+
+        requested_formats = normalize_document_formats(payload.formats or [payload.format])
+        normalized_style = normalize_document_style(payload.style)
+        normalized_citation = normalize_citation_style(payload.citation_style)
+
+        transformation_payload = generate_transformation_content_payload(
+            extracted.text,
+            doc_type,
+            topic,
+            page_target=payload.page_target,
+            style=normalized_style,
+            include_references=payload.include_references,
+            citation_style=normalized_citation,
+        )
+
+        structured_content = transformation_payload.get("content") or extracted.text
+
+        generated = generate_document(
+            doc_type,
+            topic,
+            normalize_document_format(payload.format),
+            formats=requested_formats,
+            page_target=payload.page_target,
+            style=normalized_style,
+            include_references=payload.include_references,
+            citation_style=normalized_citation,
+            prebuilt_content=structured_content,
+        )
+
+        return JSONResponse(content=_build_transform_response(generated), headers=_cors_headers())
+
+    except ValueError as error:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "error": str(error), "status": "error"},
+            headers=_cors_headers(),
+        )
+    except Exception as error:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(error), "status": "error"},
+            headers=_cors_headers(),
+        )
+
+
+@app.post("/api/transform/file")
+async def api_transform_file(
+    file: UploadFile = File(...),
+    document_type: str = Form("notes"),
+    topic: str = Form(""),
+    format: str = Form("txt"),
+    formats: Optional[str] = Form(None),
+    page_target: Optional[int] = Form(None),
+    style: Optional[str] = Form(None),
+    include_references: bool = Form(False),
+    citation_style: Optional[str] = Form(None),
+):
+    """Transform an uploaded .txt, .pdf, or .docx file into a structured document."""
+    try:
+        cleanup_generated_documents()
+        file_bytes = await file.read()
+        filename = file.filename or ""
+
+        extracted = extract_content(file_bytes, filename=filename)
+        if not extracted.success or not extracted.text.strip():
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": extracted.error or "Could not extract content from file.", "status": "error"},
+                headers=_cors_headers(),
+            )
+
+        resolved_topic = topic.strip() or extracted.source_label or "Source Material"
+        doc_type = str(document_type or "notes").strip().lower()
+        if doc_type not in {"notes", "assignment"}:
+            doc_type = "notes"
+
+        raw_formats = [f.strip() for f in (formats or "").split(",") if f.strip()] if formats else [format]
+        requested_formats = normalize_document_formats(raw_formats)
+        normalized_style = normalize_document_style(style)
+        normalized_citation = normalize_citation_style(citation_style)
+
+        transformation_payload = generate_transformation_content_payload(
+            extracted.text,
+            doc_type,
+            resolved_topic,
+            page_target=page_target,
+            style=normalized_style,
+            include_references=include_references,
+            citation_style=normalized_citation,
+        )
+
+        structured_content = transformation_payload.get("content") or extracted.text
+
+        generated = generate_document(
+            doc_type,
+            resolved_topic,
+            normalize_document_format(format),
+            formats=requested_formats,
+            page_target=page_target,
+            style=normalized_style,
+            include_references=include_references,
+            citation_style=normalized_citation,
+            prebuilt_content=structured_content,
+        )
+
+        response_payload = _build_transform_response(generated)
+        response_payload["source_file"] = filename
+        response_payload["source_type"] = extracted.source_type
+        return JSONResponse(content=response_payload, headers=_cors_headers())
+
     except ValueError as error:
         return JSONResponse(
             status_code=400,
