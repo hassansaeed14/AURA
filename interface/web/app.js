@@ -8,11 +8,22 @@
   const WAKE_FALLBACK = "Hey AURA";
   const WAKE_ACKNOWLEDGEMENT = "Yes?";
   const COMMAND_NO_SPEECH_RETRY_LIMIT = 1;
-  const CHAT_REQUEST_TIMEOUT_MS = 20000;
+  const CHAT_REQUEST_TIMEOUT_MS = 90000;
   const REFRESH_INTERVAL_MS = 120000;
   const WAKE_RESUME_DELAY_MS = 900;
   const NO_SPEECH_RECOVERY_DELAY_MS = 1400;
   const RECOGNITION_IDLE_TIMEOUT_MS = 1500;
+  const IDLE_MINIMIZE_DELAY_MS = 120000; // 2 minutes
+
+  const ORB_COLORS = {
+    blue:   { primary: "#7ed6ff", glow: "rgba(126,214,255,0.22)", outer: "rgba(61,134,199,0.16)",  soft: "rgba(126,214,255,0.16)", border: "rgba(126,214,255,0.22)" },
+    red:    { primary: "#ef8794", glow: "rgba(239,135,148,0.22)", outer: "rgba(161,44,62,0.16)",   soft: "rgba(239,135,148,0.16)", border: "rgba(239,135,148,0.22)" },
+    green:  { primary: "#6ad7a0", glow: "rgba(106,215,160,0.22)", outer: "rgba(47,130,91,0.16)",   soft: "rgba(106,215,160,0.16)", border: "rgba(106,215,160,0.22)" },
+    purple: { primary: "#c084fc", glow: "rgba(192,132,252,0.22)", outer: "rgba(109,40,217,0.16)",  soft: "rgba(192,132,252,0.16)", border: "rgba(192,132,252,0.22)" },
+    gold:   { primary: "#f3c56f", glow: "rgba(243,197,111,0.22)", outer: "rgba(196,120,28,0.16)",  soft: "rgba(243,197,111,0.16)", border: "rgba(243,197,111,0.22)" },
+    cyan:   { primary: "#67e8f9", glow: "rgba(103,232,249,0.22)", outer: "rgba(21,148,168,0.16)",  soft: "rgba(103,232,249,0.16)", border: "rgba(103,232,249,0.22)" },
+    white:  { primary: "#f5f8fd", glow: "rgba(245,248,253,0.18)", outer: "rgba(200,210,230,0.12)", soft: "rgba(245,248,253,0.14)", border: "rgba(245,248,253,0.2)"  },
+  };
 
   const state = {
     sessionId: "default",
@@ -50,6 +61,15 @@
     lastStatusRefreshAt: 0,
     recognitionStartTimer: null,
     activity: [],
+    activeNav: "chat",
+    orbColor: "blue",
+    idleMinimized: false,
+    idleTimer: null,
+    screenSharing: false,
+    screenStream: null,
+    pendingSecurityPayload: null,
+    pendingSecurityResolve: null,
+    pendingSecurityReject: null,
     browserVoice: {
       mode: "Checking",
       permission: "Checking",
@@ -74,6 +94,9 @@
     bindEvents();
     syncDetailsDrawer();
     setupRecognition();
+    loadSavedOrbColor();
+    switchNav("chat");
+    resetIdleTimer();
     await refreshBrowserVoiceDiagnostics({ requestPermission: false });
     renderProviderList();
     renderActivityList();
@@ -128,6 +151,25 @@
       "interruptButton",
       "textCommandInput",
       "sendButton",
+      // new elements
+      "orbMini",
+      "navChat", "navMemory", "navTools", "navProfile", "navSettings",
+      "chatView",
+      "panelMemory", "panelTools", "panelProfile", "panelSettings",
+      "colorSwatches",
+      "screenShareButton", "screenShareBadge", "screenShareStatus",
+      "screenPreviewWrap", "screenPreviewVideo",
+      "outputList",
+      "livePanels",
+      "profileAuthLink", "profileRegisterLink", "profilePasswordLink", "profileSummaryText",
+      "settingsClearHistory", "settingsVoiceLang",
+      "clearMemoryBtn",
+      "toolGrid",
+      "memEpisodic", "memSemantic", "memWorking",
+      // security modals
+      "modalConfirm", "modalConfirmReason", "modalConfirmHint", "modalConfirmCancel", "modalConfirmOk",
+      "modalSession", "modalSessionReason", "modalSessionHint", "modalSessionCancel", "modalSessionApprove",
+      "modalPin", "modalPinReason", "modalPinHint", "modalPinInput", "modalPinError", "modalPinCancel", "modalPinSubmit",
     ];
 
     ids.forEach((id) => {
@@ -137,6 +179,8 @@
   }
 
   function bindEvents() {
+    document.addEventListener("click", resetIdleTimer, { passive: true });
+    document.addEventListener("keydown", resetIdleTimer, { passive: true });
     el.detailsToggle.addEventListener("click", () => setDetailsOpen(!state.detailsOpen));
     el.mobileBackdrop.addEventListener("click", () => setDetailsOpen(false));
     el.refreshStatusButton.addEventListener("click", () => {
@@ -158,6 +202,72 @@
     });
     window.addEventListener("resize", handleResize);
     document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // Nav sidebar
+    ["navChat", "navMemory", "navTools", "navProfile", "navSettings"].forEach((id) => {
+      if (el[id]) {
+        el[id].addEventListener("click", () => {
+          const nav = el[id].dataset.nav;
+          if (nav) switchNav(nav);
+        });
+      }
+    });
+
+    // Screen share
+    if (el.screenShareButton) {
+      el.screenShareButton.addEventListener("click", () => void toggleScreenShare());
+    }
+
+    // Orb mini click — restore
+    if (el.orbMini) {
+      el.orbMini.addEventListener("click", restoreFromIdleMinimize);
+    }
+
+    // Color swatches
+    if (el.colorSwatches) {
+      el.colorSwatches.addEventListener("click", (event) => {
+        const swatch = event.target.closest("[data-color]");
+        if (swatch) applyOrbColor(swatch.dataset.color);
+      });
+    }
+
+    // Clear history
+    if (el.settingsClearHistory) {
+      el.settingsClearHistory.addEventListener("click", () => {
+        addActivity("Settings", "Chat history cleared.", "neutral");
+        updateLiveResponse("Chat history cleared.");
+      });
+    }
+
+    // Clear working memory
+    if (el.clearMemoryBtn) {
+      el.clearMemoryBtn.addEventListener("click", () => {
+        addActivity("Memory", "Working memory cleared.", "neutral");
+      });
+    }
+
+    // Security modals
+    if (el.modalConfirmCancel) el.modalConfirmCancel.addEventListener("click", () => resolveSecurityModal(false));
+    if (el.modalConfirmOk)     el.modalConfirmOk.addEventListener("click",     () => resolveSecurityModal(true));
+    if (el.modalSessionCancel) el.modalSessionCancel.addEventListener("click", () => resolveSecurityModal(false));
+    if (el.modalSessionApprove) el.modalSessionApprove.addEventListener("click", () => resolveSecurityModal(true));
+    if (el.modalPinCancel)     el.modalPinCancel.addEventListener("click",     () => resolveSecurityModal(false));
+    if (el.modalPinSubmit)     el.modalPinSubmit.addEventListener("click",     () => {
+      const pin = String(el.modalPinInput?.value || "").trim();
+      if (!pin) {
+        showPinError("Please enter your PIN.");
+        return;
+      }
+      resolveSecurityModal(true, { pin });
+    });
+    if (el.modalPinInput) {
+      el.modalPinInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          const pin = String(el.modalPinInput.value || "").trim();
+          if (pin) resolveSecurityModal(true, { pin });
+        }
+      });
+    }
   }
 
   async function bootstrap() {
@@ -1326,6 +1436,33 @@
       return;
     }
 
+    resetIdleTimer();
+
+    // Handle orb color command locally — never hit the LLM
+    const colorRequest = detectColorChangeCommand(commandText);
+    if (colorRequest && ORB_COLORS[colorRequest]) {
+      applyOrbColor(colorRequest);
+      const colorName = colorRequest.charAt(0).toUpperCase() + colorRequest.slice(1);
+      const reply = `Orb color changed to ${colorName}.`;
+      updateLiveTranscript(commandText);
+      updateLiveResponse(reply, { provider: "local", mode: "system" });
+      addActivity("Color", reply, "good");
+      await speakAssistant(reply, { resumeWakeAfter: true });
+      return;
+    }
+
+    // Handle navigation commands locally
+    const navRequest = detectNavCommand(commandText);
+    if (navRequest) {
+      switchNav(navRequest);
+      const navLabels = { chat: "Chat", memory: "Memory", tools: "Tools", profile: "Profile", settings: "Settings" };
+      const reply = `Opening ${navLabels[navRequest] || navRequest}.`;
+      updateLiveTranscript(commandText);
+      addActivity("Navigation", reply, "neutral");
+      await speakAssistant(reply, { resumeWakeAfter: true });
+      return;
+    }
+
     state.bargeInTriggered = false;
     setVoicePhase("processing");
     setAssistantState("thinking", {
@@ -1337,7 +1474,10 @@
     updateWakeBanner("Working on that now.");
 
     try {
-      const payload = await submitChatMessage(commandText);
+      let payload = await submitChatMessage(commandText);
+      payload = await resolveSecurityIfNeeded(payload, commandText);
+      if (!payload) { setVoicePhase("idle"); setIdleState(); return; }
+
       const assistantPayload = extractAssistantReplyPayload(payload);
       const answer = assistantPayload.answer || FALLBACK_REPLY;
       const provider = assistantPayload.provider || "local";
@@ -1349,6 +1489,7 @@
         mode: assistantPayload.documentDelivery ? "document delivery" : "voice",
         documentDelivery: assistantPayload.documentDelivery,
       });
+      if (assistantPayload.documentDelivery) addOutputCard(assistantPayload.documentDelivery);
       addActivity("Voice request", commandText, "neutral");
       addActivity("Answer ready", answer.slice(0, 140), assistantPayload.success === false ? "warn" : "good");
       await speakAssistant(answer, { resumeWakeAfter: true });
@@ -1372,6 +1513,34 @@
       return;
     }
 
+    resetIdleTimer();
+
+    // Handle orb color command locally
+    const colorRequest = detectColorChangeCommand(text);
+    if (colorRequest && ORB_COLORS[colorRequest]) {
+      applyOrbColor(colorRequest);
+      el.textCommandInput.value = "";
+      const colorName = colorRequest.charAt(0).toUpperCase() + colorRequest.slice(1);
+      const reply = `Orb color changed to ${colorName}.`;
+      updateLiveTranscript(text);
+      updateLiveResponse(reply, { provider: "local", mode: "system" });
+      addActivity("Color", reply, "good");
+      return;
+    }
+
+    // Handle navigation commands locally
+    const navRequest = detectNavCommand(text);
+    if (navRequest) {
+      el.textCommandInput.value = "";
+      switchNav(navRequest);
+      const navLabels = { chat: "Chat", memory: "Memory", tools: "Tools", profile: "Profile", settings: "Settings" };
+      const reply = `Opening ${navLabels[navRequest] || navRequest}.`;
+      updateLiveTranscript(text);
+      updateLiveResponse(reply, { provider: "local", mode: "system" });
+      addActivity("Navigation", reply, "neutral");
+      return;
+    }
+
     el.textCommandInput.value = "";
     updateLiveTranscript(text);
     if (state.recognitionActive) {
@@ -1387,7 +1556,10 @@
     });
 
     try {
-      const payload = await submitChatMessage(text);
+      let payload = await submitChatMessage(text);
+      payload = await resolveSecurityIfNeeded(payload, text);
+      if (!payload) { setIdleState(); resumeWakeStandby(); return; }
+
       const assistantPayload = extractAssistantReplyPayload(payload);
       const answer = assistantPayload.answer || FALLBACK_REPLY;
       const provider = assistantPayload.provider || "local";
@@ -1397,6 +1569,7 @@
         mode: assistantPayload.documentDelivery ? "document delivery" : (assistantPayload.mode || "text"),
         documentDelivery: assistantPayload.documentDelivery,
       });
+      if (assistantPayload.documentDelivery) addOutputCard(assistantPayload.documentDelivery);
       addActivity("Text command", text, "neutral");
       addActivity("Answer ready", answer.slice(0, 140), assistantPayload.success === false ? "warn" : "good");
 
@@ -2365,5 +2538,482 @@
 
   function escapeRegex(value) {
     return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  // ─────────────────────────────────────────────
+  // SECURITY RESOLUTION (API layer)
+  // ─────────────────────────────────────────────
+
+  async function resolveSecurityIfNeeded(payload, originalMessage) {
+    if (!payload || typeof payload !== "object") return payload;
+
+    const permissionInfo = payload.permission && typeof payload.permission === "object"
+      ? payload.permission
+      : null;
+
+    if (!permissionInfo) return payload;
+
+    const trustLevel = String(permissionInfo.trust_level || "").toLowerCase();
+    const requiresApproval = Boolean(permissionInfo.requires_approval) || Boolean(permissionInfo.approval_type && permissionInfo.approval_type !== "none");
+    const statusBlocked = String(payload.status || "").toLowerCase() === "blocked" || payload.success === false;
+
+    if (!requiresApproval || !statusBlocked) return payload;
+    if (trustLevel === "safe") return payload;
+
+    // Show the appropriate security modal and wait
+    return handleSecurityRequired(permissionInfo, originalMessage);
+  }
+
+  // ─────────────────────────────────────────────
+  // ORB COLOR SYSTEM
+  // ─────────────────────────────────────────────
+
+  function applyOrbColor(colorName) {
+    const palette = ORB_COLORS[String(colorName || "blue").toLowerCase()] || ORB_COLORS.blue;
+    const root = document.documentElement;
+    root.style.setProperty("--orb-primary",    palette.primary);
+    root.style.setProperty("--orb-glow",        palette.glow);
+    root.style.setProperty("--orb-glow-outer",  palette.outer);
+    root.style.setProperty("--orb-glow-soft",   palette.soft);
+    root.style.setProperty("--orb-border-idle", palette.border);
+
+    state.orbColor = String(colorName || "blue").toLowerCase();
+
+    // Update active swatch
+    if (el.colorSwatches) {
+      el.colorSwatches.querySelectorAll("[data-color]").forEach((swatch) => {
+        swatch.classList.toggle("color-swatch--active", swatch.dataset.color === state.orbColor);
+      });
+    }
+
+    // Update nav active item color
+    document.querySelectorAll(".nav-item--active").forEach((item) => {
+      item.style.color = palette.primary;
+    });
+
+    try {
+      localStorage.setItem("aura_orb_color", state.orbColor);
+    } catch (_error) {
+      // ignore
+    }
+  }
+
+  function loadSavedOrbColor() {
+    try {
+      const saved = localStorage.getItem("aura_orb_color");
+      if (saved && ORB_COLORS[saved]) {
+        applyOrbColor(saved);
+      }
+    } catch (_error) {
+      // ignore
+    }
+  }
+
+  function detectColorChangeCommand(text) {
+    const lower = String(text || "").toLowerCase().trim();
+    const match = lower.match(/\b(?:change|set|switch|make)\s+(?:orb\s+)?(?:color|colour)\s+(?:to\s+)?(\w+)\b/);
+    if (match) return match[1];
+    const shortMatch = lower.match(/^(?:color|colour)\s+(\w+)$/);
+    if (shortMatch) return shortMatch[1];
+    return null;
+  }
+
+  function detectNavCommand(text) {
+    const lower = String(text || "").toLowerCase().trim();
+    const patterns = [
+      { nav: "profile",  re: /\b(?:open|go\s+to|show|switch\s+to|view)\s+(?:my\s+)?profile\b/ },
+      { nav: "settings", re: /\b(?:open|go\s+to|show|switch\s+to|view)\s+settings\b/ },
+      { nav: "memory",   re: /\b(?:open|go\s+to|show|switch\s+to|view)\s+memory\b/ },
+      { nav: "tools",    re: /\b(?:open|go\s+to|show|switch\s+to|view)\s+tools\b/ },
+      { nav: "chat",     re: /\b(?:open|go\s+to|show|switch\s+to|go\s+back\s+to)\s+(?:main\s+)?(?:chat|home|assistant)\b/ },
+    ];
+    for (const { nav, re } of patterns) {
+      if (re.test(lower)) return nav;
+    }
+    return null;
+  }
+
+  // ─────────────────────────────────────────────
+  // IDLE MINIMIZE SYSTEM
+  // ─────────────────────────────────────────────
+
+  function resetIdleTimer() {
+    if (state.idleTimer) {
+      window.clearTimeout(state.idleTimer);
+      state.idleTimer = null;
+    }
+    if (state.idleMinimized) {
+      restoreFromIdleMinimize();
+    }
+    state.idleTimer = window.setTimeout(() => {
+      if (!state.busy && !state.speaking && !state.listening && state.voicePhase === "idle") {
+        minimizeOrb();
+      }
+    }, IDLE_MINIMIZE_DELAY_MS);
+  }
+
+  function minimizeOrb() {
+    if (state.idleMinimized) return;
+    state.idleMinimized = true;
+    el.body.classList.add("orb-minimized");
+    addActivity("Idle", "Orb minimized after 2 minutes of inactivity.", "neutral");
+  }
+
+  function restoreFromIdleMinimize() {
+    if (!state.idleMinimized) return;
+    state.idleMinimized = false;
+    el.body.classList.remove("orb-minimized");
+    resetIdleTimer();
+  }
+
+  // ─────────────────────────────────────────────
+  // NAVIGATION PANEL SYSTEM
+  // ─────────────────────────────────────────────
+
+  function switchNav(navName) {
+    state.activeNav = navName;
+    const panelMap = {
+      chat:     "chatView",
+      memory:   "panelMemory",
+      tools:    "panelTools",
+      profile:  "panelProfile",
+      settings: "panelSettings",
+    };
+    const navMap = {
+      chat:     "navChat",
+      memory:   "navMemory",
+      tools:    "navTools",
+      profile:  "navProfile",
+      settings: "navSettings",
+    };
+
+    Object.entries(panelMap).forEach(([key, elId]) => {
+      const panelEl = el[elId];
+      if (!panelEl) return;
+      panelEl.hidden = key !== navName;
+    });
+
+    Object.entries(navMap).forEach(([key, elId]) => {
+      const navEl = el[elId];
+      if (!navEl) return;
+      navEl.classList.toggle("nav-item--active", key === navName);
+      if (key === navName) {
+        navEl.style.color = ORB_COLORS[state.orbColor]?.primary || "";
+      } else {
+        navEl.style.color = "";
+      }
+    });
+
+    // live-panels (transcript/response) only visible in chat view
+    if (el.livePanels) el.livePanels.hidden = navName !== "chat";
+
+    // Load panel data
+    if (navName === "memory") loadMemoryPanel();
+    if (navName === "tools") loadToolsPanel();
+    if (navName === "profile") loadProfilePanel();
+    if (navName === "settings") loadSettingsPanel();
+  }
+
+  function loadMemoryPanel() {
+    // Fetch memory stats if available
+    fetchJson("/api/memory/stats").then((data) => {
+      if (el.memEpisodic) el.memEpisodic.textContent = String(data?.episodic_count ?? "—");
+      if (el.memSemantic) el.memSemantic.textContent = String(data?.semantic_count ?? "—");
+      if (el.memWorking)  el.memWorking.textContent  = String(data?.working_count ?? "—");
+    }).catch(() => {
+      if (el.memEpisodic) el.memEpisodic.textContent = "—";
+      if (el.memSemantic) el.memSemantic.textContent = "—";
+      if (el.memWorking)  el.memWorking.textContent  = "—";
+    });
+  }
+
+  function loadToolsPanel() {
+    if (!el.toolGrid) return;
+    const capabilities = [
+      { name: "Document Generation", desc: "Create PDF, DOCX, PPTX, TXT files." },
+      { name: "Content Extraction", desc: "YouTube, PDF, DOCX, image OCR." },
+      { name: "Web Search", desc: "Live information retrieval." },
+      { name: "Voice Pipeline", desc: "Speech-to-text and text-to-speech." },
+      { name: "Memory System", desc: "Episodic, semantic, working memory." },
+      { name: "Agent Routing", desc: "245+ specialized task agents." },
+      { name: "Code Execution", desc: "Run Python code safely." },
+      { name: "File Management", desc: "Read, write, transform files." },
+    ];
+    el.toolGrid.innerHTML = "";
+    capabilities.forEach((cap) => {
+      const card = document.createElement("div");
+      card.className = "tool-card";
+      const name = document.createElement("p");
+      name.className = "tool-card__name";
+      name.textContent = cap.name;
+      const desc = document.createElement("p");
+      desc.className = "tool-card__desc";
+      desc.textContent = cap.desc;
+      card.append(name, desc);
+      el.toolGrid.appendChild(card);
+    });
+  }
+
+  function loadProfilePanel() {
+    const authPayload = state.auth || {};
+    const user = authPayload.user || null;
+    if (authPayload.authenticated && user) {
+      const name = user.preferred_name || user.name || user.username || "there";
+      const email = user.email || "—";
+      if (el.profileSummaryText) {
+        el.profileSummaryText.textContent = `Signed in as ${name}. Email: ${email}.`;
+      }
+      if (el.profileAuthLink) {
+        el.profileAuthLink.textContent = "Sign out";
+        el.profileAuthLink.href = "/logout";
+        el.profileAuthLink.removeAttribute("aria-disabled");
+      }
+      if (el.profileRegisterLink) el.profileRegisterLink.style.display = "none";
+      if (el.profilePasswordLink) el.profilePasswordLink.style.display = "";
+    } else {
+      if (el.profileSummaryText) {
+        el.profileSummaryText.textContent = "Not signed in. Create an account to access personal features and wake mode.";
+      }
+      if (el.profileAuthLink) {
+        el.profileAuthLink.textContent = "Sign in";
+        el.profileAuthLink.href = "/login";
+        el.profileAuthLink.removeAttribute("aria-disabled");
+      }
+      if (el.profileRegisterLink) {
+        el.profileRegisterLink.style.display = "";
+        el.profileRegisterLink.textContent = "Create account";
+        el.profileRegisterLink.href = "/register";
+      }
+      if (el.profilePasswordLink) el.profilePasswordLink.style.display = "none";
+    }
+  }
+
+  function loadSettingsPanel() {
+    if (el.settingsVoiceLang) {
+      el.settingsVoiceLang.textContent = preferredRecognitionLanguage();
+    }
+    // Refresh active swatch
+    if (el.colorSwatches) {
+      el.colorSwatches.querySelectorAll("[data-color]").forEach((swatch) => {
+        swatch.classList.toggle("color-swatch--active", swatch.dataset.color === state.orbColor);
+      });
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // SCREEN SHARE SYSTEM
+  // ─────────────────────────────────────────────
+
+  async function toggleScreenShare() {
+    if (state.screenSharing) {
+      stopScreenShare();
+      return;
+    }
+    await startScreenShare();
+  }
+
+  async function startScreenShare() {
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      addActivity("Screen share", "Screen capture is not available in this browser.", "warn");
+      updateWakeBanner("Screen sharing is not supported in this browser.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { cursor: "always" },
+        audio: false,
+      });
+      state.screenStream = stream;
+      state.screenSharing = true;
+      el.body.classList.add("screen-sharing");
+      if (el.screenShareBadge) el.screenShareBadge.hidden = false;
+      if (el.screenShareStatus) el.screenShareStatus.textContent = "Active";
+      if (el.screenShareButton) {
+        el.screenShareButton.title = "Stop screen share";
+        el.screenShareButton.classList.add("dock-button--active");
+      }
+      if (el.screenPreviewVideo && el.screenPreviewWrap) {
+        el.screenPreviewVideo.srcObject = stream;
+        el.screenPreviewWrap.hidden = false;
+        if (!state.detailsOpen) setDetailsOpen(true);
+      }
+
+      stream.getVideoTracks().forEach((track) => {
+        track.addEventListener("ended", () => stopScreenShare());
+      });
+
+      addActivity("Screen share", "Screen is being shared with AURA. Visual context is captured — analysis pending.", "good");
+      updateWakeBanner("Screen sharing active. AURA has your screen captured.");
+    } catch (error) {
+      if (error?.name !== "NotAllowedError") {
+        addActivity("Screen share", error?.message || "Could not start screen capture.", "error");
+      }
+    }
+  }
+
+  function stopScreenShare() {
+    if (state.screenStream) {
+      state.screenStream.getTracks().forEach((track) => track.stop());
+      state.screenStream = null;
+    }
+    state.screenSharing = false;
+    el.body.classList.remove("screen-sharing");
+    if (el.screenShareBadge) el.screenShareBadge.hidden = true;
+    if (el.screenShareStatus) el.screenShareStatus.textContent = "Off";
+    if (el.screenShareButton) {
+      el.screenShareButton.title = "Share your screen with AURA";
+      el.screenShareButton.classList.remove("dock-button--active");
+    }
+    if (el.screenPreviewVideo) el.screenPreviewVideo.srcObject = null;
+    if (el.screenPreviewWrap) el.screenPreviewWrap.hidden = true;
+    addActivity("Screen share", "Screen sharing stopped.", "neutral");
+  }
+
+  // ─────────────────────────────────────────────
+  // SECURITY MODAL SYSTEM
+  // ─────────────────────────────────────────────
+
+  function showPinError(message) {
+    if (!el.modalPinError) return;
+    el.modalPinError.textContent = message;
+    el.modalPinError.hidden = false;
+  }
+
+  function clearPinError() {
+    if (!el.modalPinError) return;
+    el.modalPinError.textContent = "";
+    el.modalPinError.hidden = true;
+  }
+
+  function resolveSecurityModal(confirmed, extras = {}) {
+    hideAllSecurityModals();
+    if (state.pendingSecurityResolve) {
+      const fn = state.pendingSecurityResolve;
+      state.pendingSecurityResolve = null;
+      state.pendingSecurityReject = null;
+      fn({ confirmed, ...extras });
+    }
+  }
+
+  function hideAllSecurityModals() {
+    if (el.modalConfirm) el.modalConfirm.hidden = true;
+    if (el.modalSession) el.modalSession.hidden = true;
+    if (el.modalPin) el.modalPin.hidden = true;
+    if (el.modalPinInput) el.modalPinInput.value = "";
+    clearPinError();
+  }
+
+  function askSecurityConfirmation({ trustLevel, reason, hint, actionName }) {
+    return new Promise((resolve, reject) => {
+      state.pendingSecurityResolve = resolve;
+      state.pendingSecurityReject  = reject;
+
+      hideAllSecurityModals();
+
+      if (trustLevel === "critical") {
+        if (el.modalPinReason) el.modalPinReason.textContent = reason || "A security PIN is required for this action.";
+        if (el.modalPinHint)   el.modalPinHint.textContent   = hint || "";
+        if (el.modalPinTitle)  el.modalPinTitle.textContent  = actionName ? `PIN required for: ${actionName}` : "PIN Required";
+        clearPinError();
+        if (el.modalPin) el.modalPin.hidden = false;
+        window.setTimeout(() => el.modalPinInput?.focus(), 60);
+      } else if (trustLevel === "sensitive") {
+        if (el.modalSessionReason) el.modalSessionReason.textContent = reason || "Session-level approval is needed.";
+        if (el.modalSessionHint)   el.modalSessionHint.textContent   = hint || "";
+        if (el.modalSession) el.modalSession.hidden = false;
+      } else {
+        // private — simple confirm
+        if (el.modalConfirmReason) el.modalConfirmReason.textContent = reason || "Confirm you want to do this.";
+        if (el.modalConfirmHint)   el.modalConfirmHint.textContent   = hint || "";
+        if (el.modalConfirm) el.modalConfirm.hidden = false;
+      }
+    });
+  }
+
+  async function handleSecurityRequired(permissionInfo, originalMessage) {
+    const trustLevel = String(permissionInfo?.trust_level || "private").toLowerCase();
+    const reason = String(permissionInfo?.reason || "This action needs your approval.");
+    const hint = String(permissionInfo?.next_step_hint || "");
+    const actionName = String(permissionInfo?.action_name || "");
+
+    addActivity("Security", `${humanizeStatus(trustLevel)} approval needed for: ${actionName || "action"}`, "warn");
+
+    let result;
+    try {
+      result = await askSecurityConfirmation({ trustLevel, reason, hint, actionName });
+    } catch (_error) {
+      return null;
+    }
+
+    if (!result?.confirmed) {
+      addActivity("Security", "Action cancelled by user.", "neutral");
+      return null;
+    }
+
+    const retryPayload = {
+      message: originalMessage,
+      mode: "hybrid",
+      confirmed: true,
+    };
+
+    if (trustLevel === "critical" && result.pin) {
+      retryPayload.pin = result.pin;
+    } else if (trustLevel === "sensitive") {
+      retryPayload.confirmed = true;
+    }
+
+    addActivity("Security", "Retrying with approval…", "neutral");
+    return requestJson("/api/chat", retryPayload, { timeoutMs: CHAT_REQUEST_TIMEOUT_MS });
+  }
+
+  // ─────────────────────────────────────────────
+  // RECENT OUTPUTS PANEL (right context panel)
+  // ─────────────────────────────────────────────
+
+  function addOutputCard(delivery) {
+    if (!el.outputList || !delivery) return;
+
+    const existing = el.outputList.querySelector(".provider-empty");
+    if (existing) existing.remove();
+
+    const card = document.createElement("div");
+    card.className = "output-card";
+
+    const name = document.createElement("p");
+    name.className = "output-card__name";
+    name.textContent = delivery.title || delivery.fileName || "Document";
+
+    const row = document.createElement("div");
+    row.className = "output-card__row";
+
+    if (delivery.downloadUrl) {
+      const link = document.createElement("a");
+      link.className = "output-card__link";
+      link.href = delivery.downloadUrl;
+      link.textContent = String(delivery.format || "Download").toUpperCase();
+      link.setAttribute("target", "_blank");
+      link.setAttribute("rel", "noopener noreferrer");
+      row.appendChild(link);
+    }
+
+    const altLinks = Object.entries(delivery.alternateFormatLinks || {});
+    altLinks.slice(0, 3).forEach(([fmt, href]) => {
+      const link = document.createElement("a");
+      link.className = "output-card__link";
+      link.href = href;
+      link.textContent = String(fmt).toUpperCase();
+      link.setAttribute("target", "_blank");
+      link.setAttribute("rel", "noopener noreferrer");
+      row.appendChild(link);
+    });
+
+    card.append(name, row);
+
+    // Keep last 5 outputs
+    el.outputList.insertBefore(card, el.outputList.firstChild);
+    const cards = el.outputList.querySelectorAll(".output-card");
+    cards.forEach((c, index) => {
+      if (index >= 5) c.remove();
+    });
   }
 })();

@@ -159,6 +159,20 @@ def _normalize_topic(value: str) -> str:
     topic = str(value or "").strip()
     topic = re.sub(r"\s+", " ", topic)
     topic = re.sub(r"\s+\d{1,2}\s*(?:page|pages)\b", "", topic, flags=re.IGNORECASE)
+    # Strip delivery phrases like "give me pdf", "send me a pdf", "get me the docx"
+    topic = re.sub(
+        r"\s+(?:give|send|get|provide|email|share)\s+(?:me\s+)?(?:a\s+|an\s+|the\s+)?(?:pdf|docx|word|txt|text|pptx|ppt|slides?|presentation|file|link|download)\b.*$",
+        "",
+        topic,
+        flags=re.IGNORECASE,
+    )
+    # Strip "and give me ..." variants
+    topic = re.sub(
+        r"\s+(?:and|then|also)\s+(?:give|send|get|provide|email|share)\s+(?:me\s+)?(?:a\s+|an\s+|the\s+)?(?:pdf|docx|word|txt|text|pptx|ppt|slides?|presentation|file|link|download)\b.*$",
+        "",
+        topic,
+        flags=re.IGNORECASE,
+    )
     topic = re.sub(r"\s+(?:in|as)\s+(?:pdf|docx|word|txt|text|pptx|ppt)\b$", "", topic, flags=re.IGNORECASE)
     topic = re.sub(r"\s+(?:in|as)\s+(?:professional|simple|detailed)\b$", "", topic, flags=re.IGNORECASE)
     topic = re.sub(
