@@ -19,6 +19,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 WEB_DIR = PROJECT_ROOT / "interface" / "web"
 APP_HTML = WEB_DIR / "aura.html"
 LOGIN_HTML = WEB_DIR / "login.html"
+REGISTER_HTML = WEB_DIR / "register.html"
+FORGOT_PASSWORD_HTML = WEB_DIR / "forgot-password.html"
 SETUP_HTML = WEB_DIR / "setup.html"
 ADMIN_HTML = WEB_DIR / "admin.html"
 
@@ -1142,8 +1144,21 @@ async def setup_page(request: Request):
 
 
 @app.get("/register", response_class=HTMLResponse)
-async def register_page():
-    return RedirectResponse("/login", status_code=302)
+async def register_page(request: Request):
+    if requires_first_run_setup():
+        return RedirectResponse("/setup", status_code=302)
+    if _current_user(request):
+        return RedirectResponse("/", status_code=302)
+    return HTMLResponse(_read_html(REGISTER_HTML))
+
+
+@app.get("/forgot-password", response_class=HTMLResponse)
+async def forgot_password_page(request: Request):
+    if requires_first_run_setup():
+        return RedirectResponse("/setup", status_code=302)
+    if _current_user(request):
+        return RedirectResponse("/", status_code=302)
+    return HTMLResponse(_read_html(FORGOT_PASSWORD_HTML))
 
 
 @app.get("/admin", response_class=HTMLResponse)

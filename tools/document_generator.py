@@ -158,10 +158,18 @@ def normalize_citation_style(value: Optional[str]) -> Optional[str]:
 def _normalize_topic(value: str) -> str:
     topic = str(value or "").strip()
     topic = re.sub(r"\s+", " ", topic)
+    # Strip comma + command phrases: ", write at least 7 pages in professional format..."
+    topic = re.sub(r"\s*,\s+(?:write|make|create|format|generate|add|include|prepare|produce|use)\b.*$", "", topic, flags=re.IGNORECASE)
+    # Strip "in detail" intensifier (filler phrase)
+    topic = re.sub(r"\s+in\s+detail\b", "", topic, flags=re.IGNORECASE)
+    # Strip page counts with qualifiers like "at least 7 pages"
+    topic = re.sub(r"\s+(?:at\s+least\s+|minimum\s+|at\s+most\s+|maximum\s+|around\s+|about\s+)?\d{1,2}\s*(?:page|pages)\b[^,]*", "", topic, flags=re.IGNORECASE)
     topic = re.sub(r"\s+\d{1,2}\s*(?:page|pages)\b", "", topic, flags=re.IGNORECASE)
-    # Strip delivery phrases like "give me pdf", "send me a pdf", "get me the docx"
+    # Strip "in a professional/formal/academic format/style"
+    topic = re.sub(r"\s+in\s+(?:a\s+)?(?:professional|simple|detailed|formal|academic|standard)\s+(?:format|style|manner|way|tone)\b.*$", "", topic, flags=re.IGNORECASE)
+    # Strip delivery phrases including "give me its download link"
     topic = re.sub(
-        r"\s+(?:give|send|get|provide|email|share)\s+(?:me\s+)?(?:a\s+|an\s+|the\s+)?(?:pdf|docx|word|txt|text|pptx|ppt|slides?|presentation|file|link|download)\b.*$",
+        r"\s+(?:and\s+)?(?:give|send|get|provide|email|share)\s+(?:me\s+)?(?:its\s+|a\s+|an\s+|the\s+)?(?:pdf|docx|word|txt|text|pptx|ppt|slides?|presentation|file|link|download)\b.*$",
         "",
         topic,
         flags=re.IGNORECASE,
@@ -529,6 +537,28 @@ def _normalize_body_line(line: str) -> str:
     return normalized
 
 
+def _deduplicate_content(content: str) -> str:
+    """Remove near-duplicate sentences and lines, preserving section headings."""
+    lines = str(content or "").splitlines()
+    seen_normalized: set[str] = set()
+    result: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            result.append(line)
+            continue
+        norm = re.sub(r"\s+", " ", stripped.lower().strip(".-– "))
+        if _looks_like_heading(stripped) or stripped.startswith("-"):
+            if norm not in seen_normalized:
+                seen_normalized.add(norm)
+                result.append(line)
+        else:
+            if norm not in seen_normalized:
+                seen_normalized.add(norm)
+                result.append(line)
+    return "\n".join(result)
+
+
 def _build_title(document_type: str, topic: str) -> str:
     _ = document_type
     return _smart_title_case(topic)
@@ -542,6 +572,19 @@ def _normalize_section_title(title: str) -> str:
     candidate = _normalize_body_line(title).strip("# ").strip()
     candidate = re.sub(r"^[0-9]+[.)]\s*", "", candidate)
     candidate = candidate.rstrip(":")
+    lowered = candidate.lower()
+    title_aliases = {
+        "background and history": "Background",
+        "background and context": "Background",
+        "technical background and context": "Background",
+        "comparison context": "Background",
+        "applications and use cases": "Applications",
+        "best-fit use cases": "Applications",
+        "challenges and limitations": "Challenges",
+        "tradeoffs and limitations": "Challenges",
+    }
+    if lowered in title_aliases:
+        return title_aliases[lowered]
     return _smart_title_case(candidate or "Section")
 
 
@@ -574,8 +617,8 @@ def _append_default_summary_sections(document_type: str, sections: list[Document
             DocumentSection(
                 "Conclusion",
                 [
-                    f"In conclusion, {topic.title()} should be understood through its background, central ideas, practical relevance, and broader significance.",
-                    "A strong conclusion should leave the reader with a clear final understanding of why the topic matters academically and professionally.",
+                    f"In conclusion, {topic.title()} occupies a significant place in academic and professional study, valued for its capacity to address complex challenges with systematic analysis.",
+                    f"Its historical development, core concepts, practical applications, and known limitations together form a complete picture of why {topic} continues to attract serious scholarly and applied attention.",
                 ],
             )
         )
@@ -1580,7 +1623,7 @@ def generate_document(
             include_references=include_references,
             citation_style=normalized_citation_style,
         )
-        content = str(content_payload.get("content") or "").strip()
+        content = _deduplicate_content(str(content_payload.get("content") or "").strip())
         if not content:
             raise RuntimeError("Document generation returned empty content.")
 

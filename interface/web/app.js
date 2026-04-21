@@ -6,7 +6,7 @@
 
   const FALLBACK_REPLY = "Something went wrong on my side. Try again.";
   const WAKE_FALLBACK = "Hey AURA";
-  const WAKE_ACKNOWLEDGEMENT = "Yes?";
+  const DEFAULT_WAKE_GREETING = "Hey. I'm here.";
   const COMMAND_NO_SPEECH_RETRY_LIMIT = 1;
   const CHAT_REQUEST_TIMEOUT_MS = 90000;
   const REFRESH_INTERVAL_MS = 120000;
@@ -68,6 +68,10 @@
     overlayMode: false,
     screenSharing: false,
     screenStream: null,
+    orbLayout: "topbar",
+    chatLocked: false,
+    chatMessages: [],
+    archivedChats: [],
     pendingSecurityPayload: null,
     pendingSecurityResolve: null,
     pendingSecurityReject: null,
@@ -96,8 +100,11 @@
     syncDetailsDrawer();
     setupRecognition();
     loadSavedOrbColor();
+    setOrbLayout("topbar");
     switchNav("chat");
     resetIdleTimer();
+    renderConversationThread();
+    renderArchivedChats();
     await refreshBrowserVoiceDiagnostics({ requestPermission: false });
     renderProviderList();
     renderActivityList();
@@ -174,6 +181,8 @@
       "clearMemoryBtn",
       "toolGrid",
       "memEpisodic", "memSemantic", "memWorking",
+      "archiveCurrentChat", "navArchiveList", "navArchiveEmpty", "lockChatButton",
+      "conversationThread", "conversationEmpty",
       // security modals
       "modalConfirm", "modalConfirmReason", "modalConfirmHint", "modalConfirmCancel", "modalConfirmOk",
       "modalSession", "modalSessionReason", "modalSessionHint", "modalSessionCancel", "modalSessionApprove",
@@ -189,23 +198,34 @@
   function bindEvents() {
     document.addEventListener("click", resetIdleTimer, { passive: true });
     document.addEventListener("keydown", resetIdleTimer, { passive: true });
-    el.detailsToggle.addEventListener("click", () => setDetailsOpen(!state.detailsOpen));
-    el.mobileBackdrop.addEventListener("click", () => setDetailsOpen(false));
-    el.refreshStatusButton.addEventListener("click", () => {
+    if (el.detailsToggle) el.detailsToggle.addEventListener("click", () => setDetailsOpen(!state.detailsOpen));
+    if (el.mobileBackdrop) el.mobileBackdrop.addEventListener("click", () => setDetailsOpen(false));
+    if (el.refreshStatusButton) el.refreshStatusButton.addEventListener("click", () => {
       void refreshStatus({ force: true, includeProviderRefresh: true });
     });
-    el.wakeModeButton.addEventListener("click", () => {
+    if (el.navSearch) {
+      el.navSearch.addEventListener("input", () => {
+        filterConversationLists(String(el.navSearch.value || ""));
+      });
+    }
+    if (el.archiveCurrentChat) {
+      el.archiveCurrentChat.addEventListener("click", archiveCurrentChat);
+    }
+    if (el.lockChatButton) {
+      el.lockChatButton.addEventListener("click", toggleChatLock);
+    }
+    if (el.wakeModeButton) el.wakeModeButton.addEventListener("click", () => {
       void toggleWakeMode();
     });
-    el.talkButton.addEventListener("click", () => {
+    if (el.talkButton) el.talkButton.addEventListener("click", () => {
       void startTalkCapture();
     });
-    el.interruptButton.addEventListener("click", interruptAssistant);
-    el.sendButton.addEventListener("click", () => {
+    if (el.interruptButton) el.interruptButton.addEventListener("click", interruptAssistant);
+    if (el.sendButton) el.sendButton.addEventListener("click", () => {
       void submitTextCommand();
     });
-    el.textCommandInput.addEventListener("keydown", handleTextInputKeydown);
-    el.assistantCoreButton.addEventListener("click", () => {
+    if (el.textCommandInput) el.textCommandInput.addEventListener("keydown", handleTextInputKeydown);
+    if (el.assistantCoreButton) el.assistantCoreButton.addEventListener("click", () => {
       void handleCoreButtonClick();
     });
     window.addEventListener("resize", handleResize);
@@ -225,7 +245,7 @@
     if (el.navNewChat) {
       el.navNewChat.addEventListener("click", () => {
         switchNav("chat");
-        clearConversationHistory();
+        clearConversationHistory({ keepArchiveState: true });
       });
     }
 
@@ -269,6 +289,7 @@
     // Clear history
     if (el.settingsClearHistory) {
       el.settingsClearHistory.addEventListener("click", () => {
+        clearConversationHistory({ keepArchiveState: true });
         addActivity("Settings", "Chat history cleared.", "neutral");
         updateLiveResponse("Chat history cleared.");
       });
@@ -538,8 +559,214 @@
     renderActivityList();
   }
 
+  function setOrbLayout(layout) {
+    state.orbLayout = layout;
+    if (el.body) {
+      el.body.dataset.orbLayout = layout;
+    }
+  }
+
+  function renderChatLockState() {
+    const locked = Boolean(state.chatLocked);
+    if (el.lockChatButton) {
+      el.lockChatButton.textContent = locked ? "Unlock chat" : "Lock chat";
+      el.lockChatButton.classList.toggle("is-locked", locked);
+    }
+    if (el.textCommandInput) {
+      el.textCommandInput.readOnly = locked;
+      el.textCommandInput.placeholder = locked ? "Chat is locked" : "Message AURA";
+    }
+  }
+
+  function toggleChatLock() {
+    state.chatLocked = !state.chatLocked;
+    renderChatLockState();
+    addActivity("Chat", state.chatLocked ? "This conversation was locked." : "This conversation was unlocked.", "neutral");
+    if (state.chatLocked) {
+      updateWakeBanner("This chat is locked. Unlock it to continue.");
+    } else {
+      updateWakeBanner(currentWakeBanner());
+    }
+    renderWakeControls();
+  }
+
+  function renderConversationThread() {
+    if (!el.conversationThread) {
+      return;
+    }
+
+    el.conversationThread.innerHTML = "";
+    const messages = Array.isArray(state.chatMessages) ? state.chatMessages : [];
+    if (!messages.length) {
+      if (el.conversationEmpty) {
+        el.conversationEmpty.hidden = false;
+        el.conversationThread.appendChild(el.conversationEmpty);
+      }
+      return;
+    }
+
+    if (el.conversationEmpty) {
+      el.conversationEmpty.hidden = true;
+    }
+
+    messages.forEach((message) => {
+      const item = document.createElement("article");
+      item.className = `conversation-message conversation-message--${message.role}`;
+
+      const label = document.createElement("p");
+      label.className = "conversation-label";
+      label.textContent = message.role === "assistant" ? "AURA" : "You";
+
+      const bubble = document.createElement("div");
+      bubble.className = "conversation-bubble";
+
+      const body = document.createElement("div");
+      body.className = "conversation-body";
+      if (message.role === "assistant") {
+        renderResponseContent(body, message.text);
+      } else {
+        body.textContent = message.text;
+      }
+
+      bubble.appendChild(body);
+
+      if (message.meta) {
+        const meta = document.createElement("p");
+        meta.className = "chat-meta";
+        meta.textContent = message.meta;
+        item.append(label, bubble, meta);
+      } else {
+        item.append(label, bubble);
+      }
+
+      el.conversationThread.appendChild(item);
+    });
+
+    el.conversationThread.scrollTop = el.conversationThread.scrollHeight;
+  }
+
+  function appendConversationMessage(role, text, { meta = "" } = {}) {
+    const safeText = String(text || "").trim();
+    if (!safeText) {
+      return;
+    }
+    state.chatMessages.push({
+      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      role,
+      text: safeText,
+      meta: String(meta || "").trim(),
+    });
+    renderConversationThread();
+  }
+
+  function archiveCurrentChat() {
+    if (!state.chatMessages.length) {
+      addActivity("Archive", "Nothing to archive yet.", "neutral");
+      return;
+    }
+
+    const firstUserMessage = state.chatMessages.find((item) => item.role === "user")?.text || "Archived chat";
+    const preview = state.chatMessages.find((item) => item.role === "assistant")?.text || firstUserMessage;
+    state.archivedChats.unshift({
+      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      title: firstUserMessage.slice(0, 56),
+      preview: preview.slice(0, 96),
+      messages: state.chatMessages.map((item) => ({ ...item })),
+      createdAt: formatTime(new Date()),
+    });
+    state.archivedChats = state.archivedChats.slice(0, 24);
+    renderArchivedChats();
+    clearConversationHistory({ keepArchiveState: true });
+    addActivity("Archive", "Current chat archived.", "good");
+  }
+
+  function restoreArchivedChat(chatId) {
+    const archived = state.archivedChats.find((item) => item.id === chatId);
+    if (!archived) {
+      return;
+    }
+    state.chatMessages = archived.messages.map((item) => ({ ...item }));
+    switchNav("chat");
+    setOrbLayout("left");
+    renderConversationThread();
+    const lastUser = [...state.chatMessages].reverse().find((item) => item.role === "user");
+    const lastAssistant = [...state.chatMessages].reverse().find((item) => item.role === "assistant");
+    updateLiveTranscript(lastUser?.text || "Waiting for your voice or text command.");
+    updateLiveResponse(lastAssistant?.text || "AURA is standing by.");
+    addActivity("Archive", "Archived conversation restored.", "neutral");
+  }
+
+  function renderArchivedChats(filterValue = String(el.navSearch?.value || "")) {
+    if (!el.navArchiveList) {
+      return;
+    }
+    const query = String(filterValue || "").trim().toLowerCase();
+    el.navArchiveList.innerHTML = "";
+
+    const visibleChats = state.archivedChats.filter((item) => {
+      if (!query) {
+        return true;
+      }
+      return `${item.title} ${item.preview}`.toLowerCase().includes(query);
+    });
+
+    if (!visibleChats.length) {
+      if (el.navArchiveEmpty) {
+        el.navArchiveEmpty.hidden = false;
+        el.navArchiveList.appendChild(el.navArchiveEmpty);
+      }
+      return;
+    }
+
+    if (el.navArchiveEmpty) {
+      el.navArchiveEmpty.hidden = true;
+    }
+
+    visibleChats.forEach((chat) => {
+      const item = document.createElement("button");
+      item.className = "nav-conv-item";
+      item.type = "button";
+      item.title = chat.preview;
+
+      const dot = document.createElement("span");
+      dot.className = "nav-conv-item__dot";
+
+      const text = document.createElement("span");
+      text.className = "nav-conv-item__text";
+      text.textContent = chat.title;
+
+      const time = document.createElement("span");
+      time.className = "nav-conv-item__time";
+      time.textContent = chat.createdAt;
+
+      item.append(dot, text, time);
+      item.addEventListener("click", () => restoreArchivedChat(chat.id));
+      el.navArchiveList.appendChild(item);
+    });
+  }
+
+  function filterConversationLists(filterValue) {
+    const query = String(filterValue || "").trim().toLowerCase();
+    if (el.navConversations) {
+      const items = Array.from(el.navConversations.querySelectorAll(".nav-conv-item"));
+      let visibleCount = 0;
+      items.forEach((item) => {
+        const matches = !query || String(item.textContent || "").toLowerCase().includes(query);
+        item.hidden = !matches;
+        if (matches) {
+          visibleCount += 1;
+        }
+      });
+      if (el.navConvEmpty) {
+        el.navConvEmpty.hidden = visibleCount > 0;
+      }
+    }
+    renderArchivedChats(query);
+  }
+
   function renderWakeControls() {
     el.wakeModeButton.classList.toggle("is-active", state.wakeModeEnabled);
+    renderChatLockState();
     if (!canUseVoice()) {
       el.wakeModeButton.textContent = "Wake unavailable";
     } else if (state.voicePhase === "wake_listening") {
@@ -549,7 +776,7 @@
     } else if (state.voicePhase === "interrupted") {
       el.wakeModeButton.textContent = "Interrupted";
     } else if (state.voicePhase === "processing") {
-      el.wakeModeButton.textContent = "Working";
+      el.wakeModeButton.textContent = "Analyzing";
     } else if (state.voicePhase === "speaking") {
       el.wakeModeButton.textContent = "Speaking";
     } else if (state.wakeModeEnabled) {
@@ -557,9 +784,12 @@
     } else {
       el.wakeModeButton.textContent = "Wake mode";
     }
-    el.wakeModeButton.disabled = state.voiceActionInFlight;
-    el.talkButton.disabled = !canUseVoice() || state.busy || state.voicePhase !== "idle" || state.voiceActionInFlight;
+    el.wakeModeButton.disabled = state.voiceActionInFlight || state.chatLocked;
+    el.talkButton.disabled = !canUseVoice() || state.busy || state.voicePhase !== "idle" || state.voiceActionInFlight || state.chatLocked;
     el.interruptButton.disabled = !(state.busy || state.recognitionActive || state.voicePhase !== "idle");
+    if (el.sendButton) {
+      el.sendButton.disabled = state.busy || state.chatLocked;
+    }
   }
 
   function setBrowserVoiceDiagnostics(patch) {
@@ -608,7 +838,7 @@
     const phaseLabels = {
       wake_listening:    "Listening…",
       command_listening: "Listening…",
-      processing:        "Thinking…",
+      processing:        "Analyzing…",
       speaking:          "Speaking…",
       interrupted:       "Interrupted",
     };
@@ -628,7 +858,7 @@
     } else if (state.voicePhase === "interrupted") {
       el.wakeModeStatus.textContent = "Interrupted";
     } else if (state.voicePhase === "processing") {
-      el.wakeModeStatus.textContent = "Thinking";
+      el.wakeModeStatus.textContent = "Analyzing";
     } else if (state.voicePhase === "speaking") {
       el.wakeModeStatus.textContent = "Speaking";
     } else if (state.wakeModeEnabled) {
@@ -1056,8 +1286,9 @@
         return false;
       }
 
-      state.wakeModeEnabled = true;
-      state.wakeModeGestureNeeded = false;
+    state.wakeModeEnabled = true;
+    state.wakeModeGestureNeeded = false;
+    setOrbLayout("center");
       state.commandRetryCount = 0;
       clearRecognitionStartTimer();
 
@@ -1477,19 +1708,22 @@
       remainingText: wakeMatch.remainingText,
     });
     addActivity("Wake detected", `AURA heard ${preferredWakePhrase()}.`, "good");
+    setOrbLayout("center");
     // Expand orb if minimized
     if (state.idleMinimized) restoreFromIdleMinimize();
 
     if (!wakeMatch.remainingText) {
-      updateLiveResponse(WAKE_ACKNOWLEDGEMENT, { provider: "local_wake", mode: "wake" });
+      const wakeGreeting = buildWakeGreeting();
+      updateLiveResponse(wakeGreeting, { provider: "local_wake", mode: "wake" });
       setAssistantState("listening", {
         pill: "Listening",
         kicker: "Wake detected",
-        headline: "Yes?",
+        headline: wakeGreeting,
         description: "I'm listening for your command now.",
       });
       updateWakeBanner("Wake detected. Go ahead.");
-      await speakAssistant(WAKE_ACKNOWLEDGEMENT, { resumeWakeAfter: false });
+      appendConversationMessage("assistant", wakeGreeting, { meta: "Wake greeting" });
+      await speakAssistant(wakeGreeting, { resumeWakeAfter: false });
       await transitionRecognitionMode("command", {
         automatic: true,
         resetCommandRetryCount: true,
@@ -1544,11 +1778,18 @@
       return;
     }
 
+    const routedCommand = classifyAssistantCommand(commandText);
+    if (routedCommand.route === "external") {
+      executeExternalRoute(commandText, routedCommand, { source: "voice" });
+      return;
+    }
+
     state.bargeInTriggered = false;
     setVoicePhase("processing");
+    beginInternalRoute(commandText, routedCommand);
     setAssistantState("thinking", {
       pill: "Thinking",
-      kicker: "Working",
+      kicker: routedCommand.taskType === "chat" ? "Conversation" : routedCommand.taskType,
       headline: "One second.",
       description: "I'm working through that now.",
     });
@@ -1564,11 +1805,13 @@
       const provider = assistantPayload.provider || "local";
 
       state.currentProvider = provider;
-      updateLiveTranscript(commandText);
       updateLiveResponse(answer, {
         provider,
         mode: assistantPayload.documentDelivery ? "document delivery" : "voice",
         documentDelivery: assistantPayload.documentDelivery,
+      });
+      appendConversationMessage("assistant", answer, {
+        meta: assistantPayload.documentDelivery ? "document delivery" : provider,
       });
       if (assistantPayload.documentDelivery) addOutputCard(assistantPayload.documentDelivery);
       addConversationEntry(commandText, answer);
@@ -1587,6 +1830,10 @@
 
   async function submitTextCommand() {
     if (state.busy) {
+      return;
+    }
+    if (state.chatLocked) {
+      updateWakeBanner("This chat is locked. Unlock it to continue.");
       return;
     }
 
@@ -1623,8 +1870,13 @@
       return;
     }
 
+    const routedCommand = classifyAssistantCommand(text);
     el.textCommandInput.value = "";
-    updateLiveTranscript(text);
+    if (routedCommand.route === "external") {
+      executeExternalRoute(text, routedCommand, { source: "text" });
+      return;
+    }
+    beginInternalRoute(text, routedCommand);
     if (state.recognitionActive) {
       state.recognitionHandoffPending = true;
       stopRecognition();
@@ -1632,7 +1884,7 @@
     }
     setAssistantState("thinking", {
       pill: "Thinking",
-      kicker: "Text command",
+      kicker: routedCommand.taskType === "chat" ? "Conversation" : routedCommand.taskType,
       headline: "One second.",
       description: "I'm working through that now.",
     });
@@ -1650,6 +1902,9 @@
         provider,
         mode: assistantPayload.documentDelivery ? "document delivery" : (assistantPayload.mode || "text"),
         documentDelivery: assistantPayload.documentDelivery,
+      });
+      appendConversationMessage("assistant", answer, {
+        meta: assistantPayload.documentDelivery ? "document delivery" : provider,
       });
       if (assistantPayload.documentDelivery) addOutputCard(assistantPayload.documentDelivery);
       addConversationEntry(text, answer);
@@ -1932,6 +2187,13 @@
   function setIdleState() {
     const wakePhrase = preferredWakePhrase();
     const standbyActive = state.voicePhase === "wake_listening";
+    if (standbyActive) {
+      setOrbLayout("center");
+    } else if (state.chatMessages.length) {
+      setOrbLayout("left");
+    } else if (state.orbLayout !== "floating") {
+      setOrbLayout("topbar");
+    }
     setAssistantState("idle", {
       pill: standbyActive ? "Standby" : "Idle",
       kicker: standbyActive ? "Standby" : "Idle",
@@ -2371,6 +2633,16 @@
     return currentRuntime().message || "AURA is routing around an unhealthy path right now.";
   }
 
+  function currentUserName() {
+    const user = state.auth?.user || {};
+    return user.preferred_name || user.name || user.username || "";
+  }
+
+  function buildWakeGreeting() {
+    const name = String(currentUserName() || "").trim();
+    return name ? `Hey ${name}, I'm here.` : DEFAULT_WAKE_GREETING;
+  }
+
   function preferredWakePhrase() {
     return state.voiceStatus?.wake_word?.default_phrase || state.voiceStatus?.settings?.wake_words?.[0] || WAKE_FALLBACK;
   }
@@ -2704,16 +2976,153 @@
   function detectNavCommand(text) {
     const lower = String(text || "").toLowerCase().trim();
     const patterns = [
-      { nav: "profile",  re: /\b(?:open|go\s+to|show|switch\s+to|view)\s+(?:my\s+)?profile\b/ },
-      { nav: "settings", re: /\b(?:open|go\s+to|show|switch\s+to|view)\s+settings\b/ },
-      { nav: "memory",   re: /\b(?:open|go\s+to|show|switch\s+to|view)\s+memory\b/ },
-      { nav: "tools",    re: /\b(?:open|go\s+to|show|switch\s+to|view)\s+tools\b/ },
-      { nav: "chat",     re: /\b(?:open|go\s+to|show|switch\s+to|go\s+back\s+to)\s+(?:main\s+)?(?:chat|home|assistant)\b/ },
+      { nav: "profile",  re: /\b(?:open|go\s+to|show|switch\s+to|view|click|navigate\s+to)\s+(?:my\s+)?profile\b/ },
+      { nav: "settings", re: /\b(?:open|go\s+to|show|switch\s+to|view|click|navigate\s+to)\s+settings\b/ },
+      { nav: "memory",   re: /\b(?:open|go\s+to|show|switch\s+to|view|click|navigate\s+to)\s+memory\b/ },
+      { nav: "tools",    re: /\b(?:open|go\s+to|show|switch\s+to|view|click|navigate\s+to)\s+tools\b/ },
+      { nav: "chat",     re: /\b(?:open|go\s+to|show|switch\s+to|go\s+back\s+to|click)\s+(?:main\s+)?(?:chat|home|assistant)\b/ },
     ];
     for (const { nav, re } of patterns) {
       if (re.test(lower)) return nav;
     }
     return null;
+  }
+
+  function normalizeCommandText(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+  }
+
+  function resolveExternalTarget(text) {
+    const normalized = normalizeCommandText(text);
+    const websiteMap = [
+      { label: "YouTube", pattern: /\b(?:open|launch|go to)\s+youtube\b/, url: "https://www.youtube.com" },
+      { label: "Google", pattern: /\b(?:open|launch|go to)\s+google\b/, url: "https://www.google.com" },
+      { label: "GitHub", pattern: /\b(?:open|launch|go to)\s+github\b/, url: "https://www.github.com" },
+      { label: "Gmail", pattern: /\b(?:open|launch|go to)\s+gmail\b/, url: "https://mail.google.com" },
+      { label: "WhatsApp", pattern: /\b(?:open|launch|go to)\s+whatsapp\b/, url: "https://web.whatsapp.com" },
+      { label: "Spotify", pattern: /\b(?:open|launch|go to)\s+spotify\b/, url: "https://open.spotify.com" },
+    ];
+
+    for (const entry of websiteMap) {
+      if (entry.pattern.test(normalized)) {
+        return { ...entry, kind: "website" };
+      }
+    }
+
+    const rawUrlMatch = normalized.match(/\b((?:https?:\/\/)?(?:www\.)?[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)\b/i);
+    if (/\b(?:open|launch|go to|visit)\b/.test(normalized) && rawUrlMatch) {
+      const rawUrl = rawUrlMatch[1];
+      const url = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+      return {
+        label: rawUrl.replace(/^https?:\/\//i, "").replace(/^www\./i, ""),
+        kind: "website",
+        url,
+      };
+    }
+
+    return null;
+  }
+
+  function classifyAssistantCommand(text) {
+    const normalized = normalizeCommandText(text);
+    const externalTarget = resolveExternalTarget(normalized);
+    if (externalTarget) {
+      return {
+        route: "external",
+        taskType: "website",
+        label: externalTarget.label,
+        target: externalTarget,
+      };
+    }
+
+    const internalMatchers = [
+      { taskType: "coding", re: /\b(?:write|build|generate|show)\b.*\b(?:python|javascript|java|code|program|script|app)\b/ },
+      { taskType: "assignment", re: /\b(?:assignment|notes|slides|presentation|document|pdf|docx|pptx)\b/ },
+      { taskType: "research", re: /\b(?:research|search|find|look up|latest|current|compare)\b/ },
+      { taskType: "writing", re: /\b(?:write|draft|compose|create)\b/ },
+    ];
+
+    for (const matcher of internalMatchers) {
+      if (matcher.re.test(normalized)) {
+        return {
+          route: "internal",
+          taskType: matcher.taskType,
+          label: matcher.taskType,
+          target: null,
+        };
+      }
+    }
+
+    return {
+      route: "internal",
+      taskType: "chat",
+      label: "chat",
+      target: null,
+    };
+  }
+
+  function beginInternalRoute(commandText, route) {
+    setOrbLayout("left");
+    setAssistantState("understanding", {
+      pill: "Analyzing",
+      kicker: route.taskType === "chat" ? "Conversation" : route.taskType,
+      headline: "Working on it.",
+      description: "I'm routing this through AURA now.",
+    });
+    updateLiveTranscript(commandText);
+    appendConversationMessage("user", commandText, { meta: route.taskType });
+  }
+
+  function executeExternalRoute(commandText, route, { source = "text" } = {}) {
+    setOrbLayout("floating");
+    updateLiveTranscript(commandText);
+    appendConversationMessage("user", commandText, { meta: "external" });
+    setAssistantState("understanding", {
+      pill: "Analyzing",
+      kicker: "External task",
+      headline: `Opening ${route.label}.`,
+      description: "I'll keep the orb available while the external action runs.",
+    });
+
+    let opened = false;
+    try {
+      const popup = window.open(route.target.url, "_blank", "noopener,noreferrer");
+      opened = Boolean(popup);
+    } catch (_error) {
+      opened = false;
+    }
+
+    const reply = opened
+      ? `Opening ${route.label}.`
+      : `I tried to open ${route.label}, but this browser blocked the action.`;
+    updateLiveResponse(reply, { provider: "local", mode: "external" });
+    appendConversationMessage("assistant", reply, { meta: opened ? "external action" : "browser blocked" });
+    addConversationEntry(commandText, reply);
+    addActivity("External task", reply, opened ? "good" : "warn");
+    updateWakeBanner(opened ? `${route.label} is opening now.` : "This browser blocked the external action.");
+
+    if (source !== "text") {
+      void speakAssistant(reply, { resumeWakeAfter: true });
+    } else if (opened) {
+      setAssistantState("idle", {
+        pill: "Idle",
+        kicker: "External task",
+        headline: `${route.label} is opening.`,
+        description: "AURA is still here when you need the next command.",
+      });
+    } else {
+      setAssistantState("error", {
+        pill: "Error",
+        kicker: "External task",
+        headline: "The action was blocked.",
+        description: "This browser blocked the external command. Try again from a direct click if needed.",
+      });
+    }
+
+    return true;
   }
 
   // ─────────────────────────────────────────────
@@ -3177,14 +3586,25 @@
     // Keep max 20 entries
     const items = el.navConversations.querySelectorAll(".nav-conv-item");
     items.forEach((c, i) => { if (i >= 20) c.remove(); });
+    filterConversationLists(String(el.navSearch?.value || ""));
   }
 
-  function clearConversationHistory() {
+  function clearConversationHistory({ keepArchiveState = false } = {}) {
     if (!el.navConversations) return;
     el.navConversations.querySelectorAll(".nav-conv-item").forEach((c) => c.remove());
     if (el.navConvEmpty) el.navConvEmpty.hidden = false;
+    if (!keepArchiveState) {
+      state.archivedChats = [];
+      renderArchivedChats();
+    }
+    state.chatMessages = [];
+    renderConversationThread();
+    state.chatLocked = false;
+    renderChatLockState();
+    setOrbLayout("topbar");
     updateLiveTranscript("Waiting for your voice or text command.");
     updateLiveResponse("AURA is standing by.");
+    updateWakeBanner(currentWakeBanner());
   }
 
 })();

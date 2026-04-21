@@ -3,19 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AURA | Live Assistant Console</title>
+  <title>AURA</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body data-assistant-state="idle">
-
-  <!-- ═══════════════════════════════════════════════
-       SECURITY MODALS
-  ═══════════════════════════════════════════════ -->
-
-  <!-- Private: Confirm popup -->
+<body data-assistant-state="idle" data-orb-layout="topbar">
   <div class="modal-overlay" id="modalConfirm" hidden aria-modal="true" role="dialog" aria-labelledby="modalConfirmTitle">
     <div class="modal-card">
       <div class="modal-icon modal-icon--private">
@@ -31,7 +25,6 @@
     </div>
   </div>
 
-  <!-- Sensitive: Session approval -->
   <div class="modal-overlay" id="modalSession" hidden aria-modal="true" role="dialog" aria-labelledby="modalSessionTitle">
     <div class="modal-card">
       <div class="modal-icon modal-icon--sensitive">
@@ -47,7 +40,6 @@
     </div>
   </div>
 
-  <!-- Critical: PIN / OTP modal -->
   <div class="modal-overlay" id="modalPin" hidden aria-modal="true" role="dialog" aria-labelledby="modalPinTitle">
     <div class="modal-card">
       <div class="modal-icon modal-icon--critical">
@@ -57,8 +49,7 @@
       <p class="modal-reason" id="modalPinReason">This action requires your security PIN.</p>
       <p class="modal-hint" id="modalPinHint"></p>
       <div class="modal-pin-field">
-        <input id="modalPinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8"
-               placeholder="Enter PIN" autocomplete="current-password" aria-label="Security PIN">
+        <input id="modalPinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Enter PIN" autocomplete="current-password" aria-label="Security PIN">
         <p class="modal-pin-error" id="modalPinError" hidden></p>
       </div>
       <div class="modal-actions">
@@ -68,116 +59,60 @@
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════════
-       MAIN SHELL
-  ═══════════════════════════════════════════════ -->
-
-  <div class="console-shell">
-
-    <!-- TOP HEADER -->
-    <header class="console-header">
-      <div class="identity-block">
-        <!-- Minimized orb lives here when idle for 2 min -->
-        <div class="orb-mini" id="orbMini" aria-hidden="true">
-          <span class="orb-mini__dot"></span>
+  <div class="app-shell">
+    <aside class="nav-sidebar" id="navSidebar" aria-label="Chat sidebar">
+      <div class="nav-brand">
+        <div class="nav-brand__orb" id="navBrandOrb" aria-hidden="true"></div>
+        <div class="nav-brand__text">
+          <p class="nav-brand__name">AURA</p>
+          <p class="nav-brand__sub" id="navBrandSub">Standby</p>
         </div>
-        <div class="identity-text">
-          <p class="eyebrow">Autonomous Universal Responsive Assistant</p>
-          <h1>AURA</h1>
-        </div>
-        <p class="identity-summary" id="presenceSummary">Private voice-first assistant console.</p>
       </div>
 
-      <div class="header-actions">
-        <div class="state-pill" id="statePill" role="status" aria-live="polite">
-          <span class="state-pill__dot"></span>
-          <span id="statePillLabel">Idle</span>
-        </div>
-        <!-- Screen share indicator (shown when active) -->
-        <div class="screen-share-badge" id="screenShareBadge" hidden>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/></svg>
-          Sharing
-        </div>
-        <button class="detail-button" id="overlayToggle" type="button" title="Toggle floating orb overlay" aria-pressed="false">
-          Overlay
+      <div class="nav-actions">
+        <button class="nav-new-chat" id="navNewChat" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          New chat
         </button>
-        <button class="detail-button" id="detailsToggle" type="button" aria-expanded="false" aria-controls="detailsDrawer">
-          Details
-        </button>
+        <div class="nav-search-wrap">
+          <svg class="nav-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input class="nav-search-input" id="navSearch" type="text" placeholder="Search chats" autocomplete="off" aria-label="Search chats">
+        </div>
       </div>
-    </header>
 
-    <div class="mobile-backdrop" id="mobileBackdrop" hidden></div>
-
-    <!-- BODY: left nav + center + right panel -->
-    <div class="console-body">
-
-      <!-- LEFT NAVIGATION -->
-      <nav class="nav-sidebar" id="navSidebar" aria-label="Main navigation">
-
-        <!-- Brand -->
-        <div class="nav-brand">
-          <div class="nav-brand__orb" id="navBrandOrb" aria-hidden="true"></div>
-          <div class="nav-brand__text">
-            <p class="nav-brand__name">AURA</p>
-            <p class="nav-brand__sub" id="navBrandSub">Standby</p>
-          </div>
+      <section class="nav-section nav-section--history">
+        <div class="nav-section-head">
+          <p class="nav-section-label">Chat history</p>
         </div>
-
-        <!-- New Chat -->
-        <div class="nav-section">
-          <button class="nav-new-chat" id="navNewChat" type="button">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-            New chat
-          </button>
+        <div class="nav-conversations" id="navConversations">
+          <p class="nav-conv-empty" id="navConvEmpty">No messages yet.</p>
         </div>
+      </section>
 
-        <!-- Search -->
-        <div class="nav-section">
-          <div class="nav-search-wrap">
-            <svg class="nav-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input class="nav-search-input" id="navSearch" type="text" placeholder="Search chats..." autocomplete="off" aria-label="Search chat history">
-          </div>
+      <section class="nav-section nav-section--archive">
+        <div class="nav-section-head">
+          <p class="nav-section-label">Archive</p>
+          <button class="archive-action" id="archiveCurrentChat" type="button">Archive current</button>
         </div>
-
-        <!-- Conversation history -->
-        <div class="nav-section nav-section--history">
-          <p class="nav-section-label">This session</p>
-          <div class="nav-conversations" id="navConversations">
-            <p class="nav-conv-empty" id="navConvEmpty">No messages yet.</p>
-          </div>
+        <div class="nav-conversations nav-conversations--archive" id="navArchiveList">
+          <p class="nav-conv-empty" id="navArchiveEmpty">No archived chats.</p>
         </div>
+        <button class="lock-chat-button" id="lockChatButton" type="button">Lock chat</button>
+      </section>
 
-        <!-- Main nav items -->
-        <div class="nav-section nav-section--nav">
-          <button class="nav-item nav-item--active" id="navChat" data-nav="chat" type="button" aria-label="Chat">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
-            <span class="nav-label">Chat</span>
-          </button>
-          <button class="nav-item" id="navMemory" data-nav="memory" type="button" aria-label="Memory">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-            </svg>
-            <span class="nav-label">Memory</span>
-          </button>
-          <button class="nav-item" id="navTools" data-nav="tools" type="button" aria-label="Tools">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-            </svg>
-            <span class="nav-label">Tools</span>
-          </button>
-        </div>
+      <div class="nav-footer">
+        <button class="nav-item nav-item--active" id="navChat" data-nav="chat" type="button">Chat</button>
+        <button class="nav-item" id="navMemory" data-nav="memory" type="button">Memory</button>
+        <button class="nav-item" id="navTools" data-nav="tools" type="button">Tools</button>
+        <button class="nav-item" id="navProfile" data-nav="profile" type="button">Profile</button>
+        <button class="nav-item" id="navSettings" data-nav="settings" type="button">Settings</button>
 
-        <!-- User / settings footer -->
         <div class="nav-user-area">
-          <button class="nav-user-btn" id="navProfile" data-nav="profile" type="button" aria-label="Profile">
+          <div class="nav-user-btn">
             <div class="nav-user-avatar" id="navUserAvatar">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
@@ -188,313 +123,303 @@
               <p class="nav-user-name" id="navUserName">Guest</p>
               <p class="nav-user-status" id="navUserStatus">Public mode</p>
             </div>
-          </button>
-          <button class="nav-settings-trigger" id="navSettings" data-nav="settings" type="button" aria-label="Settings">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
-          </button>
+          </div>
         </div>
-
-      </nav>
-
-      <!-- CENTER MAIN STAGE -->
-      <main class="presence-stage">
-
-        <!-- NAV PANELS (shown when nav item selected) -->
-        <section class="nav-panel" id="panelMemory" data-panel="memory" hidden>
-          <div class="panel-header">
-            <p class="eyebrow">System</p>
-            <h2>Memory</h2>
-          </div>
-          <p class="panel-description">AURA's active memory layers — episodic, semantic, and working memory — are managed here.</p>
-          <div class="panel-stats" id="memoryStats">
-            <div class="stat-row"><span>Episodic events</span><strong id="memEpisodic">—</strong></div>
-            <div class="stat-row"><span>Semantic entries</span><strong id="memSemantic">—</strong></div>
-            <div class="stat-row"><span>Working memory</span><strong id="memWorking">—</strong></div>
-          </div>
-          <button class="panel-btn" id="clearMemoryBtn" type="button">Clear working memory</button>
-        </section>
-
-        <section class="nav-panel" id="panelTools" data-panel="tools" hidden>
-          <div class="panel-header">
-            <p class="eyebrow">System</p>
-            <h2>Tools</h2>
-          </div>
-          <p class="panel-description">Active AURA capabilities and agent tools.</p>
-          <div class="tool-grid" id="toolGrid"></div>
-        </section>
-
-        <section class="nav-panel" id="panelProfile" data-panel="profile" hidden>
-          <div class="panel-header">
-            <p class="eyebrow">Account</p>
-            <h2>Profile</h2>
-          </div>
-          <!-- Guest / unauthenticated view -->
-          <div class="profile-guest" id="profileGuestView">
-            <p class="panel-description">Sign in to access personal features, wake mode, and session memory.</p>
-            <div class="profile-links">
-              <a class="panel-btn" id="profileAuthLink" href="/login">Sign in</a>
-              <a class="panel-btn" id="profileRegisterLink" href="/register">Create account</a>
-            </div>
-          </div>
-          <!-- Authenticated user view -->
-          <div class="profile-user" id="profileUserView" hidden>
-            <div class="profile-avatar-row">
-              <div class="profile-avatar" id="profileAvatar">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                  <circle cx="12" cy="7" r="4"/>
-                </svg>
-              </div>
-              <div>
-                <p class="profile-welcome" id="profileWelcome">Welcome back</p>
-                <p class="profile-status-line" id="profileSummaryText">Signed in</p>
-              </div>
-            </div>
-            <div class="profile-fields">
-              <div class="profile-field">
-                <label class="profile-field-label">Name</label>
-                <p class="profile-field-value" id="profileFieldName">—</p>
-              </div>
-              <div class="profile-field">
-                <label class="profile-field-label">Email</label>
-                <p class="profile-field-value" id="profileFieldEmail">—</p>
-              </div>
-              <div class="profile-field">
-                <label class="profile-field-label">Phone</label>
-                <p class="profile-field-value" id="profileFieldPhone">Not set</p>
-              </div>
-              <div class="profile-field">
-                <label class="profile-field-label">Session</label>
-                <p class="profile-field-value" id="profileFieldSession">Active</p>
-              </div>
-              <div class="profile-field profile-field--action" id="profileOtpRow">
-                <label class="profile-field-label">Two-factor auth</label>
-                <button class="profile-toggle" id="profileOtpToggle" type="button" data-enabled="false" aria-label="Toggle two-factor authentication" title="Toggle OTP / 2FA">
-                  <span class="profile-toggle__track">
-                    <span class="profile-toggle__thumb"></span>
-                  </span>
-                  <span class="profile-toggle__label" id="profileOtpLabel">Off</span>
-                </button>
-              </div>
-            </div>
-            <div class="profile-actions">
-              <a class="panel-btn" id="profilePasswordLink" href="/forgot-password">Change password</a>
-              <a class="panel-btn" href="/security">Security settings</a>
-              <a class="panel-btn panel-btn--danger" id="profileLogoutLink" href="/logout">Sign out</a>
-            </div>
-          </div>
-        </section>
-
-        <section class="nav-panel" id="panelSettings" data-panel="settings" hidden>
-          <div class="panel-header">
-            <p class="eyebrow">System</p>
-            <h2>Settings</h2>
-          </div>
-          <div class="settings-group">
-            <p class="settings-label">Orb color</p>
-            <div class="color-swatches" id="colorSwatches" aria-label="Orb color presets">
-              <button class="color-swatch color-swatch--active" data-color="blue" style="--swatch: #7ed6ff" title="Blue" aria-label="Blue" type="button"></button>
-              <button class="color-swatch" data-color="purple" style="--swatch: #c084fc" title="Purple" aria-label="Purple" type="button"></button>
-              <button class="color-swatch" data-color="green" style="--swatch: #6ad7a0" title="Green" aria-label="Green" type="button"></button>
-              <button class="color-swatch" data-color="red" style="--swatch: #ef8794" title="Red" aria-label="Red" type="button"></button>
-              <button class="color-swatch" data-color="gold" style="--swatch: #f3c56f" title="Gold" aria-label="Gold" type="button"></button>
-              <button class="color-swatch" data-color="cyan" style="--swatch: #67e8f9" title="Cyan" aria-label="Cyan" type="button"></button>
-              <button class="color-swatch" data-color="white" style="--swatch: #f5f8fd" title="White" aria-label="White" type="button"></button>
-            </div>
-            <p class="settings-hint">Or say "change color to purple" to AURA.</p>
-          </div>
-          <div class="settings-group">
-            <p class="settings-label">Voice language</p>
-            <p class="settings-value" id="settingsVoiceLang">en-US</p>
-          </div>
-          <div class="settings-group">
-            <p class="settings-label">Session</p>
-            <button class="panel-btn" id="settingsClearHistory" type="button">Clear chat history</button>
-          </div>
-        </section>
-
-        <!-- MAIN CHAT VIEW -->
-        <section class="assistant-core" id="chatView">
-          <button class="core-orb" id="assistantCoreButton" type="button"
-                  aria-label="Toggle wake mode or start listening">
-            <span class="core-orb__ring core-orb__ring--outer"></span>
-            <span class="core-orb__ring core-orb__ring--mid"></span>
-            <span class="core-orb__ring core-orb__ring--inner"></span>
-            <span class="core-orb__pulse"></span>
-            <span class="core-orb__center"></span>
-          </button>
-
-          <div class="core-status">
-            <p class="core-status__kicker" id="stateKicker">Standby</p>
-            <h2 id="stateHeadline">Ready when you are.</h2>
-            <p id="stateDescription">Wake mode works while this page stays open. Say "Hey AURA" after microphone access is granted, or use the controls below.</p>
-          </div>
-
-          <!-- Idle suggestion chips — shown after 2 min inactivity -->
-          <div class="idle-suggestions" id="idleSuggestions" hidden>
-            <p class="idle-suggestions__hint">Quick actions</p>
-            <div class="idle-suggestions__row">
-              <button class="idle-chip" data-fill="Summarize this" type="button">Summarize this</button>
-              <button class="idle-chip" data-fill="Generate an assignment on " type="button">Generate assignment</button>
-              <button class="idle-chip" data-fill="Search the web for " type="button">Search the web</button>
-              <button class="idle-chip" data-fill="Explain " type="button">Ask something</button>
-            </div>
-          </div>
-        </section>
-
-        <section class="live-panels" id="livePanels">
-          <article class="live-card">
-            <p class="eyebrow">Heard</p>
-            <div class="live-copy" id="liveTranscript" aria-live="polite">Waiting for your voice or text command.</div>
-          </article>
-
-          <article class="live-card live-card--response">
-            <p class="eyebrow">Response</p>
-            <div class="live-copy live-copy--response" id="liveResponse" aria-live="polite">AURA is standing by.</div>
-            <div class="response-meta">
-              <span id="responseMetaProvider">Provider: checking...</span>
-              <span id="responseMetaMode">Mode: public</span>
-            </div>
-            <div class="document-delivery" id="documentDeliveryPanel" hidden></div>
-          </article>
-        </section>
-
-      </main>
-
-      <!-- RIGHT CONTEXT DRAWER -->
-      <aside class="details-drawer" id="detailsDrawer" aria-label="Context panel">
-        <section class="drawer-card">
-          <div class="drawer-card__head">
-            <div>
-              <p class="eyebrow">Assistant route</p>
-              <h2>State</h2>
-            </div>
-            <button class="detail-button detail-button--quiet" id="refreshStatusButton" type="button">Refresh</button>
-          </div>
-          <div class="detail-list">
-            <div class="detail-row">
-              <span>Access</span>
-              <strong id="accessMode">Checking</strong>
-            </div>
-            <div class="detail-row">
-              <span>Brain</span>
-              <strong id="brainState">Checking</strong>
-            </div>
-            <div class="detail-row">
-              <span>Active provider</span>
-              <strong id="activeProvider">Checking</strong>
-            </div>
-            <div class="detail-row">
-              <span>Wake mode</span>
-              <strong id="wakeModeStatus">Checking</strong>
-            </div>
-            <div class="detail-row">
-              <span>Screen share</span>
-              <strong id="screenShareStatus">Off</strong>
-            </div>
-          </div>
-          <div class="screen-preview-wrap" id="screenPreviewWrap" hidden>
-            <video id="screenPreviewVideo" class="screen-preview-video" autoplay muted playsinline></video>
-            <p class="screen-preview-note">Live capture — context analysis: future-ready</p>
-          </div>
-          <p class="drawer-note" id="routeSummary">Checking runtime...</p>
-        </section>
-
-        <section class="drawer-card">
-          <div class="drawer-card__head">
-            <div>
-              <p class="eyebrow">Providers</p>
-              <h2>Live truth</h2>
-            </div>
-          </div>
-          <div class="provider-list" id="providersList"></div>
-        </section>
-
-        <section class="drawer-card">
-          <div class="drawer-card__head">
-            <div>
-              <p class="eyebrow">Outputs</p>
-              <h2>Recent documents</h2>
-            </div>
-          </div>
-          <div class="output-list" id="outputList">
-            <p class="provider-empty">No documents generated yet.</p>
-          </div>
-        </section>
-
-        <section class="drawer-card">
-          <div class="drawer-card__head">
-            <div>
-              <p class="eyebrow">Voice diagnostics</p>
-              <h2>Browser microphone</h2>
-            </div>
-          </div>
-          <div class="detail-list">
-            <div class="detail-row">
-              <span>Wake mode</span>
-              <strong id="browserVoiceMode">Checking</strong>
-            </div>
-            <div class="detail-row">
-              <span>Microphone permission</span>
-              <strong id="micPermissionState">Checking</strong>
-            </div>
-            <div class="detail-row">
-              <span>Input device</span>
-              <strong id="inputDeviceSummary">Checking</strong>
-            </div>
-            <div class="detail-row">
-              <span>Last transcript</span>
-              <strong id="lastTranscriptSummary">No data yet</strong>
-            </div>
-            <div class="detail-row">
-              <span>Last voice issue</span>
-              <strong id="lastVoiceIssue">No issues yet</strong>
-            </div>
-          </div>
-        </section>
-
-        <section class="drawer-card">
-          <div class="drawer-card__head">
-            <div>
-              <p class="eyebrow">Session</p>
-              <h2>Account and activity</h2>
-            </div>
-          </div>
-          <p class="drawer-note" id="accountSummary">Checking session state.</p>
-          <div class="drawer-actions">
-            <a class="detail-link" id="authActionLink" href="/login">Sign in</a>
-            <a class="detail-link" id="adminLink" href="/admin" hidden>Admin</a>
-          </div>
-          <div class="activity-list" id="activityList"></div>
-        </section>
-      </aside>
-    </div>
-
-    <!-- BOTTOM CONTROL DOCK -->
-    <footer class="control-dock">
-      <div class="wake-banner" id="wakeBanner">Wake mode is loading.</div>
-      <div class="control-row">
-        <button class="dock-button dock-button--primary" id="wakeModeButton" type="button">Wake mode</button>
-        <button class="dock-button" id="talkButton" type="button">Talk</button>
-        <button class="dock-button dock-button--quiet" id="interruptButton" type="button">Interrupt</button>
-        <button class="dock-button dock-button--screen" id="screenShareButton" type="button" title="Share your screen with AURA">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <rect x="2" y="3" width="20" height="14" rx="2"/>
-            <polyline points="8 21 12 17 16 21"/>
-          </svg>
-          Screen
-        </button>
-
-        <div class="text-command-shell">
-          <input id="textCommandInput" type="text" placeholder="Text command" autocomplete="off" aria-label="Type a text command">
-        </div>
-
-        <button class="dock-button dock-button--secondary" id="sendButton" type="button">Send</button>
       </div>
-    </footer>
+    </aside>
+
+    <div class="workspace">
+      <header class="console-header">
+        <div class="identity-block">
+          <div class="identity-text">
+            <p class="eyebrow">Autonomous Universal Responsive Assistant</p>
+            <h1>AURA</h1>
+            <p class="identity-summary" id="presenceSummary">Private assistant conversation console.</p>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <div class="state-pill" id="statePill" role="status" aria-live="polite">
+            <span class="state-pill__dot"></span>
+            <span id="statePillLabel">Idle</span>
+          </div>
+          <div class="screen-share-badge" id="screenShareBadge" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/></svg>
+            Sharing
+          </div>
+          <button class="detail-button detail-button--quiet" id="overlayToggle" type="button" aria-pressed="false">Overlay</button>
+          <button class="detail-button detail-button--quiet" id="detailsToggle" type="button" aria-expanded="false" aria-controls="detailsDrawer">Details</button>
+          <button class="orb-mini" id="orbMini" type="button" aria-label="AURA orb">
+            <span class="orb-mini__dot"></span>
+          </button>
+        </div>
+      </header>
+
+      <div class="mobile-backdrop" id="mobileBackdrop" hidden></div>
+
+      <div class="console-body">
+        <main class="presence-stage">
+          <section class="chat-view" id="chatView">
+            <div class="assistant-core">
+              <button class="core-orb" id="assistantCoreButton" type="button" aria-label="Activate AURA">
+                <span class="core-orb__ring core-orb__ring--outer"></span>
+                <span class="core-orb__ring core-orb__ring--mid"></span>
+                <span class="core-orb__ring core-orb__ring--inner"></span>
+                <span class="core-orb__pulse"></span>
+                <span class="core-orb__center"></span>
+              </button>
+
+              <div class="core-status">
+                <p class="core-status__kicker" id="stateKicker">Standby</p>
+                <h2 id="stateHeadline">Ready when you are.</h2>
+                <p id="stateDescription">Say "Hey AURA" after wake mode is active, or use Talk and the composer below.</p>
+              </div>
+
+              <div class="idle-suggestions" id="idleSuggestions" hidden>
+                <p class="idle-suggestions__hint">Quick actions</p>
+                <div class="idle-suggestions__row">
+                  <button class="idle-chip" data-fill="Write 10 python programs" type="button">Write code</button>
+                  <button class="idle-chip" data-fill="Write assignment on artificial intelligence" type="button">Make assignment</button>
+                  <button class="idle-chip" data-fill="Open YouTube" type="button">Open YouTube</button>
+                  <button class="idle-chip" data-fill="Explain artificial intelligence simply" type="button">Ask AURA</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="chat-thread-shell">
+              <div class="chat-thread" id="conversationThread">
+                <div class="chat-empty" id="conversationEmpty">
+                  <p class="chat-empty__eyebrow">AURA ready</p>
+                  <h3>Talk to AURA like a real assistant.</h3>
+                  <p>Internal work opens a chat flow. External actions can run while the orb stays present.</p>
+                </div>
+              </div>
+
+              <section class="live-panels" id="livePanels">
+                <article class="live-card live-card--user">
+                  <p class="eyebrow">You</p>
+                  <div class="live-copy" id="liveTranscript" aria-live="polite">Waiting for your voice or text command.</div>
+                </article>
+
+                <article class="live-card live-card--response">
+                  <p class="eyebrow">AURA</p>
+                  <div class="live-copy live-copy--response" id="liveResponse" aria-live="polite">AURA is standing by.</div>
+                  <div class="response-meta">
+                    <span id="responseMetaProvider">Provider: checking...</span>
+                    <span id="responseMetaMode">Mode: public</span>
+                  </div>
+                  <div class="document-delivery" id="documentDeliveryPanel" hidden></div>
+                </article>
+              </section>
+            </div>
+          </section>
+
+          <section class="nav-panel" id="panelMemory" data-panel="memory" hidden>
+            <div class="panel-header">
+              <p class="eyebrow">System</p>
+              <h2>Memory</h2>
+            </div>
+            <p class="panel-description">AURA's active memory layers are tracked here.</p>
+            <div class="panel-stats" id="memoryStats">
+              <div class="stat-row"><span>Episodic events</span><strong id="memEpisodic">-</strong></div>
+              <div class="stat-row"><span>Semantic entries</span><strong id="memSemantic">-</strong></div>
+              <div class="stat-row"><span>Working memory</span><strong id="memWorking">-</strong></div>
+            </div>
+            <button class="panel-btn" id="clearMemoryBtn" type="button">Clear working memory</button>
+          </section>
+
+          <section class="nav-panel" id="panelTools" data-panel="tools" hidden>
+            <div class="panel-header">
+              <p class="eyebrow">System</p>
+              <h2>Tools</h2>
+            </div>
+            <p class="panel-description">Active AURA capabilities and available tools.</p>
+            <div class="tool-grid" id="toolGrid"></div>
+          </section>
+
+          <section class="nav-panel" id="panelProfile" data-panel="profile" hidden>
+            <div class="panel-header">
+              <p class="eyebrow">Account</p>
+              <h2>Profile</h2>
+            </div>
+            <div class="profile-guest" id="profileGuestView">
+              <p class="panel-description">Sign in to unlock protected features and persistent identity.</p>
+              <div class="profile-links">
+                <a class="panel-btn" id="profileAuthLink" href="/login">Sign in</a>
+                <a class="panel-btn" id="profileRegisterLink" href="/register">Create account</a>
+              </div>
+            </div>
+            <div class="profile-user" id="profileUserView" hidden>
+              <div class="profile-avatar-row">
+                <div class="profile-avatar" id="profileAvatar">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                </div>
+                <div>
+                  <p class="profile-welcome" id="profileWelcome">Welcome back</p>
+                  <p class="profile-status-line" id="profileSummaryText">Signed in</p>
+                </div>
+              </div>
+              <div class="profile-fields">
+                <div class="profile-field">
+                  <label class="profile-field-label">Name</label>
+                  <p class="profile-field-value" id="profileFieldName">-</p>
+                </div>
+                <div class="profile-field">
+                  <label class="profile-field-label">Email</label>
+                  <p class="profile-field-value" id="profileFieldEmail">-</p>
+                </div>
+                <div class="profile-field">
+                  <label class="profile-field-label">Phone</label>
+                  <p class="profile-field-value" id="profileFieldPhone">Not set</p>
+                </div>
+                <div class="profile-field">
+                  <label class="profile-field-label">Session</label>
+                  <p class="profile-field-value" id="profileFieldSession">Active</p>
+                </div>
+                <div class="profile-field profile-field--action" id="profileOtpRow">
+                  <label class="profile-field-label">Two-factor auth</label>
+                  <button class="profile-toggle" id="profileOtpToggle" type="button" data-enabled="false" aria-label="Toggle two-factor authentication">
+                    <span class="profile-toggle__track"><span class="profile-toggle__thumb"></span></span>
+                    <span class="profile-toggle__label" id="profileOtpLabel">Off</span>
+                  </button>
+                </div>
+              </div>
+              <div class="profile-actions">
+                <a class="panel-btn" id="profilePasswordLink" href="/forgot-password">Forgot password</a>
+                <a class="panel-btn" href="/security">Security settings</a>
+                <a class="panel-btn panel-btn--danger" id="profileLogoutLink" href="/logout">Sign out</a>
+              </div>
+            </div>
+          </section>
+
+          <section class="nav-panel" id="panelSettings" data-panel="settings" hidden>
+            <div class="panel-header">
+              <p class="eyebrow">System</p>
+              <h2>Settings</h2>
+            </div>
+            <div class="settings-group">
+              <p class="settings-label">Orb color</p>
+              <div class="color-swatches" id="colorSwatches" aria-label="Orb color presets">
+                <button class="color-swatch color-swatch--active" data-color="blue" style="--swatch: #7ed6ff" title="Blue" type="button"></button>
+                <button class="color-swatch" data-color="purple" style="--swatch: #c084fc" title="Purple" type="button"></button>
+                <button class="color-swatch" data-color="green" style="--swatch: #6ad7a0" title="Green" type="button"></button>
+                <button class="color-swatch" data-color="red" style="--swatch: #ef8794" title="Red" type="button"></button>
+                <button class="color-swatch" data-color="gold" style="--swatch: #f3c56f" title="Gold" type="button"></button>
+                <button class="color-swatch" data-color="cyan" style="--swatch: #67e8f9" title="Cyan" type="button"></button>
+                <button class="color-swatch" data-color="white" style="--swatch: #f5f8fd" title="White" type="button"></button>
+              </div>
+            </div>
+            <div class="settings-group">
+              <p class="settings-label">Voice language</p>
+              <p class="settings-value" id="settingsVoiceLang">en-US</p>
+            </div>
+            <div class="settings-group">
+              <button class="panel-btn" id="settingsClearHistory" type="button">Clear chat history</button>
+            </div>
+          </section>
+        </main>
+
+        <aside class="details-drawer" id="detailsDrawer" aria-label="Details drawer">
+          <section class="drawer-card">
+            <div class="drawer-card__head">
+              <div>
+                <p class="eyebrow">Assistant route</p>
+                <h2>State</h2>
+              </div>
+              <button class="detail-button detail-button--quiet" id="refreshStatusButton" type="button">Refresh</button>
+            </div>
+            <div class="detail-list">
+              <div class="detail-row"><span>Access</span><strong id="accessMode">Checking</strong></div>
+              <div class="detail-row"><span>Brain</span><strong id="brainState">Checking</strong></div>
+              <div class="detail-row"><span>Active provider</span><strong id="activeProvider">Checking</strong></div>
+              <div class="detail-row"><span>Wake mode</span><strong id="wakeModeStatus">Checking</strong></div>
+              <div class="detail-row"><span>Screen share</span><strong id="screenShareStatus">Off</strong></div>
+            </div>
+            <div class="screen-preview-wrap" id="screenPreviewWrap" hidden>
+              <video id="screenPreviewVideo" class="screen-preview-video" autoplay muted playsinline></video>
+              <p class="screen-preview-note">Live capture available.</p>
+            </div>
+            <p class="drawer-note" id="routeSummary">Checking runtime...</p>
+          </section>
+
+          <section class="drawer-card">
+            <div class="drawer-card__head">
+              <div>
+                <p class="eyebrow">Providers</p>
+                <h2>Live truth</h2>
+              </div>
+            </div>
+            <div class="provider-list" id="providersList"></div>
+          </section>
+
+          <section class="drawer-card">
+            <div class="drawer-card__head">
+              <div>
+                <p class="eyebrow">Outputs</p>
+                <h2>Recent documents</h2>
+              </div>
+            </div>
+            <div class="output-list" id="outputList">
+              <p class="provider-empty">No documents generated yet.</p>
+            </div>
+          </section>
+
+          <section class="drawer-card">
+            <div class="drawer-card__head">
+              <div>
+                <p class="eyebrow">Voice diagnostics</p>
+                <h2>Browser microphone</h2>
+              </div>
+            </div>
+            <div class="detail-list">
+              <div class="detail-row"><span>Wake mode</span><strong id="browserVoiceMode">Checking</strong></div>
+              <div class="detail-row"><span>Microphone permission</span><strong id="micPermissionState">Checking</strong></div>
+              <div class="detail-row"><span>Input device</span><strong id="inputDeviceSummary">Checking</strong></div>
+              <div class="detail-row"><span>Last transcript</span><strong id="lastTranscriptSummary">No data yet</strong></div>
+              <div class="detail-row"><span>Last voice issue</span><strong id="lastVoiceIssue">No issues yet</strong></div>
+            </div>
+          </section>
+
+          <section class="drawer-card">
+            <div class="drawer-card__head">
+              <div>
+                <p class="eyebrow">Session</p>
+                <h2>Account</h2>
+              </div>
+            </div>
+            <p class="drawer-note" id="accountSummary">Checking session state.</p>
+            <div class="drawer-actions">
+              <a class="detail-link" id="authActionLink" href="/login">Sign in</a>
+              <a class="detail-link" id="adminLink" href="/admin" hidden>Admin</a>
+            </div>
+            <div class="activity-list" id="activityList"></div>
+          </section>
+        </aside>
+      </div>
+
+      <footer class="control-dock">
+        <div class="wake-banner" id="wakeBanner">Wake mode is loading.</div>
+        <div class="control-row">
+          <button class="dock-button dock-button--primary" id="wakeModeButton" type="button">Wake mode</button>
+          <button class="dock-button" id="talkButton" type="button">Talk</button>
+          <button class="dock-button dock-button--quiet" id="interruptButton" type="button">Interrupt</button>
+          <button class="dock-button dock-button--screen" id="screenShareButton" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <rect x="2" y="3" width="20" height="14" rx="2"/>
+              <polyline points="8 21 12 17 16 21"/>
+            </svg>
+            Screen
+          </button>
+          <div class="text-command-shell">
+            <input id="textCommandInput" type="text" placeholder="Message AURA" autocomplete="off" aria-label="Message AURA">
+          </div>
+          <button class="dock-button dock-button--secondary" id="sendButton" type="button">Send</button>
+        </div>
+      </footer>
+    </div>
   </div>
 
   <script src="/static/app.js"></script>

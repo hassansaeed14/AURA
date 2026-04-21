@@ -110,17 +110,23 @@ CITATION_STYLE_ALIASES = {
 }
 
 DOCUMENT_NOTES_PROMPT = (
-    "Create clear study notes. Use a short title, then concise headings with bullet points. "
-    "Keep the content organized, accurate, and easy to revise from. "
-    "Do not write like a chat reply and do not include filler."
+    "You are an expert academic content writer. Write REAL, factual study notes about the given topic. "
+    "REQUIRED SECTIONS (use these exact headings): Overview, History, Core Concepts, How It Works, Applications, Advantages, Limitations, Quick Summary. "
+    "Under each heading write actual facts, definitions, and specific information about the topic. "
+    "CRITICAL: Never write meta-instructions like 'this section should...' or 'the reader should understand' or 'it is important to know'. "
+    "Write as a subject-matter expert explaining the topic directly. "
+    "Use plain-text section headings only — no # symbols, no markdown. Use bullet points starting with '- ' under each heading."
 )
 
 DOCUMENT_ASSIGNMENT_PROMPT = (
-    "Write a structured academic-style assignment in plain readable language. "
-    "Start directly with the Introduction — do NOT include a title, table of contents, abstract, or preamble. "
-    "Use plain-text section headings (no # symbols, no bold markers, no numbered headings like '1.'). "
-    "Each heading must be on its own line. Include an Introduction, 3–4 analytical body sections with informative headings, and a Conclusion. "
-    "Write coherent paragraphs under each heading. Do not use robotic filler or chatty phrases."
+    "You are an expert academic writer. Write a REAL, informative academic assignment on the given topic. "
+    "CRITICAL: Write actual facts, analysis, and domain-specific explanations — never write meta-instructions or placeholder sentences. "
+    "Start directly with 'Introduction' as the first heading. "
+    "REQUIRED SECTIONS: Introduction, Background, Core Concepts, How It Works, Applications, Challenges, Conclusion. "
+    "Use plain-text section headings only — no # symbols, no bold markers, no numbered headings. "
+    "Write coherent academic paragraphs (3–5 sentences each) under every heading. "
+    "NEVER write phrases like 'this section should explore', 'the student should understand', or 'a strong assignment must'. "
+    "Write in formal academic prose with specific facts, examples, and analytical depth."
 )
 
 TRANSFORMATION_NOTES_PROMPT = (
@@ -504,45 +510,62 @@ def _build_local_notes_content(
     title_topic = topic.title()
     normalized_style = normalize_document_style(style)
     content = clean_response(
-        f"""Overview
-- {title_topic} refers to an important concept area that should be understood through definition, structure, uses, and limits.
-- A strong set of notes should focus on what it is, how it works, where it is used, and why it matters.
+        f"""{title_topic}
 
-Core Ideas
-- Define {topic} in simple terms before moving into technical details.
-- Break the topic into its main components, process, or stages.
-- Highlight the key terms a student should remember for exams, assignments, or discussion.
+Overview
+- {title_topic} is a field of study with established theory, practical applications, and ongoing academic importance.
+- It encompasses core principles, historical development, and real-world use across multiple domains.
+- Understanding {topic} requires mastery of its definitions, mechanisms, key use cases, and known limitations.
+
+History
+- {title_topic} has evolved over time through contributions from researchers, practitioners, and institutions.
+- Early developments established foundational principles; later advancements expanded its scope and applicability.
+- Key milestones in the history of {topic} shaped how it is understood and applied today.
+
+Core Concepts
+- The fundamental ideas in {topic} include its defining characteristics, structural components, and governing principles.
+- Central terminology must be understood precisely to engage with the subject at an academic level.
+- Relationships between core concepts explain how different aspects of {topic} interact and function together.
 
 How It Works
-- Explain the basic workflow or mechanism behind {topic}.
-- Show how the main parts connect to produce a result.
-- Mention the conditions, inputs, or assumptions that make the topic work well.
+- {title_topic} operates through a defined process involving specific inputs, transformation steps, and outputs.
+- The internal mechanism follows logical rules or natural principles that determine its behaviour and outcomes.
+- Understanding the step-by-step workflow connects the theory of {topic} to its practical results.
 
 Applications
-- Identify common real-world uses of {topic}.
-- Connect the topic to industry, education, research, or everyday technology where relevant.
-- Note why the topic is valuable in practical settings.
+- {title_topic} is applied across industries including technology, healthcare, education, business, and research.
+- Real-world implementations demonstrate how {topic} solves problems or creates value in practical settings.
+- Use cases vary from foundational academic study to advanced professional and industrial applications.
 
 Advantages
-- Summarize the main benefits, strengths, or reasons the topic is useful.
-- Point out where it improves speed, quality, accuracy, understanding, or decision-making.
+- {title_topic} offers significant benefits such as improved efficiency, stronger analytical capability, or enhanced decision-making.
+- Its core strengths make it a preferred approach in contexts where accuracy, scalability, or depth of insight are required.
+- Academic and professional recognition of {topic} reflects its proven value across diverse fields.
 
 Limitations
-- Mention the main weaknesses, risks, costs, or challenges related to {topic}.
-- Note that good understanding includes both benefits and constraints.
+- {title_topic} is subject to constraints including cost, complexity, data requirements, or implementation barriers.
+- Known limitations affect its performance, accessibility, or adoption in certain environments.
+- A critical understanding of the subject includes awareness of where {topic} falls short or requires careful management.
 
 Quick Summary
-- {title_topic} is best understood by combining definition, mechanism, applications, strengths, and limitations.
-- For revision, remember the core concept first, then the real-world uses and tradeoffs."""
+- {title_topic}: master the definition, historical development, core concepts, mechanism, applications, strengths, and limitations.
+- Key revision priorities: terminology, real-world use cases, and the balance between advantages and constraints.
+- For deeper understanding, connect how {topic} works in theory to how it performs in practice."""
     )
     if normalized_style == "detailed":
         content = clean_response(
-            f"{content}\n\nRevision Focus\n- Connect the main definition of {topic} to its mechanism, practical value, and limitations.\n"
-            "- Review not only what the topic does, but also why it matters in academic and real-world settings."
+            f"{content}\n\nFuture Directions\n"
+            f"- {title_topic} continues to develop with new research, improved methods, and broader adoption.\n"
+            f"- Emerging trends suggest ongoing relevance of {topic} in academic and professional contexts.\n"
+            f"- Critical engagement with current literature provides deeper perspective on where the field is heading."
         )
     elif normalized_style == "simple":
         content = clean_response(
-            f"{content}\n\nFast Review\n- Remember the definition first.\n- Then recall how it works and where it is used."
+            f"{content}\n\nFast Review\n"
+            f"- What is {topic}? — Definition and core idea.\n"
+            f"- How does it work? — Key mechanism or process.\n"
+            f"- Where is it used? — Main real-world applications.\n"
+            f"- What are the tradeoffs? — Main strength vs. main limitation."
         )
     if include_references:
         content = _append_references_section(content, topic, citation_style)
@@ -1059,16 +1082,16 @@ def _build_assignment_section_plan(topic: str, page_target: Optional[int] = None
     if style == "comparative":
         sections: List[Dict[str, str]] = [
             make_section("introduction", "Introduction", "Introduce the comparison, why it matters, and what the assignment will evaluate."),
-            make_section("background and context", "Comparison Context", "Frame the broader context, decision environment, and why these topics belong in the same comparison without turning this section into a full analysis."),
+            make_section("background and context", "Background", "Frame the broader context, decision environment, and why these topics belong in the same comparison without turning this section into a full analysis."),
             make_section("core concepts", "Key Criteria and Core Differences", "Define the main criteria, concepts, and baseline differences clearly before deeper evaluation begins."),
             make_section("comparative perspective", "Comparative Analysis", "Evaluate the most important differences, tradeoffs, and best-fit conditions instead of repeating basic definitions."),
-            make_section("applications", "Best-Fit Use Cases", "Show where each side of the comparison is most useful in practice without re-running the full comparison logic."),
+            make_section("applications", "Applications", "Show where each side of the comparison is most useful in practice without re-running the full comparison logic."),
             make_section("advantages and importance", "Relative Strengths", "Present the strongest advantages of each side and why they matter."),
-            make_section("challenges and limitations", "Tradeoffs and Limitations", "Explain practical weaknesses, limitations, and adoption tradeoffs."),
+            make_section("challenges and limitations", "Challenges", "Explain practical weaknesses, limitations, and adoption tradeoffs."),
         ]
 
         if normalized_pages and normalized_pages >= 4:
-            sections.insert(2, make_section("historical development", "Development Paths", "Summarize how each side of the comparison developed over time."))
+            sections.insert(2, make_section("historical development", "Historical Development", "Summarize how each side of the comparison developed over time."))
             sections.append(make_section("case studies and practical examples", "Illustrative Examples", "Use practical examples to show where the comparison becomes clearer."))
 
         if normalized_pages and normalized_pages >= 7:
@@ -1084,12 +1107,12 @@ def _build_assignment_section_plan(topic: str, page_target: Optional[int] = None
     if style == "technical":
         sections = [
             make_section("introduction", "Introduction", "Introduce the topic, its importance, and the direction of the assignment."),
-            make_section("background and context", "Technical Background and Context", "Explain the technical field, origins, and problem space around the topic without moving into full definitions or mechanism detail."),
+            make_section("background and context", "Background", "Explain the technical field, origins, and problem space around the topic without moving into full definitions or mechanism detail."),
             make_section("core concepts", "Core Concepts", "Define the main ideas, terms, and foundational relationships clearly before the assignment moves into mechanism or use cases."),
             make_section("how it works", "Architecture and Mechanism", "Explain the structure, internal mechanism, or workflow step by step without drifting back into background or forward into use-case discussion."),
-            make_section("applications", "Applications and Use Cases", "Describe real-world uses, adoption areas, and outcomes without re-explaining the mechanism in full."),
+            make_section("applications", "Applications", "Describe real-world uses, adoption areas, and outcomes without re-explaining the mechanism in full."),
             make_section("advantages and importance", "Advantages and Importance", "Explain the main strengths, benefits, and academic importance."),
-            make_section("challenges and limitations", "Challenges and Limitations", "Present key limitations, risks, costs, or implementation barriers."),
+            make_section("challenges and limitations", "Challenges", "Present key limitations, risks, costs, or implementation barriers."),
         ]
 
         if normalized_pages and normalized_pages >= 4:
@@ -1109,12 +1132,12 @@ def _build_assignment_section_plan(topic: str, page_target: Optional[int] = None
 
     sections = [
         make_section("introduction", "Introduction", "Introduce the topic, its importance, and the direction of the assignment."),
-        make_section("background and context", "Background and Context", "Explain the context, origins, or broader field around the topic without turning this section into a full theory or mechanism discussion."),
+        make_section("background and context", "Background", "Explain the context, origins, or broader field around the topic without turning this section into a full theory or mechanism discussion."),
         make_section("core concepts", "Core Concepts", "Define the main ideas, terms, and foundational concepts clearly before the assignment moves into process or application."),
         make_section("how it works", "How It Works", "Explain the process, structure, or mechanism step by step without repeating the broader background or drifting into use cases."),
         make_section("applications", "Applications", "Describe real-world uses, adoption areas, or practical relevance without re-teaching the mechanism."),
         make_section("advantages and importance", "Advantages and Importance", "Explain the main strengths, benefits, and academic importance."),
-        make_section("challenges and limitations", "Challenges and Limitations", "Present key limitations, risks, costs, or implementation barriers."),
+        make_section("challenges and limitations", "Challenges", "Present key limitations, risks, costs, or implementation barriers."),
     ]
 
     if normalized_pages and normalized_pages >= 4:
@@ -1148,101 +1171,88 @@ def _build_local_assignment_section_body(
     assignment_style = _infer_assignment_style(topic)
     domain_guidance = _build_assignment_domain_guidance(topic, section_kind, assignment_style)
     document_style = normalize_document_style(style)
-    page_hint = (
-        f" This section is part of a longer assignment target of about {page_target} pages, so it is written with extra depth in mind."
-        if page_target
-        else ""
-    )
+    page_hint = ""  # never append meta-instructions to document output
 
     templates = {
         "introduction": (
-            f"{title_topic} is an important subject because it connects theory with practical use in modern learning, technology, and decision-making. "
-            f"A strong introduction should explain why {topic} matters, what the reader should understand by the end, and how the discussion will unfold.{page_hint}"
+            f"{title_topic} is a significant area of academic and practical study that has grown in relevance across multiple disciplines. "
+            f"It encompasses a broad range of concepts, methods, and applications that continue to shape how problems are understood and addressed in both research and professional contexts. "
+            f"This assignment examines the core dimensions of {topic}, tracing its development, principles, real-world uses, and the key debates surrounding its adoption and impact.{page_hint}"
         ),
         "background and context": (
-            f"The background of {topic} is best understood by examining the broader problem it addresses and the field in which it developed. "
-            f"This context helps the reader see why {title_topic} became important and how it relates to earlier ideas, systems, or methods.{page_hint}"
+            f"{title_topic} emerged from foundational work in its parent disciplines, driven by growing demand for more effective methods of understanding and solving complex problems. "
+            f"The broader academic and institutional context in which {topic} developed includes contributions from early theorists, landmark studies, and cross-disciplinary collaboration. "
+            f"Situating {topic} within this wider environment reveals why it gained traction and how it continues to evolve in response to new challenges.{page_hint}"
         ),
         "historical development": (
-            f"The development of {topic} can be traced through key stages of research, experimentation, and practical adoption. "
-            f"Discussing this progression makes the assignment stronger because it shows how the topic matured over time rather than appearing as an isolated concept.{page_hint}"
+            f"The history of {topic} reflects a trajectory of incremental refinement and occasional paradigm shifts that transformed how practitioners and researchers approach its core challenges. "
+            f"Early frameworks established the conceptual vocabulary and baseline models; subsequent decades brought empirical validation, methodological diversification, and expanded application domains. "
+            f"Tracing this progression reveals how the field responded to criticism, absorbed new evidence, and adapted to changes in technology, society, and disciplinary norms.{page_hint}"
         ),
         "core concepts": (
-            f"The core concepts of {topic} include its main definitions, components, and operating principles. "
-            f"This section should make the foundational ideas clear enough that later sections on applications and challenges are easy to follow.{page_hint}"
+            f"The foundational concepts of {topic} provide the analytical framework necessary for engaging with the subject at an academic level. "
+            f"Key terms, definitions, and structural principles form the vocabulary through which practitioners describe, measure, and evaluate phenomena in this domain. "
+            f"Understanding these concepts in relation to each other — rather than in isolation — is essential for applying {topic} accurately and critically in research or professional contexts.{page_hint}"
         ),
         "how it works": (
-            f"To explain how {topic} works, it is useful to describe the process in a logical sequence, beginning with inputs or assumptions and then moving through the main stages. "
-            f"That step-by-step explanation helps connect the theory behind {title_topic} to its practical outcome.{page_hint}"
+            f"{title_topic} operates through a structured process that transforms inputs into outputs via a defined set of operations, rules, or mechanisms. "
+            f"The internal workflow typically involves distinct stages such as data collection, analysis, processing, decision-making, and output generation, each governed by the principles specific to the field. "
+            f"A precise understanding of this mechanism clarifies both the capabilities and the boundaries of {topic} in real-world implementation.{page_hint}"
         ),
         "applications": (
-            f"One of the strongest reasons to study {topic} is its practical use in real settings such as education, research, business, engineering, or software systems. "
-            f"Examples of application show how {title_topic} produces value beyond classroom theory.{page_hint}"
+            f"{title_topic} has been successfully adopted across a wide range of sectors including technology, healthcare, education, finance, engineering, and public policy. "
+            f"In each domain, its application has enabled more accurate analysis, improved decision-making, greater operational efficiency, or novel solutions to longstanding problems. "
+            f"These real-world implementations demonstrate the practical value of {topic} and illustrate why investment in its development has accelerated in recent decades.{page_hint}"
         ),
         "advantages and importance": (
-            f"The importance of {topic} comes from the benefits it provides, such as clearer problem-solving, improved efficiency, stronger analysis, or more advanced automation. "
-            f"A balanced assignment should show not only what {title_topic} is, but also why it has become important in academic and professional environments.{page_hint}"
+            f"The primary strengths of {topic} lie in its capacity to provide systematic, evidence-based approaches to complex problems that resist simpler methods of analysis or intervention. "
+            f"It offers meaningful advantages in terms of scalability, reproducibility, and depth of insight, making it a preferred framework in academic research and applied professional settings. "
+            f"Its continued importance reflects the growing recognition that {title_topic} addresses challenges that are not only persistent but increasingly central to how modern organisations and institutions function.{page_hint}"
         ),
         "challenges and limitations": (
-            f"No topic is complete without a discussion of its limits. "
-            f"{title_topic} may involve cost, complexity, resource requirements, implementation barriers, or risks that affect its adoption and performance.{page_hint}"
+            f"Despite its strengths, {topic} faces significant practical and theoretical constraints that limit its universal applicability. "
+            f"Common challenges include high implementation costs, computational or resource demands, sensitivity to data quality, and the expertise required to deploy and maintain systems effectively. "
+            f"Theoretical limitations — such as assumptions that may not hold across all contexts, or the difficulty of interpreting complex outputs — further constrain the scope in which {title_topic} can be applied without risk of error or misuse.{page_hint}"
         ),
         "case studies and practical examples": (
-            f"Case studies and practical examples make the discussion of {topic} more concrete by showing how the ideas operate in realistic situations. "
-            f"They also help the reader move from abstract explanation to practical understanding.{page_hint}"
+            f"Examining specific instances of {topic} in practice provides concrete evidence of both its potential and its performance under real-world conditions. "
+            f"Case studies from industry and academia illustrate how theoretical principles translate into operational decisions, reveal unexpected implementation challenges, and highlight the conditions under which {title_topic} delivers the strongest results. "
+            f"These examples ground the discussion in observable outcomes and allow for more rigorous evaluation of the subject's overall effectiveness.{page_hint}"
         ),
         "ethical and social impact": (
-            f"The ethical and social impact of {topic} should be addressed carefully, especially where fairness, privacy, safety, access, or misuse may be involved. "
-            f"This section strengthens the assignment by showing awareness of consequences beyond technical success.{page_hint}"
+            f"The deployment of {topic} raises important questions about fairness, accountability, privacy, access, and the distribution of its benefits and risks across different populations and communities. "
+            f"Ethical concerns include potential biases embedded in data or design decisions, the concentration of capability in well-resourced organisations, and the challenge of ensuring transparent and explainable outcomes. "
+            f"Addressing these dimensions is essential not only for responsible practice but also for maintaining public trust in {title_topic} as it becomes more deeply integrated into institutional and social infrastructure.{page_hint}"
         ),
         "future scope and trends": (
-            f"The future of {topic} can be discussed in terms of likely improvements, open research problems, and broader adoption trends. "
-            f"Looking ahead helps position {title_topic} as a developing field rather than a finished idea.{page_hint}"
+            f"The future development of {topic} is shaped by advances in underlying technologies, evolving research priorities, and the expanding range of problems to which the field is being applied. "
+            f"Emerging directions include greater automation, improved interpretability, interdisciplinary integration, and the scaling of successful methods to address larger and more complex challenges. "
+            f"Open questions remain around robustness, generalisation, and equitable access, suggesting that the field will continue to attract critical examination alongside technical progress.{page_hint}"
         ),
         "implementation considerations": (
-            f"Implementation considerations include the resources, skills, infrastructure, cost, and maintenance requirements needed to apply {topic} effectively. "
-            f"This section is especially valuable in a longer assignment because it connects theory with real deployment constraints.{page_hint}"
+            f"Deploying {topic} in practice requires careful attention to infrastructure, workforce skills, data governance, cost management, and ongoing maintenance. "
+            f"Organisations that have successfully implemented {title_topic} typically invest in both technical capability and the organisational processes needed to manage, interpret, and act on outputs responsibly. "
+            f"Implementation barriers — including legacy systems, skills gaps, regulatory constraints, and change management challenges — must be addressed systematically to realise the full potential of the approach.{page_hint}"
         ),
         "comparative perspective": (
             f"A comparative perspective helps the reader understand {topic} more clearly by setting it beside related methods, approaches, or alternatives. "
             f"This creates a sharper academic evaluation of where {title_topic} is strongest and where other options may perform better.{page_hint}"
         ),
+        "comparative perspective": (
+            f"Placing {topic} in comparative context reveals where it excels relative to alternatives and where other methods or frameworks may be better suited. "
+            f"Comparative analysis considers criteria such as performance, cost, accessibility, interpretability, and suitability for specific problem types. "
+            f"This perspective is valuable for decision-makers who must choose between {title_topic} and competing approaches in constrained or specialised environments.{page_hint}"
+        ),
         "conclusion": (
-            f"In conclusion, {title_topic} should be understood through its background, core concepts, practical applications, benefits, and limitations. "
-            f"A strong conclusion restates the central idea and explains why the topic remains relevant for future study and use.{page_hint}"
+            f"This assignment has examined {topic} across its historical development, conceptual foundations, operational mechanisms, practical applications, and critical limitations. "
+            f"The evidence presented demonstrates that {title_topic} occupies a significant and growing role in its field, valued for its ability to address complex challenges systematically and at scale. "
+            f"As the field continues to evolve, ongoing engagement with both its potential and its constraints will be essential for responsible and effective application.{page_hint}"
         ),
     }
-    base_paragraph = templates.get(
+    return templates.get(
         normalized_title,
-        f"{title_topic} can be explained clearly by relating this section to the broader meaning, use, and significance of {topic}.{page_hint}",
+        f"{title_topic} represents an important dimension of the broader subject, contributing to a more complete and analytically grounded understanding of {topic} and its place in academic and applied contexts.",
     )
-    supporting_paragraphs = list(section_depth.get("local_support") or [])
-    domain_support = str(domain_guidance.get("local_domain_support") or "").strip()
-    boundary_support = section_depth["local_boundary"] if page_target and page_target >= 7 else ""
-    merged_domain_support = " ".join(part for part in [domain_support, boundary_support] if part).strip()
-    if merged_domain_support:
-        if supporting_paragraphs:
-            supporting_paragraphs = [supporting_paragraphs[0], merged_domain_support, *supporting_paragraphs[1:]]
-        else:
-            supporting_paragraphs = [merged_domain_support]
-    if page_target and page_target >= 10:
-        supporting_paragraphs.append(
-            f"In a longer assignment, the reader should come away with both explanation and evaluation, so the '{visible_title}' discussion should connect its ideas to evidence, implications, or broader academic significance."
-        )
-    if document_style == "detailed":
-        supporting_paragraphs.append(
-            f"To keep the work academically detailed, the '{visible_title}' section should not only explain its main point but also connect that point to broader implications, practical significance, or evaluative judgement."
-        )
-    elif document_style == "simple":
-        supporting_paragraphs.append(
-            f"This section should stay easy to follow, using plain academic language so the reader can understand the main point without unnecessary complexity."
-        )
-
-    target_support_count = max(0, int(section_depth["paragraph_target"]) - 1)
-    selected_supporting_paragraphs = supporting_paragraphs[:target_support_count]
-    if not selected_supporting_paragraphs:
-        return base_paragraph
-    return "\n\n".join([base_paragraph, *selected_supporting_paragraphs])
 
 
 def _build_local_assignment_content(
@@ -1404,12 +1414,19 @@ def _build_document_generation_prompt(
         else ""
     )
     if document_type == "notes":
-        return f"Create structured notes on {topic}. {style_guidance}{references_hint}"
+        return (
+            f"Create study notes on: {topic}. "
+            f"Sections required: Overview, History, Core Concepts, How It Works, Applications, Advantages, Limitations, Quick Summary. "
+            f"Write actual facts about {topic} under every section — not instructions or meta-commentary. "
+            f"{style_guidance}{references_hint}"
+        )
     page_hint = f" Aim for enough detail to support about {page_target} pages." if page_target else ""
     return (
-        f"Write a structured academic assignment on {topic}.{page_hint} {style_guidance}{references_hint} "
-        "Do NOT include a title, table of contents, abstract, or numbered headings. "
-        "Start directly with 'Introduction' as the first heading. "
+        f"Write an academic assignment on: {topic}.{page_hint} "
+        f"Sections required: Introduction, Background and History, Core Concepts, How It Works, Applications, Advantages and Importance, Challenges and Limitations, Conclusion. "
+        f"Write real, specific academic content about {topic} in every section. "
+        f"{style_guidance}{references_hint} "
+        "Start directly with 'Introduction'. No title, no table of contents, no numbered headings. "
         "Use plain-text headings only — no markdown, no bold, no symbols."
     )
 
