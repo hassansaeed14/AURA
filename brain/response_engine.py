@@ -39,13 +39,32 @@ RECENT_CONTEXT_MESSAGES = 10
 DEFAULT_MAX_TOKENS = 2048
 DEFAULT_TEMPERATURE = 0.7
 
-FALLBACK_USER_MESSAGE = "I ran into a problem while generating a response. Please try again."
+FALLBACK_USER_MESSAGE = "I couldn't get a clean answer out of the live response path just now. Please try again in a moment."
 BAD_RESPONSE_MARKERS = (
     "as an ai",
     "i cannot help",
     "i apologize but",
     "i'm just a language model",
     "couldn't generate a useful response",
+    "that is a great question",
+    "i would be happy to",
+    "i'd be happy to",
+    "here's some information",
+    "it appears you've provided",
+    "i don't see a specific question",
+    "could you provide more context",
+    "it seems you've repeated the same input",
+)
+
+WEAK_RESPONSE_PATTERNS = (
+    r"^that is a great question\b",
+    r"^here(?:'s| is)\s+(?:some\s+)?information\b",
+    r"^i(?: would|\'d)\s+be\s+happy\s+to\b",
+    r"^it seems (?:like )?you(?:'ve| have)\s+repeated\b.*?[.?!]\s*",
+    r"^it appears you(?:'ve| have)\s+provided\b.*?[.?!]\s*",
+    r"^however,\s*i do not see a specific question\b.*?[.?!]\s*",
+    r"^however,\s*i don't see a specific question\b.*?[.?!]\s*",
+    r"^could you provide more context\b.*$",
 )
 
 CASUAL_CONVERSATION_MARKERS = (
@@ -122,12 +141,26 @@ DOCUMENT_ASSIGNMENT_PROMPT = (
     "You are an expert academic writer. Write a REAL, informative academic assignment on the given topic. "
     "CRITICAL: Write actual facts, analysis, and domain-specific explanations — never write meta-instructions or placeholder sentences. "
     "Start directly with 'Introduction' as the first heading. "
-    "REQUIRED SECTIONS: Introduction, Background, Core Concepts, How It Works, Applications, Challenges, Conclusion. "
+    "REQUIRED SECTIONS: Introduction, Background / History, Core Concepts, Applications, Advantages, Limitations, Conclusion. "
     "Use plain-text section headings only — no # symbols, no bold markers, no numbered headings. "
     "Write coherent academic paragraphs (3–5 sentences each) under every heading. "
     "NEVER write phrases like 'this section should explore', 'the student should understand', or 'a strong assignment must'. "
     "Write in formal academic prose with specific facts, examples, and analytical depth."
 )
+
+REQUIRED_ASSIGNMENT_SECTIONS: tuple[tuple[str, str], ...] = (
+    ("introduction", "Introduction"),
+    ("background_history", "Background / History"),
+    ("core_concepts", "Core Concepts"),
+    ("applications", "Applications"),
+    ("advantages", "Advantages"),
+    ("limitations", "Limitations"),
+    ("conclusion", "Conclusion"),
+)
+
+ASSIGNMENT_WORDS_PER_PAGE_MIN = 180
+ASSIGNMENT_WORDS_PER_PAGE_TARGET = 205
+ASSIGNMENT_WORDS_PER_PAGE_MAX = 230
 
 TRANSFORMATION_NOTES_PROMPT = (
     "You are a professional academic content specialist converting source material into structured study notes.\n\n"
@@ -1164,6 +1197,21 @@ def _build_local_assignment_section_body(
     display_title: Optional[str] = None,
     style: Optional[str] = None,
 ) -> str:
+    section_depth = _resolve_assignment_section_depth(section_kind, page_target)
+    visible_title = str(display_title or section_kind or "").strip()
+    section_label = f"{visible_title} {section_kind}".lower()
+    canonical_kind = (
+        "comparative"
+        if "comparative" in section_label or "comparison" in section_label
+        else (
+            _canonical_assignment_section_kind(visible_title)
+            or _canonical_assignment_section_kind(section_kind)
+            or "core_concepts"
+        )
+    )
+    target_words = max(60, int(section_depth["paragraph_target"]) * 75)
+    return _build_quality_assignment_section_body(topic, canonical_kind, target_words)
+
     title_topic = topic.title()
     normalized_title = str(section_kind or "").strip().lower()
     visible_title = str(display_title or section_kind or "").strip() or "Section"
@@ -1265,9 +1313,376 @@ def _build_local_assignment_content(
             f"{section['title']}\n{_build_local_assignment_section_body(topic, section['kind'], page_target, display_title=section['title'], style=style)}"
         )
     content = clean_response("\n\n".join(section_blocks))
+    return stabilize_assignment_content(
+        content,
+        topic,
+        page_target=page_target,
+        style=style,
+        include_references=include_references,
+        citation_style=citation_style,
+    )
+
+
+def _assignment_word_count(text: str) -> int:
+    return len(re.findall(r"[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)?", str(text or "")))
+
+
+def _canonical_assignment_section_kind(title: str) -> Optional[str]:
+    candidate = str(title or "").strip()
+    candidate = re.sub(r"^[#*\-\s]+", "", candidate)
+    candidate = re.sub(r"^\d+[.)]\s*", "", candidate)
+    candidate = re.sub(r"\s+", " ", candidate).strip(" :;-").lower()
+    candidate = candidate.replace("&", "and")
+    if not candidate or len(candidate) > 90:
+        return None
+    if "introduction" in candidate or candidate == "overview":
+        return "introduction"
+    if "background" in candidate or "history" in candidate or "historical" in candidate or "context" in candidate:
+        return "background_history"
+    if (
+        "core concept" in candidate
+        or "concept" in candidate
+        or "criteria" in candidate
+        or "mechanism" in candidate
+        or "architecture" in candidate
+        or "how it works" in candidate
+        or "theory" in candidate
+    ):
+        return "core_concepts"
+    if "application" in candidate or "use case" in candidate or "case stud" in candidate or "example" in candidate:
+        return "applications"
+    if "advantage" in candidate or "strength" in candidate or "benefit" in candidate or "importance" in candidate:
+        return "advantages"
+    if (
+        "limitation" in candidate
+        or "challenge" in candidate
+        or "tradeoff" in candidate
+        or "risk" in candidate
+        or "barrier" in candidate
+    ):
+        return "limitations"
+    if "conclusion" in candidate or "final" in candidate or "summary" in candidate:
+        return "conclusion"
+    return None
+
+
+def _strip_assignment_meta_writing(text: str) -> str:
+    weak_patterns = (
+        r"\bthis section\s+(?:should|will|explains|explores|discusses|covers)\b",
+        r"\bin this section\b",
+        r"\bthe following section\b",
+        r"\byou should discuss\b",
+        r"\bthe student should\b",
+        r"\bthe reader should\b",
+        r"\ba strong assignment must\b",
+        r"\bthis assignment\s+(?:will|aims to|has examined|examines)\b",
+        r"\bin this assignment\b",
+        r"\bthis essay\s+(?:will|aims to|has examined|examines)\b",
+        r"\bwe will discuss\b",
+        r"\bi will discuss\b",
+    )
+    cleaned_lines: list[str] = []
+    for raw_line in str(text or "").replace("\r\n", "\n").splitlines():
+        line = raw_line.strip()
+        if not line:
+            cleaned_lines.append("")
+            continue
+        sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", line) if part.strip()]
+        kept = [
+            sentence
+            for sentence in sentences
+            if not any(re.search(pattern, sentence, flags=re.IGNORECASE) for pattern in weak_patterns)
+        ]
+        if kept:
+            cleaned_lines.append(" ".join(kept))
+        elif not any(re.search(pattern, line, flags=re.IGNORECASE) for pattern in weak_patterns):
+            cleaned_lines.append(line)
+    cleaned = "\n".join(cleaned_lines)
+    cleaned = re.sub(r"(?im)^\s*(?:here(?:'s| is)|below is)\s+(?:the\s+)?(?:assignment|content).*?$", "", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+def _dedupe_assignment_paragraphs(text: str) -> str:
+    blocks = re.split(r"\n\s*\n+", str(text or "").strip())
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for block in blocks:
+        normalized = re.sub(r"[^a-z0-9]+", " ", block.lower()).strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(block.strip())
+    return "\n\n".join(deduped).strip()
+
+
+def _assignment_display_topic(topic: str) -> str:
+    acronym_words = {"ai", "ml", "nlp", "llm", "api", "iot"}
+    pieces = re.split(r"(\s+)", str(topic or "").strip())
+    formatted: list[str] = []
+    for piece in pieces:
+        if not piece or piece.isspace():
+            formatted.append(piece)
+            continue
+        lowered = piece.lower()
+        if lowered in acronym_words or (piece.isupper() and len(piece) <= 5):
+            formatted.append(piece.upper())
+        else:
+            formatted.append(piece[:1].upper() + piece[1:].lower())
+    return "".join(formatted).strip() or "The Topic"
+
+
+def _assignment_quality_context(topic: str) -> Dict[str, Any]:
+    normalized = str(topic or "").strip().lower()
+    title_topic = _assignment_display_topic(topic)
+    if re.search(r"\b(ai|artificial intelligence|machine learning|deep learning|neural|transformer|transformers|llm|language model)\b", normalized):
+        return {
+            "domain": "technical",
+            "field": "computing, data analysis, and intelligent automation",
+            "terms": ["machine learning", "neural networks", "training data", "algorithmic decision-making", "model evaluation"],
+            "examples": ["medical decision support", "language processing", "fraud detection", "adaptive tutoring", "industrial automation"],
+            "advantages": ["scalable analysis", "pattern recognition", "automation of repetitive cognitive tasks", "decision support"],
+            "limits": ["data bias", "explainability gaps", "privacy risk", "high resource demand", "overreliance on automated outputs"],
+        }
+    if "sociology" in normalized or any(marker in normalized for marker in ("society", "social", "culture", "inequality")):
+        return {
+            "domain": "social",
+            "field": "social life, institutions, and collective behaviour",
+            "terms": ["social institutions", "culture", "socialization", "stratification", "norms"],
+            "examples": ["family structures", "education systems", "workplaces", "media influence", "migration patterns"],
+            "advantages": ["critical understanding of society", "evidence-based policy insight", "clearer analysis of inequality", "stronger institutional awareness"],
+            "limits": ["measurement difficulty", "researcher bias", "ethical limits on data collection", "changing social conditions"],
+        }
+    if "climate" in normalized or any(marker in normalized for marker in ("environment", "global warming", "carbon", "sustainability")):
+        return {
+            "domain": "environmental",
+            "field": "environmental science, public policy, and sustainable development",
+            "terms": ["greenhouse gas emissions", "mitigation", "adaptation", "climate justice", "energy transition"],
+            "examples": ["renewable energy planning", "flood-risk management", "agricultural adaptation", "urban heat reduction", "carbon accounting"],
+            "advantages": ["risk reduction", "long-term resilience", "better resource planning", "protection of vulnerable communities"],
+            "limits": ["political coordination", "economic cost", "unequal impacts", "uncertainty in local projections", "slow institutional response"],
+        }
+    return {
+        "domain": "general",
+        "field": f"the academic and practical field surrounding {title_topic}",
+        "terms": ["core principles", "evidence", "methods", "stakeholders", "practical outcomes"],
+        "examples": ["education", "research", "professional practice", "public policy", "industry"],
+        "advantages": ["structured analysis", "practical relevance", "clearer decision-making", "stronger understanding"],
+        "limits": ["implementation barriers", "limited evidence in some contexts", "cost", "complexity", "uneven access"],
+    }
+
+
+def _assignment_section_word_allocations(page_target: Optional[int]) -> Dict[str, int]:
+    pages = _normalize_assignment_page_target(page_target) or 2
+    target_total = max(ASSIGNMENT_WORDS_PER_PAGE_TARGET * pages, 420)
+    weights = {
+        "introduction": 0.75,
+        "background_history": 1.05,
+        "core_concepts": 1.25,
+        "applications": 1.15,
+        "advantages": 0.9,
+        "limitations": 1.05,
+        "conclusion": 0.8,
+    }
+    total_weight = sum(weights.values())
+    minimum = 40 if pages <= 2 else 55
+    return {
+        kind: max(minimum, int(round(target_total * weight / total_weight)))
+        for kind, weight in weights.items()
+    }
+
+
+def _trim_assignment_text_to_words(text: str, max_words: int) -> str:
+    if max_words <= 0 or _assignment_word_count(text) <= max_words:
+        return str(text or "").strip()
+    sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", str(text or "").strip()) if part.strip()]
+    kept: list[str] = []
+    for sentence in sentences:
+        candidate = " ".join([*kept, sentence]).strip()
+        if kept and _assignment_word_count(candidate) > max_words:
+            break
+        kept.append(sentence)
+    if kept:
+        return " ".join(kept).strip()
+    words = re.findall(r"\S+", str(text or ""))
+    return " ".join(words[:max_words]).strip()
+
+
+def _assignment_section_paragraph_bank(topic: str, section_kind: str) -> list[str]:
+    title_topic = _assignment_display_topic(topic)
+    context = _assignment_quality_context(topic)
+    terms = context["terms"]
+    examples = context["examples"]
+    advantages = context["advantages"]
+    limits = context["limits"]
+    field = context["field"]
+    banks = {
+        "introduction": [
+            f"{title_topic} is an important academic subject because it connects theoretical knowledge with practical decision-making in {field}. Its relevance comes from the way it helps researchers, students, and practitioners understand complex problems through clearer concepts, evidence, and structured analysis.",
+            f"The topic becomes especially significant when viewed through ideas such as {terms[0]}, {terms[1]}, and {terms[2]}. These ideas give the discussion a precise foundation and show why {topic} cannot be treated as a simple or isolated issue.",
+        ],
+        "background_history": [
+            f"The background of {topic} is shaped by gradual intellectual development, institutional change, and practical demand for better ways to explain complex conditions. Early work in the field created the vocabulary and methods that later researchers refined through evidence, criticism, and wider application.",
+            f"Over time, {title_topic} became more visible as scholars and professionals recognized its connection to {terms[0]}, {terms[1]}, and {terms[2]}. This historical growth shows that the subject developed through both theoretical inquiry and real-world pressure to solve emerging problems.",
+            f"The broader context also includes changing social, technical, economic, or policy conditions that affect how {topic} is interpreted. Because these conditions evolve, academic treatment of the topic must connect past development with current relevance rather than presenting it as a fixed body of facts.",
+        ],
+        "core_concepts": [
+            f"The core concepts of {topic} begin with a clear understanding of {terms[0]}, {terms[1]}, and {terms[2]}. These concepts define the subject's basic structure and help explain how different parts of the field relate to one another.",
+            f"A strong academic reading of {topic} also requires attention to evidence, causation, and interpretation. Concepts are not useful as isolated definitions; they matter because they explain relationships, guide analysis, and help distinguish reliable conclusions from unsupported claims.",
+            f"In practice, the conceptual framework around {topic} allows students and researchers to compare cases, evaluate outcomes, and identify patterns. This makes the subject more than descriptive, because it provides tools for disciplined reasoning and informed judgement.",
+        ],
+        "applications": [
+            f"The applications of {topic} are visible in areas such as {examples[0]}, {examples[1]}, and {examples[2]}. These examples show how academic ideas become useful when they are applied to concrete problems, institutions, or systems.",
+            f"In professional and public settings, {title_topic} can support better planning, diagnosis, communication, and evaluation. Its practical value depends on matching the method or concept to the context instead of applying it mechanically.",
+            f"Applications also reveal the difference between theoretical potential and real performance. When {topic} is used responsibly, it can improve outcomes, but its success depends on evidence quality, local conditions, and the competence of the people or institutions applying it.",
+        ],
+        "advantages": [
+            f"The main advantages of {topic} include {advantages[0]}, {advantages[1]}, and {advantages[2]}. These strengths explain why the subject continues to hold academic and practical importance across different settings.",
+            f"Another advantage is that {title_topic} encourages systematic thinking. Instead of relying only on opinion or habit, it supports clearer interpretation of evidence, stronger comparison of alternatives, and more transparent reasoning.",
+            f"The importance of {topic} is also linked to its capacity to connect knowledge with action. When its principles are applied carefully, it can improve understanding, strengthen decision-making, and create more informed responses to complex challenges.",
+        ],
+        "limitations": [
+            f"The limitations of {topic} include {limits[0]}, {limits[1]}, and {limits[2]}. These issues matter because they affect how confidently the subject can be applied in research, policy, or professional practice.",
+            f"Practical constraints can also reduce the effectiveness of {title_topic}. Cost, access to reliable evidence, institutional capacity, and differences between contexts may prevent a strong idea from producing equally strong results everywhere.",
+            f"A balanced academic view recognizes that limitations do not make {topic} unimportant. Instead, they show where careful interpretation, ethical responsibility, and contextual awareness are necessary for responsible use.",
+        ],
+        "conclusion": [
+            f"Overall, {topic} remains significant because it combines conceptual depth with practical relevance. Its background, core ideas, applications, advantages, and limitations together show why the subject deserves careful academic attention.",
+            f"The strongest understanding of {title_topic} is balanced: it recognizes the value of the field while also acknowledging the constraints that shape real-world outcomes. This balance makes the topic useful for study, professional judgement, and responsible decision-making.",
+        ],
+        "comparative": [
+            f"A comparative view of {topic} focuses on alternatives, suitability, tradeoffs, and best-fit conditions. This makes the discussion more analytical because it evaluates where each option performs well instead of describing both sides in isolation.",
+            f"Useful comparison depends on clear criteria such as cost, reliability, accessibility, performance, learning curve, and long-term maintainability. These criteria help explain why one choice may be stronger in one context while another is more appropriate elsewhere.",
+            f"The strongest comparative judgement avoids declaring a universal winner. It connects advantages and limitations to specific needs, showing how context determines the most responsible and effective choice.",
+        ],
+    }
+    return banks.get(section_kind, banks["core_concepts"])
+
+
+def _build_quality_assignment_section_body(
+    topic: str,
+    section_kind: str,
+    target_words: int,
+    *,
+    existing_text: str = "",
+) -> str:
+    existing = _dedupe_assignment_paragraphs(_strip_assignment_meta_writing(existing_text))
+    paragraphs = [paragraph for paragraph in re.split(r"\n\s*\n+", existing) if paragraph.strip()]
+    bank = _assignment_section_paragraph_bank(topic, section_kind)
+    index = 0
+    while _assignment_word_count("\n\n".join(paragraphs)) < target_words and index < len(bank):
+        paragraphs.append(bank[index])
+        index += 1
+    context = _assignment_quality_context(topic)
+    extension_bank = [
+        f"Academic discussion of {topic} becomes stronger when it connects {context['terms'][0]} with evidence, examples, and consequences. This connection keeps the writing specific and prevents the section from becoming a list of broad claims.",
+        f"Another important point is the relationship between {context['terms'][1]} and practical outcomes in areas such as {context['examples'][0]} and {context['examples'][1]}. This relationship gives the topic clearer academic depth because it links concepts to observable conditions.",
+        f"The quality of analysis also depends on recognizing context. {context['terms'][2].title()} may appear differently across institutions, communities, industries, or policy environments, so careful interpretation is necessary before drawing broad conclusions.",
+        f"For that reason, {topic} is most useful when studied through both theory and application. The theoretical side explains meaning, while the applied side shows how the subject affects real decisions, constraints, and outcomes.",
+        f"Evidence also needs to be interpreted with attention to stakeholders and consequences. In {topic}, the same idea can produce different results depending on resources, governance, expertise, and the assumptions built into the surrounding environment.",
+        f"Concrete examples such as {context['examples'][2]} and {context['examples'][3]} make the analysis more credible because they show how the topic operates beyond abstract definition. They also reveal where strengths and limitations become visible in practice.",
+        f"A mature academic treatment of {topic} therefore keeps explanation, evaluation, and context connected. That approach gives the reader a fuller view of both the subject's promise and the conditions required for responsible use.",
+        f"The discussion remains strongest when it avoids overgeneralization. Careful attention to {context['limits'][0]} and {context['limits'][1]} helps preserve balance while still recognizing the practical value of the subject.",
+    ]
+    extension_index = 0
+    while _assignment_word_count("\n\n".join(paragraphs)) < target_words and extension_index < len(extension_bank):
+        paragraphs.append(extension_bank[extension_index])
+        extension_index += 1
+    body = _dedupe_assignment_paragraphs("\n\n".join(paragraphs))
+    return _trim_assignment_text_to_words(body, max(target_words + 45, target_words)).strip()
+
+
+def _extract_assignment_quality_sections(content: str) -> Dict[str, str]:
+    cleaned = clean_response(content)
+    section_lines: Dict[str, list[str]] = {kind: [] for kind, _ in REQUIRED_ASSIGNMENT_SECTIONS}
+    unassigned: list[str] = []
+    current_kind: Optional[str] = None
+    for raw_line in cleaned.replace("\r\n", "\n").splitlines():
+        line = raw_line.strip()
+        if not line:
+            if current_kind and section_lines[current_kind] and section_lines[current_kind][-1] != "":
+                section_lines[current_kind].append("")
+            continue
+        kind = _canonical_assignment_section_kind(line)
+        if kind:
+            current_kind = kind
+            continue
+        if current_kind:
+            section_lines[current_kind].append(line)
+        else:
+            unassigned.append(line)
+    if unassigned and not section_lines["introduction"]:
+        section_lines["introduction"] = unassigned
+    return {
+        kind: _dedupe_assignment_paragraphs(_strip_assignment_meta_writing("\n".join(lines)))
+        for kind, lines in section_lines.items()
+    }
+
+
+def stabilize_assignment_content(
+    content: str,
+    topic: str,
+    *,
+    page_target: Optional[int] = None,
+    style: Optional[str] = None,
+    include_references: bool = False,
+    citation_style: Optional[str] = None,
+) -> str:
+    """Normalize assignment output into a complete academic structure before export."""
+    _ = normalize_document_style(style)
+    normalized_topic = str(topic or "").strip()
+    pages = _normalize_assignment_page_target(page_target) or 2
+    minimum_words = pages * ASSIGNMENT_WORDS_PER_PAGE_MIN
+    maximum_words = pages * ASSIGNMENT_WORDS_PER_PAGE_MAX if page_target else 0
+    allocations = _assignment_section_word_allocations(pages)
+    extracted = _extract_assignment_quality_sections(content)
+
+    bodies: Dict[str, str] = {}
+    for kind, _title in REQUIRED_ASSIGNMENT_SECTIONS:
+        bodies[kind] = _build_quality_assignment_section_body(
+            normalized_topic,
+            kind,
+            allocations[kind],
+            existing_text=extracted.get(kind, ""),
+        )
+
+    def compose() -> str:
+        return clean_response(
+            "\n\n".join(
+                f"{title}\n{bodies[kind].strip()}"
+                for kind, title in REQUIRED_ASSIGNMENT_SECTIONS
+                if bodies.get(kind, "").strip()
+            )
+        )
+
+    stabilized = compose()
+    expansion_order = ("core_concepts", "applications", "background_history", "limitations", "advantages")
+    expansion_step = 100
+    guard = 0
+    while _assignment_word_count(stabilized) < minimum_words and guard < len(expansion_order) * 4:
+        kind = expansion_order[guard % len(expansion_order)]
+        bodies[kind] = _build_quality_assignment_section_body(
+            normalized_topic,
+            kind,
+            allocations[kind] + expansion_step,
+            existing_text=bodies[kind],
+        )
+        guard += 1
+        stabilized = compose()
+
+    if maximum_words and _assignment_word_count(stabilized) > maximum_words:
+        max_allocations = _assignment_section_word_allocations(max(page_target or pages, pages))
+        scale = maximum_words / max(1, sum(max_allocations.values()))
+        for kind in bodies:
+            section_limit = max(28, int(max_allocations[kind] * scale))
+            bodies[kind] = _trim_assignment_text_to_words(bodies[kind], section_limit)
+        stabilized = compose()
+
+    stabilized = _strip_assignment_meta_writing(stabilized)
+    stabilized = _dedupe_assignment_paragraphs(stabilized)
     if include_references:
-        content = _append_references_section(content, topic, citation_style)
-    return content
+        stabilized = _append_references_section(stabilized, normalized_topic, citation_style)
+    return clean_response(stabilized)
 
 
 def _build_assignment_section_prompt(
@@ -1378,9 +1793,14 @@ def _generate_assignment_chunked_content_payload(
     elif not used_provider:
         source = "local_template"
 
-    content = clean_response("\n\n".join(combined_sections))
-    if include_references:
-        content = _append_references_section(content, topic, citation_style)
+    content = stabilize_assignment_content(
+        clean_response("\n\n".join(combined_sections)),
+        topic,
+        page_target=normalized_pages,
+        style=style,
+        include_references=include_references,
+        citation_style=citation_style,
+    )
 
     return {
         "success": True,
@@ -1419,7 +1839,7 @@ def _build_document_generation_prompt(
     page_hint = f" Aim for enough detail to support about {page_target} pages." if page_target else ""
     return (
         f"Write an academic assignment on: {topic}.{page_hint} "
-        f"Sections required: Introduction, Background and History, Core Concepts, How It Works, Applications, Advantages and Importance, Challenges and Limitations, Conclusion. "
+        f"Sections required: Introduction, Background / History, Core Concepts, Applications, Advantages, Limitations, Conclusion. "
         f"Write real, specific academic content about {topic} in every section. "
         f"{style_guidance}{references_hint} "
         "Start directly with 'Introduction'. No title, no table of contents, no numbered headings. "
@@ -1497,7 +1917,16 @@ def generate_document_content_payload(
     )
     content = clean_response(payload.get("content"))
     if payload.get("success") and is_meaningful_text(content):
-        if include_references:
+        if normalized_type == "assignment":
+            content = stabilize_assignment_content(
+                content,
+                normalized_topic,
+                page_target=normalized_pages,
+                style=normalized_style,
+                include_references=include_references,
+                citation_style=normalized_citation_style,
+            )
+        elif include_references:
             content = _append_references_section(content, normalized_topic, normalized_citation_style)
         return {
             "success": True,
@@ -1522,10 +1951,19 @@ def generate_document_content_payload(
             normalized_topic,
             normalized_pages,
             style=normalized_style,
-            include_references=include_references,
+            include_references=False,
             citation_style=normalized_citation_style,
         )
     )
+    if normalized_type == "assignment":
+        local_content = stabilize_assignment_content(
+            local_content,
+            normalized_topic,
+            page_target=normalized_pages,
+            style=normalized_style,
+            include_references=include_references,
+            citation_style=normalized_citation_style,
+        )
     return {
         "success": True,
         "content": local_content,
@@ -1639,7 +2077,9 @@ def get_groq_client():
 
 def _response_contains_bad_phrases(response_text: str) -> bool:
     normalized = clean_response(response_text).lower()
-    return any(marker in normalized for marker in BAD_RESPONSE_MARKERS)
+    if any(marker in normalized for marker in BAD_RESPONSE_MARKERS):
+        return True
+    return any(re.search(pattern, normalized, flags=re.IGNORECASE) for pattern in WEAK_RESPONSE_PATTERNS)
 
 
 def _last_user_message(messages: List[Dict[str, str]]) -> str:
@@ -1658,6 +2098,9 @@ def _strip_leading_filler(text: str) -> str:
         r"^(understood|right away|analysis complete)\b[\s,.:!-]*",
         r"^(certainly|of course|absolutely|sure)\s+(sir|ma'am)\b[\s,.:!-]*",
         r"^(sir|ma'am)\b[\s,.:!-]*",
+        r"^(here(?:'s| is)\s+(?:some\s+)?information(?:\s+about\s+that)?)\b[\s,.:!-]*",
+        r"^(that is a great question)\b[\s,.:!-]*",
+        r"^(i(?: would|\'d)\s+be\s+happy\s+to\s+help)\b[\s,.:!-]*",
     ]
     for pattern in patterns:
         updated = re.sub(pattern, "", cleaned, count=1, flags=re.IGNORECASE)
@@ -1852,6 +2295,35 @@ def _strip_repeat_claim_sentences(text: str) -> str:
     return result or str(text or "").strip()
 
 
+def _strip_prompt_meta_filler(text: str) -> str:
+    cleaned = str(text or "").strip()
+    patterns = [
+        r"^it seems (?:like )?you(?:'ve| have)\s+repeated.*?[.?!]\s*",
+        r"^it appears you(?:'ve| have)\s+provided.*?[.?!]\s*",
+        r"^(however,\s*)?i do not see a specific question or request\.?\s*",
+        r"^(however,\s*)?i don't see a specific question or request\.?\s*",
+        r"^if you(?:'d| would)\s+like,\s*i can.*?provide more context.*?[.?!]\s*",
+    ]
+    for pattern in patterns:
+        updated = re.sub(pattern, "", cleaned, count=1, flags=re.IGNORECASE)
+        if updated != cleaned:
+            cleaned = updated.strip()
+    return cleaned
+
+
+def _dedupe_adjacent_sentences(text: str) -> str:
+    sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", str(text or "").strip()) if part.strip()]
+    filtered: List[str] = []
+    last_normalized = ""
+    for sentence in sentences:
+        normalized = re.sub(r"[^a-z0-9]+", "", sentence.lower())
+        if normalized and normalized == last_normalized:
+            continue
+        filtered.append(sentence)
+        last_normalized = normalized
+    return " ".join(filtered).strip()
+
+
 def polish_assistant_reply(text: Optional[str], user_input: str = "") -> str:
     cleaned = clean_response(text)
     if not cleaned:
@@ -1860,6 +2332,7 @@ def polish_assistant_reply(text: Optional[str], user_input: str = "") -> str:
     cleaned = _strip_direct_address_phrases(cleaned)
     cleaned = _strip_meta_section_wrappers(cleaned)
     cleaned = _format_inline_numbered_list(cleaned)
+    cleaned = _strip_prompt_meta_filler(cleaned)
 
     if _looks_like_casual_conversation(user_input):
         cleaned = _strip_leading_filler(cleaned)
@@ -1874,33 +2347,158 @@ def polish_assistant_reply(text: Optional[str], user_input: str = "") -> str:
             cleaned = _strip_repeat_claim_sentences(cleaned)
             cleaned = _strip_stale_memory_filler(cleaned)
 
+    cleaned = _dedupe_adjacent_sentences(cleaned)
     cleaned = _apply_mode_length_guard(cleaned, user_input)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
 
 
 def build_degraded_reply(user_input: str, providers_tried: Optional[List[Any]] = None) -> str:
-    attempts = providers_tried or []
-    if attempts:
-        provider_names = []
-        for item in attempts:
-            if isinstance(item, dict):
-                name = str(item.get("provider", "")).strip()
-            else:
-                raw = str(item)
-                name = raw.split(":", 1)[0].strip()
-            if name and name not in provider_names:
-                provider_names.append(name)
-        attempted = ", ".join(name.upper() for name in provider_names[:3]) if provider_names else "the configured providers"
-        return (
-            "The request is clear, but I can't answer it reliably right now because my live AI providers "
-            f"are not completing the response path cleanly. I tried {attempted}. Please try again in a moment or check provider health."
-        )
+    def _display_provider(name: str) -> str:
+        normalized = str(name or "").strip().lower()
+        display_map = {
+            "groq": "Groq",
+            "openai": "OpenAI",
+            "gemini": "Gemini",
+            "openrouter": "OpenRouter",
+            "claude": "Claude",
+            "ollama": "Ollama",
+        }
+        return display_map.get(normalized, normalized.title() or name)
 
+    attempts = providers_tried or []
+    provider_names: List[str] = []
+    for item in attempts:
+        if isinstance(item, dict):
+            name = str(item.get("provider", "")).strip()
+        else:
+            raw = str(item)
+            name = raw.split(":", 1)[0].strip()
+        display_name = _display_provider(name)
+        if display_name and display_name not in provider_names:
+            provider_names.append(display_name)
+
+    attempted = ", ".join(provider_names[:3]) if provider_names else ""
+    normalized_input = str(user_input or "").strip().lower()
+
+    if _looks_like_casual_conversation(user_input):
+        lead = "I'm here, but the live reply path is unstable right now."
+    elif any(token in normalized_input for token in ("write", "make", "create", "notes", "assignment", "document", "summary", "summarize")):
+        lead = "I couldn't finish that cleanly just yet."
+    else:
+        lead = "I don't have a clean live answer for that right now."
+
+    detail = f" The model path stalled on {attempted}." if attempted else ""
+    return f"{lead}{detail} Try again in a moment."
+
+
+def _merge_provider_attempts(*attempt_groups: Optional[List[Any]]) -> List[Any]:
+    merged: List[Any] = []
+    seen: set[str] = set()
+    for group in attempt_groups:
+        for item in list(group or []):
+            if isinstance(item, dict):
+                key = (
+                    f"{str(item.get('provider', '')).strip().lower()}|"
+                    f"{str(item.get('status', '')).strip().lower()}|"
+                    f"{str(item.get('reason', '')).strip().lower()}"
+                )
+            else:
+                key = str(item).strip().lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            merged.append(item)
+    return merged
+
+
+def _build_quality_retry_prompt(system_prompt: str) -> str:
     return (
-        "I can see what you asked, but I do not have a healthy live provider I can trust for a dependable answer yet. "
-        "Please check provider health and try again."
+        f"{str(system_prompt or '').strip()}\n\n"
+        "QUALITY OVERRIDE:\n"
+        "Lead with the answer. Sound calm, natural, and confident. "
+        "Do not comment on the prompt itself, repeated input, or formatting unless that is genuinely necessary. "
+        "Avoid filler like 'That is a great question', 'Here's some information', or 'I'd be happy to help'."
+    ).strip()
+
+
+def _extract_usable_payload_content(payload: Dict[str, Any], user_input: str) -> str:
+    if not payload.get("success"):
+        return ""
+    content = clean_response(payload.get("content"))
+    if not is_meaningful_text(content):
+        return ""
+    polished = polish_assistant_reply(content, user_input=user_input)
+    if not is_meaningful_text(polished):
+        return ""
+    if _response_contains_bad_phrases(polished):
+        return ""
+    return polished
+
+
+def _run_response_attempt_chain(
+    *,
+    user_input: str,
+    provider_messages: List[Dict[str, str]],
+    system_prompt: str,
+    max_tokens: int,
+    temperature: float,
+) -> Dict[str, Any]:
+    primary_payload = generate_with_fallback(
+        provider_messages,
+        system_prompt,
+        preferred_only=True,
+        max_tokens=max_tokens,
+        temperature=temperature,
     )
+    merged_attempts = _merge_provider_attempts(primary_payload.get("providers_tried") or [])
+    primary_content = _extract_usable_payload_content(primary_payload, user_input)
+    if primary_content:
+        primary_payload["content"] = primary_content
+        primary_payload["providers_tried"] = merged_attempts
+        primary_payload["response_stage"] = "primary"
+        return primary_payload
+
+    retry_prompt = _build_quality_retry_prompt(system_prompt)
+    retry_payload = generate_with_fallback(
+        provider_messages,
+        retry_prompt,
+        preferred_only=True,
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
+    merged_attempts = _merge_provider_attempts(merged_attempts, retry_payload.get("providers_tried") or [])
+    retry_content = _extract_usable_payload_content(retry_payload, user_input)
+    if retry_content:
+        retry_payload["content"] = retry_content
+        retry_payload["providers_tried"] = merged_attempts
+        retry_payload["response_stage"] = "retry"
+        return retry_payload
+
+    fallback_payload = generate_with_fallback(
+        provider_messages,
+        retry_prompt,
+        preferred_only=False,
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
+    merged_attempts = _merge_provider_attempts(merged_attempts, fallback_payload.get("providers_tried") or [])
+    fallback_content = _extract_usable_payload_content(fallback_payload, user_input)
+    if fallback_content:
+        fallback_payload["content"] = fallback_content
+        fallback_payload["providers_tried"] = merged_attempts
+        fallback_payload["response_stage"] = "fallback_provider"
+        return fallback_payload
+
+    final_payload = dict(fallback_payload)
+    final_payload["success"] = False
+    final_payload["content"] = None
+    final_payload["providers_tried"] = merged_attempts
+    final_payload["response_stage"] = "degraded"
+    final_payload["degraded_reply"] = build_degraded_reply(user_input=user_input, providers_tried=merged_attempts)
+    if not final_payload.get("error"):
+        final_payload["error"] = "No provider returned a clean response."
+    return final_payload
 
 
 def generate_groq_response(
@@ -2029,15 +2627,15 @@ def generate_web_search_response_payload(
         }
     )
 
-    payload = generate_with_fallback(
-        messages,
-        system_prompt,
+    payload = _run_response_attempt_chain(
+        user_input=normalized_input,
+        provider_messages=messages,
+        system_prompt=system_prompt,
         max_tokens=max_tokens,
         temperature=temperature,
     )
     content = clean_response(payload.get("content"))
     if payload.get("success") and is_meaningful_text(content):
-        payload["content"] = polish_assistant_reply(content, user_input=normalized_input)
         payload["web_used"] = True
         payload["explanation_mode"] = explanation_mode
         payload["web_grounding"] = grounding_text
@@ -2084,34 +2682,15 @@ def generate_response_payload(
         }
 
     system_prompt, explanation_mode = build_runtime_system_prompt(user_input, base_system_prompt)
-    payload = generate_with_fallback(
-        provider_messages,
-        system_prompt,
-        preferred_only=True,
+    payload = _run_response_attempt_chain(
+        user_input=user_input,
+        provider_messages=provider_messages,
+        system_prompt=system_prompt,
         max_tokens=max_tokens,
         temperature=temperature,
     )
     content = clean_response(payload.get("content"))
-
-    if payload.get("success") and content and _response_contains_bad_phrases(content):
-        retry_system_prompt = (
-            f"{system_prompt}\n\n"
-            "Important: Answer directly. Avoid canned filler. "
-            "Sound calm, capable, and natural."
-        )
-        retry_payload = generate_with_fallback(
-            provider_messages,
-            retry_system_prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
-        retry_content = clean_response(retry_payload.get("content"))
-        if retry_payload.get("success") and retry_content:
-            payload = retry_payload
-            content = retry_content
-
     if payload.get("success") and is_meaningful_text(content):
-        payload["content"] = polish_assistant_reply(content, user_input=user_input)
         payload["explanation_mode"] = explanation_mode
         add_to_history("user", user_input)
         add_to_history("assistant", payload["content"])
@@ -2153,7 +2732,8 @@ def get_ai_response(
         f"success={payload.get('success')}  error={payload.get('error')!r}  "
         f"input={repr(str(user_input)[:80])}"
     )
-    return FALLBACK_USER_MESSAGE
+    degraded_reply = clean_response(payload.get("degraded_reply"))
+    return degraded_reply or build_degraded_reply(str(user_input), payload.get("providers_tried") or [])
 
 
 def generate_response(
@@ -2176,7 +2756,9 @@ def generate_response(
         f"success={payload.get('success')}  error={payload.get('error')!r}  "
         f"input={user_input_repr}"
     )
-    return FALLBACK_USER_MESSAGE
+    degraded_reply = clean_response(payload.get("degraded_reply"))
+    fallback_input = str(user_input_or_messages) if isinstance(user_input_or_messages, str) else _last_user_message(user_input_or_messages)
+    return degraded_reply or build_degraded_reply(fallback_input, payload.get("providers_tried") or [])
 
 
 def get_provider_summary() -> Dict[str, object]:

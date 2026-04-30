@@ -28,7 +28,7 @@ def extract_memory_candidates(user_input: str, response: str, intent: str, confi
     entities = parse_entities(user_input)
     candidates: List[MemoryCandidate] = []
 
-    name_match = re.search(r"\bmy name is\s+([a-zA-Z ]{1,40})", lowered)
+    name_match = re.search(r"\b(?:my name is|call me)\s+([a-zA-Z ]{1,40})", lowered)
     if name_match and confidence >= STABLE_MEMORY_CONFIDENCE:
         candidates.append(MemoryCandidate("semantic", "user_name", name_match.group(1).strip().title(), confidence, "explicit_name"))
 
@@ -36,7 +36,7 @@ def extract_memory_candidates(user_input: str, response: str, intent: str, confi
     if city_match and confidence >= STABLE_MEMORY_CONFIDENCE:
         candidates.append(MemoryCandidate("semantic", "user_city", city_match.group(1).strip().title(), confidence, "explicit_city"))
 
-    if "prefer" in lowered or "default" in lowered:
+    if "prefer" in lowered or "default" in lowered or "usually" in lowered:
         candidates.append(MemoryCandidate("semantic", "user_preference", user_input.strip(), confidence, "explicit_preference"))
 
     if entities.files:

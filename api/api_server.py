@@ -63,6 +63,7 @@ from forge.forge_engine import forge_engine
 from memory import vector_memory
 from memory.chat_history import DB_PATH as CHAT_HISTORY_DB_PATH, clear_history, get_all_sessions, get_history, save_message
 from memory.memory_stats import get_memory_stats
+from memory.personalization import get_personal_display_name
 from security.access_control import AccessController
 from security.auth_manager import (
     authenticate_user,
@@ -125,6 +126,7 @@ from tools.document_generator import (
 )
 from tools.content_extractor import extract_content
 from brain.response_engine import generate_transformation_content_payload
+from tools.desktop_controller import get_supported_desktop_apps
 
 
 app = FastAPI()
@@ -596,7 +598,18 @@ def _normalize_chat_mode(requested_mode: Optional[str], execution_mode: Optional
         return "real"
 
     execution = (execution_mode or "").strip().lower()
-    if execution in {"greeting", "memory", "special_intent", "single_agent", "generated_agent", "permission_blocked", "document_generation"}:
+    if execution in {
+        "greeting",
+        "memory",
+        "special_intent",
+        "single_agent",
+        "generated_agent",
+        "permission_blocked",
+        "document_generation",
+        "external_desktop",
+        "action_plan",
+        "action_plan_failed",
+    }:
         return "real"
 
     if "agent" in execution and "fallback" not in execution:
@@ -714,18 +727,22 @@ def _normalize_casual_conversation_input(message: str) -> str:
     return lowered.strip()
 
 
-def _build_casual_conversation_reply(message: str) -> Optional[str]:
+def _build_casual_conversation_reply(message: str, user_profile: Optional[dict[str, Any]] = None) -> Optional[str]:
     normalized = _normalize_casual_conversation_input(message)
     if not normalized:
         return None
 
+    profile = dict(user_profile or {})
+    display_name = get_personal_display_name(profile, allow_memory_fallback=bool(profile))
+    greeting_prefix = f"Hey {display_name}." if display_name else "Hey."
+
     greeting_inputs = {
-        "hi": "Hey. What can I help you with?",
-        "hello": "Hey. What can I help you with?",
-        "hey": "Hey. What can I help you with?",
-        "hi aura": "Hey. I'm here.",
-        "hello aura": "Hey. I'm here.",
-        "hey aura": "Hey. I'm here.",
+        "hi": f"{greeting_prefix} What can I help you with?",
+        "hello": f"{greeting_prefix} What can I help you with?",
+        "hey": f"{greeting_prefix} What can I help you with?",
+        "hi aura": f"{greeting_prefix} I'm here.",
+        "hello aura": f"{greeting_prefix} I'm here.",
+        "hey aura": f"{greeting_prefix} I'm here.",
     }
     if normalized in greeting_inputs:
         return greeting_inputs[normalized]
@@ -753,7 +770,11 @@ def _build_casual_conversation_reply(message: str) -> Optional[str]:
 
 
 def _build_casual_chat_payload(context: dict[str, Any]) -> Optional[dict[str, Any]]:
-    reply = _build_casual_conversation_reply(context.get("raw_message") or context.get("cleaned_message") or "")
+    profile = {**(context.get("user_profile") or {}), **(context.get("user") or {})}
+    reply = _build_casual_conversation_reply(
+        context.get("raw_message") or context.get("cleaned_message") or "",
+        profile,
+    )
     if not reply:
         return None
 
@@ -1141,6 +1162,8 @@ def _execute_chat_pipeline(context: dict[str, Any]) -> dict[str, Any]:
     payload["model"] = result.get("model")
     payload["providers_tried"] = result.get("providers_tried", [])
     payload["degraded"] = degraded
+    if result.get("personal_context"):
+        payload["personal_context"] = result.get("personal_context")
     payload["routing_trace"] = {
         "input": clean_response(context["raw_message"]),
         "intent": str(result.get("detected_intent") or result.get("intent") or context["detected_intent"] or "general"),
@@ -1149,6 +1172,21 @@ def _execute_chat_pipeline(context: dict[str, Any]) -> dict[str, Any]:
         "output": reply_text,
         "execution_mode": execution_mode or "unknown",
     }
+    for field in (
+        "desktop_app",
+        "desktop_label",
+        "desktop_launch_status",
+        "desktop_launch_success",
+        "desktop_launched_with",
+        "desktop_pid",
+        "action_plan",
+        "action_steps",
+        "action_success",
+        "action_status",
+        "failed_action_step",
+    ):
+        if field in result:
+            payload[field] = result.get(field)
     return _append_document_payload_fields(payload, result)
 
 
@@ -1274,6 +1312,7 @@ PUBLIC_PATHS = {
     "/api/system/health",
     "/api/voice/status",
     "/api/voice/text",
+    "/api/desktop/apps",
     "/api/generate/document",
     "/api/transform",
     "/api/transform/file",
@@ -2185,6 +2224,18 @@ async def api_sessions():
             content={"error": str(error), "status": "error"},
             headers=_cors_headers(),
         )
+
+
+@app.get("/api/desktop/apps")
+async def api_desktop_apps():
+    return JSONResponse(
+        content={
+            "success": True,
+            "status": "ok",
+            "apps": get_supported_desktop_apps(),
+        },
+        headers=_cors_headers(),
+    )
 
 
 @app.get("/api/admin/users")

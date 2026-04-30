@@ -39,6 +39,7 @@ from brain.understanding_engine import clean_user_input
 from config.settings import DEFAULT_REASONING_PROVIDER
 from memory.knowledge_base import get_user_name, store_user_name
 from memory.memory_controller import process_interaction_memory
+from memory.personalization import build_personalized_system_prompt
 
 from agents.autonomous.planner_agent import create_plan, parse_plan_to_steps
 from agents.core.language_agent import detect_language, respond_in_language
@@ -100,7 +101,13 @@ from tools.document_generator import (
     resolve_document_retrieval_followup,
     secure_generated_document_access,
 )
+from tools.action_intelligence import build_action_plan, execute_action_plan
 from tools.content_extractor import extract_content, is_youtube_url
+from tools.desktop_controller import (
+    get_application_label,
+    normalize_application_name,
+    open_application,
+)
 
 
 GREETING_INPUTS = {"hi", "hello", "hey", "hey aura", "hi aura", "hello aura"}
@@ -230,6 +237,10 @@ _TRANSFORMATION_TRIGGER_RE = re.compile(
 _INLINE_CONTENT_SPLIT_RE = re.compile(
     r"[:\uff1a]\s*\n|[:\uff1a]\s{2,}",
 )
+_DESKTOP_OPEN_COMMAND_RE = re.compile(
+    r"^(?:please\s+)?(?:open|launch|start)\s+(?:the\s+)?(?P<target>[a-z0-9 .-]+?)(?:\s+(?:app|application))?[.!?]*$",
+    flags=re.IGNORECASE,
+)
 
 try:
     from memory.vector_memory import store_memory
@@ -263,8 +274,15 @@ def _with_telemetry(
     return payload
 
 
-def _llm_response_with_provider(user_input: str, language: str) -> Dict[str, Any]:
-    system_prompt = build_system_prompt(language)
+def _llm_response_with_provider(
+    user_input: str,
+    language: str,
+    personal_context: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    system_prompt = build_personalized_system_prompt(
+        build_system_prompt(language),
+        personal_context,
+    )
     messages = build_messages(user_input, system_prompt)
     started = time.perf_counter()
     provider_response = generate_response_payload(
@@ -473,6 +491,20 @@ def _resolve_execution_agent_name(agent_name: str) -> str:
     return INTENT_TO_REAL_AGENT_MAP.get(normalized, normalized)
 
 
+def _resolve_desktop_open_request(command: str) -> Optional[Dict[str, str]]:
+    match = _DESKTOP_OPEN_COMMAND_RE.match(str(command or "").strip())
+    if not match:
+        return None
+    target = str(match.group("target") or "").strip()
+    app_name = normalize_application_name(target)
+    if not app_name:
+        return None
+    return {
+        "app_name": app_name,
+        "label": get_application_label(app_name) or app_name.title(),
+    }
+
+
 def _sanitize_chat_orchestration(orchestration: Dict[str, Any]) -> Dict[str, Any]:
     safe_orchestration = dict(orchestration or {})
     primary_alias = str(safe_orchestration.get("primary_agent") or "general").strip().lower() or "general"
@@ -537,10 +569,15 @@ def store_and_learn(
     response: str,
     intent: str,
     extra_metadata: Optional[Dict[str, Any]] = None,
+    session_id: str = "default",
+    username: Optional[str] = None,
 ) -> None:
     metadata = {"type": "user_input", "intent": intent}
     if extra_metadata:
         metadata.update(extra_metadata)
+    metadata["session_id"] = str(session_id or "default")
+    if username:
+        metadata["username"] = username
 
     try:
         process_interaction_memory(
@@ -548,6 +585,7 @@ def store_and_learn(
             response,
             intent,
             float(metadata.get("confidence", 1.0)),
+            session_id=str(session_id or "default"),
         )
     except Exception:
         pass
@@ -622,6 +660,7 @@ def resolve_permission_action(
         "document_generator": "document_generation",
         "document_retrieval": "document_generation",
         "transformation_engine": "document_generation",
+        "desktop_controller": "desktop_launch",
     }
 
     if primary_agent == "task":
@@ -1410,6 +1449,8 @@ def build_result(
             "execution_mode": effective_execution_mode,
             "plan_steps": plan_steps or [],
         },
+        session_id=session_id,
+        username=username,
     )
     try:
         update_context_from_command(
@@ -1578,6 +1619,11 @@ def process_single_command_detailed(
     runtime_session_id = session_id or "runtime"
     runtime_identity = _runtime_identity(security_context)
     runtime_username = runtime_identity.get("username")
+    runtime_personal_context = (
+        security_context.get("personal_context")
+        if isinstance(security_context.get("personal_context"), dict)
+        else None
+    )
     raw_input = str(command or "")
     understanding_started = time.perf_counter()
     raw_command = clean_user_input(command)
@@ -1627,7 +1673,7 @@ def process_single_command_detailed(
         active_telemetry.record_intent("greeting", 1.0, [], 0.0)
         active_telemetry.record_routing("general", "Greeting shortcut matched a known greeting input.", "safe", 0.0)
         active_telemetry.record_execution("general", response, True, 0.0)
-        store_and_learn(raw_command, response, "greeting")
+        store_and_learn(raw_command, response, "greeting", session_id=runtime_session_id, username=runtime_username)
         return _with_telemetry({
             "intent": "greeting",
             "detected_intent": "greeting",
@@ -1689,7 +1735,7 @@ def process_single_command_detailed(
             final_memory_response = f"Your name is {name}." if name else "I don't know your name yet."
 
         active_telemetry.record_execution("memory", final_memory_response, True, 0.0)
-        store_and_learn(raw_command, final_memory_response, "memory")
+        store_and_learn(raw_command, final_memory_response, "memory", session_id=runtime_session_id, username=runtime_username)
         return _with_telemetry({
             "intent": "memory",
             "detected_intent": "memory",
@@ -1918,6 +1964,96 @@ def process_single_command_detailed(
         result["document_preview"] = transformation_result.get("preview_text")
         return result
 
+    desktop_request = _resolve_desktop_open_request(raw_command)
+    if desktop_request is not None:
+        _log_intent_agent_mapping("open", "desktop_controller")
+        permission = _enforce_runtime_permission(
+            "desktop_launch",
+            session_id=runtime_session_id,
+            security_context=security_context,
+            require_auth=False,
+        )
+        if not permission.get("success"):
+            reason = str((permission.get("permission") or {}).get("reason") or "This action is protected.")
+            active_telemetry.record_intent("desktop_open", 1.0, [], 0.0)
+            active_telemetry.record_routing("desktop_controller", "Desktop launch matched a supported application.", "safe", 0.0)
+            active_telemetry.record_execution("desktop_controller", reason, False, 0.0)
+            return _with_telemetry({
+                "intent": "permission",
+                "detected_intent": "desktop_open",
+                "confidence": 1.0,
+                "response": reason,
+                "plan": [],
+                "used_agents": ["desktop_controller"],
+                "agent_capabilities": build_runtime_agent_cards(["desktop_controller"]),
+                "execution_mode": "permission_blocked",
+                "decision": build_decision_summary("desktop_open", 1.0, AGENT_ROUTER),
+                "orchestration": {
+                    "primary_agent": "desktop_controller",
+                    "secondary_agents": [],
+                    "execution_order": ["desktop_controller"],
+                    "requires_multiple": False,
+                    "primary_selection_source": "desktop_open_guard",
+                    "mode": "real",
+                    "reason": "Desktop launch request matched a supported application, but permission was blocked.",
+                },
+                "language": "english",
+                "permission_action": "desktop_launch",
+                "permission": permission,
+                "desktop_app": desktop_request["app_name"],
+            }, active_telemetry, publish=publish_telemetry)
+
+        launch_started = time.perf_counter()
+        desktop_result = open_application(desktop_request["app_name"])
+        execution_time_ms = (time.perf_counter() - launch_started) * 1000
+        reply = str(desktop_result.get("message") or "I can't open that yet.")
+        active_telemetry.record_intent("desktop_open", 1.0, [], 0.0)
+        active_telemetry.record_routing(
+            "desktop_controller",
+            f"Desktop launch matched the supported app '{desktop_request['app_name']}'.",
+            "safe",
+            0.0,
+        )
+        active_telemetry.record_execution(
+            "desktop_controller",
+            reply,
+            bool(desktop_result.get("success")),
+            execution_time_ms,
+        )
+        result = build_result(
+            raw_command=raw_command,
+            detected_intent="desktop_open",
+            confidence=1.0,
+            response=reply,
+            language="english",
+            orchestration={
+                "primary_agent": "desktop_controller",
+                "secondary_agents": [],
+                "execution_order": ["desktop_controller"],
+                "requires_multiple": False,
+                "primary_selection_source": "desktop_open_guard",
+                "mode": "real",
+                "reason": "Desktop launch request was routed directly to the desktop controller.",
+            },
+            used_agents=["desktop_controller"],
+            execution_mode="external_desktop",
+            plan_steps=[],
+            permission_action="desktop_launch",
+            permission=permission,
+            session_id=runtime_session_id,
+            username=runtime_username,
+            telemetry=active_telemetry,
+            publish_telemetry=publish_telemetry,
+        )
+        result["desktop_app"] = desktop_result.get("app_name")
+        result["desktop_label"] = desktop_result.get("label")
+        result["desktop_launch_status"] = desktop_result.get("status")
+        result["desktop_launch_success"] = bool(desktop_result.get("success"))
+        result["desktop_launched_with"] = desktop_result.get("launched_with")
+        result["desktop_pid"] = desktop_result.get("pid")
+        result["error"] = desktop_result.get("error")
+        return result
+
     language = detect_language(raw_command)
 
     intent_started = time.perf_counter()
@@ -1967,7 +2103,11 @@ def process_single_command_detailed(
         )
 
         execution_started = time.perf_counter()
-        provider_result = _llm_response_with_provider(raw_command, language)
+        provider_result = _llm_response_with_provider(
+            raw_command,
+            language,
+            personal_context=runtime_personal_context,
+        )
         execution_time_ms = (time.perf_counter() - execution_started) * 1000
         provider_name = str(provider_result.get("provider_name") or "").strip() or None
         provider_model = str(provider_result.get("model") or "").strip() or None
@@ -2177,7 +2317,11 @@ def process_single_command_detailed(
                 execution_mode = "generated_agent"
             else:
                 enhanced_input = build_enhanced_input(raw_command, confidence)
-                provider_result = _llm_response_with_provider(enhanced_input, language)
+                provider_result = _llm_response_with_provider(
+                    enhanced_input,
+                    language,
+                    personal_context=runtime_personal_context,
+                )
                 if provider_result.get("success"):
                     response = str(provider_result.get("text") or "")
                     provider_name = str(provider_result.get("provider_name") or "").strip() or None
@@ -2202,8 +2346,8 @@ def process_single_command_detailed(
                         error=provider_result.get("error"),
                     )
                     log_failure(raw_command, str(provider_result.get("error") or "Provider response failed"))
-        normalized_response = clean_response(response).lower()
-        success = bool(normalized_response) and execution_mode != "degraded_assistant" and "i ran into a problem" not in normalized_response
+        normalized_response = clean_response(response)
+        success = bool(normalized_response) and execution_mode != "degraded_assistant" and not _is_unusable_runtime_response(normalized_response)
     except Exception as error:
         execution_time_ms = (time.perf_counter() - execution_started) * 1000
         active_telemetry.record_execution(
@@ -2251,6 +2395,119 @@ def process_single_command(command: str) -> tuple[str, str]:
     return result["intent"], result["response"]
 
 
+def _process_action_plan_command(
+    raw_command: str,
+    action_plan: Any,
+    *,
+    session_id: Optional[str],
+    security_context: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    active_telemetry = ProcessingTelemetry()
+    runtime_session_id = session_id or "runtime"
+    runtime_identity = _runtime_identity(security_context)
+    runtime_username = runtime_identity.get("username")
+    active_telemetry.record_understanding(
+        raw_input=raw_command,
+        normalized=raw_command,
+        entities=parse_entities(raw_command).to_dict(),
+        time_ms=0.0,
+    )
+
+    permission = _enforce_runtime_permission(
+        "desktop_launch",
+        session_id=runtime_session_id,
+        security_context=security_context,
+        require_auth=False,
+    )
+    if not permission.get("success"):
+        reason = str((permission.get("permission") or {}).get("reason") or "This action is protected.")
+        active_telemetry.record_intent("action_plan", 1.0, [], 0.0)
+        active_telemetry.record_routing("action_planner", "Safe action plan matched, but permission blocked execution.", "safe", 0.0)
+        active_telemetry.record_execution("action_planner", reason, False, 0.0)
+        return _with_telemetry({
+            "intent": "permission",
+            "detected_intent": "action_plan",
+            "confidence": 1.0,
+            "response": reason,
+            "plan": [step.get("label") for step in action_plan.to_dict().get("steps", [])],
+            "used_agents": ["action_planner"],
+            "agent_capabilities": build_runtime_agent_cards(["action_planner"]),
+            "execution_mode": "permission_blocked",
+            "decision": {"action_plan": True, "command_count": len(action_plan.steps)},
+            "orchestration": {
+                "primary_agent": "action_planner",
+                "execution_order": ["action_planner"],
+                "requires_multiple": True,
+                "mode": "real",
+                "reason": "Action plan was blocked by permission enforcement.",
+            },
+            "language": "english",
+            "permission_action": "desktop_launch",
+            "permission": permission,
+            "action_plan": action_plan.to_dict(),
+        }, active_telemetry, publish=True)
+
+    started = time.perf_counter()
+    execution = execute_action_plan(action_plan)
+    execution_time_ms = (time.perf_counter() - started) * 1000
+    feedback = [str(item).strip() for item in execution.get("feedback", []) if str(item).strip()]
+    response = "\n".join(feedback) or (
+        "Action plan completed." if execution.get("success") else "I couldn't complete that action plan."
+    )
+    step_types = {str(step.get("action_type") or "") for step in execution.get("plan", {}).get("steps", [])}
+    used_agents = ["action_planner"]
+    if "desktop_open" in step_types:
+        used_agents.append("desktop_controller")
+    if "browser_search" in step_types:
+        used_agents.append("browser_action")
+
+    active_telemetry.record_intent("action_plan", 1.0, [], 0.0)
+    active_telemetry.record_routing(
+        "action_planner",
+        "Command decomposed into safe whitelisted desktop/browser actions.",
+        "safe",
+        0.0,
+    )
+    active_telemetry.record_execution(
+        "action_planner",
+        response,
+        bool(execution.get("success")),
+        execution_time_ms,
+    )
+
+    result = build_result(
+        raw_command=raw_command,
+        detected_intent="action_plan",
+        confidence=1.0,
+        response=response,
+        language="english",
+        orchestration={
+            "primary_agent": "action_planner",
+            "secondary_agents": used_agents[1:],
+            "execution_order": used_agents,
+            "requires_multiple": True,
+            "primary_selection_source": "safe_action_plan",
+            "mode": "real",
+            "reason": "AURA decomposed the request into safe whitelisted actions and executed them sequentially.",
+        },
+        used_agents=used_agents,
+        execution_mode="action_plan" if execution.get("success") else "action_plan_failed",
+        plan_steps=[step.get("label") for step in execution.get("plan", {}).get("steps", [])],
+        permission_action="desktop_launch",
+        permission=permission,
+        session_id=runtime_session_id,
+        username=runtime_username,
+        telemetry=active_telemetry,
+        publish_telemetry=True,
+    )
+    result["action_plan"] = execution.get("plan")
+    result["action_steps"] = execution.get("plan", {}).get("steps", [])
+    result["action_success"] = bool(execution.get("success"))
+    result["action_status"] = execution.get("status")
+    result["failed_action_step"] = execution.get("failed_step")
+    return result
+
+
 def process_command_detailed(
     command: str,
     *,
@@ -2270,6 +2527,15 @@ def process_command_detailed(
     if resolve_document_request(raw_input, session_id=session_id) is not None or resolve_document_request(raw_command, session_id=session_id) is not None:
         return process_single_command_detailed(
             raw_command,
+            session_id=session_id,
+            security_context=security_context,
+        )
+
+    action_plan = build_action_plan(raw_command)
+    if action_plan is not None:
+        return _process_action_plan_command(
+            raw_command,
+            action_plan,
             session_id=session_id,
             security_context=security_context,
         )

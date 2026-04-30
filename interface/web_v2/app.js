@@ -47,8 +47,10 @@
     { pattern: /\b(?:open|launch|go to|visit)\s+whatsapp\b/i, label: "WhatsApp", type: "web", url: "https://web.whatsapp.com/" },
     { pattern: /\b(?:open|launch|go to|visit)\s+spotify\b/i, label: "Spotify", type: "web", url: "https://open.spotify.com/" },
     { pattern: /\b(?:open|launch)\s+(?:the\s+)?browser\b/i, label: "Browser", type: "web", url: "https://www.google.com/" },
-    { pattern: /\b(?:open|launch)\s+(?:vs\s*code|visual studio code|vscode)\b/i, label: "VS Code", type: "desktop" },
-    { pattern: /\b(?:open|launch)\s+(?:notepad|calculator|settings)\b/i, label: "Desktop app", type: "desktop" },
+    { pattern: /\b(?:open|launch|start)\s+(?:google chrome|chrome)\b/i, label: "Chrome", type: "desktop" },
+    { pattern: /\b(?:open|launch|start)\s+(?:vs\s*code|visual studio code|vscode)\b/i, label: "VS Code", type: "desktop" },
+    { pattern: /\b(?:open|launch|start)\s+notepad\b/i, label: "Notepad", type: "desktop" },
+    { pattern: /\b(?:open|launch|start)\s+(?:calculator|calc)\b/i, label: "Calculator", type: "desktop" },
   ];
 
   const INTERNAL_HINTS = [
@@ -73,6 +75,7 @@
     sessions: [],
     messages: [],
     recentOutputs: [],
+    desktopApps: [],
     sidebarSearch: "",
     panelVisible: false,
     panelMode: "",
@@ -112,6 +115,34 @@
     console.info(`[ORB STATE] ${stateName} triggered by ${eventName}`);
   }
 
+  function pulseOrbClass(className, durationMs = 520) {
+    if (!el.assistantOrb) {
+      return;
+    }
+    el.assistantOrb.classList.remove(className);
+    void el.assistantOrb.offsetWidth;
+    el.assistantOrb.classList.add(className);
+    window.setTimeout(() => {
+      el.assistantOrb?.classList.remove(className);
+    }, durationMs);
+  }
+
+  function triggerOrbRipple() {
+    pulseOrbClass("assistant-orb--rippling", 560);
+  }
+
+  function triggerOrbWake() {
+    pulseOrbClass("assistant-orb--wake-active", 1200);
+  }
+
+  function triggerOrbStateShift() {
+    pulseOrbClass("assistant-orb--state-shift", 420);
+  }
+
+  function triggerOrbResponsePulse() {
+    pulseOrbClass("assistant-orb--response-pulse", 900);
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     cacheElements();
     bindEvents();
@@ -128,6 +159,7 @@
     await Promise.allSettled([
       refreshAuthSession(),
       loadVoiceStatus(),
+      refreshDesktopApps(),
       loadSessions(),
     ]);
     syncVoiceControls();
@@ -145,6 +177,15 @@
     renderConversation();
     renderRightPanel();
     updateWorkspaceChrome();
+  }
+
+  async function refreshDesktopApps() {
+    try {
+      const payload = await apiJson("/api/desktop/apps", { method: "GET" });
+      state.desktopApps = Array.isArray(payload.apps) ? payload.apps : [];
+    } catch (_error) {
+      state.desktopApps = [];
+    }
   }
 
   function cacheElements() {
@@ -194,7 +235,8 @@
       state.sidebarSearch = String(el.chatSearch.value || "").trim().toLowerCase();
       renderSidebarSessions();
     });
-    el.profileButton?.addEventListener("click", () => {
+    el.profileButton?.addEventListener("click", async () => {
+      await refreshDesktopApps();
       state.panelVisible = true;
       state.panelMode = "profile";
       renderRightPanel();
@@ -503,7 +545,7 @@
 
     const classification = classifyCommand(commandText);
     if (classification.kind === "external") {
-      handleExternalCommand(commandText, classification);
+      await handleExternalCommand(commandText, classification);
       return;
     }
 
@@ -511,6 +553,7 @@
   }
 
   async function runWakeSequence() {
+    triggerOrbWake();
     setOrbLayout("center");
     setAssistantState("listening", "wake:sequence_started");
     showPresence({
@@ -523,11 +566,15 @@
     updateWorkspaceSummary("AURA is awake, present, and listening for the next step.");
     await delay(220);
     setAssistantState("responding", "wake:greeting_ready");
-    appendMessage({
+    await revealAssistantMessage({
       role: "assistant",
       text: buildWakeGreeting(),
       badge: "Wake",
       timestamp: new Date().toISOString(),
+    }, {
+      delayMs: 220,
+      stateName: "responding",
+      event: "wake:greeting_revealed",
     });
     showPresence({
       mode: "center",
@@ -573,12 +620,15 @@
 
       const delivery = normalizeDocumentDeliveryPayload(payload);
       const replyText = String(payload.reply || payload.content || "").trim() || "Done.";
-      appendMessage({
+      await revealAssistantMessage({
         role: "assistant",
         text: replyText,
         badge: humanizeBadge(payload.execution_mode || classification.taskKind || "Assistant"),
         timestamp: new Date().toISOString(),
         delivery,
+      }, {
+        stateName: "responding",
+        event: "api:response_ready",
       });
 
       if (delivery) {
@@ -587,7 +637,6 @@
         state.panelMode = "outputs";
       }
 
-      setAssistantState("responding", "api:response_received");
       setComposerStatus(delivery
         ? "Done. I've prepared it."
         : payload.degraded
@@ -627,21 +676,24 @@
         text: "Please try again in a moment.",
         duration: 2200,
       });
-      appendMessage({
+      await revealAssistantMessage({
         role: "assistant",
         text: error.message || "Something went wrong while processing that request.",
         badge: "Error",
         timestamp: new Date().toISOString(),
+      }, {
+        delayMs: 220,
+        stateName: "error",
+        event: "api:error_revealed",
       });
     } finally {
       state.requestInFlight = false;
-      renderConversation();
       renderRightPanel();
       resetToCalmIdle();
     }
   }
 
-  function handleExternalCommand(commandText, classification) {
+  async function handleExternalCommand(commandText, classification) {
     setTaskScope("external");
     state.currentTask = {
       scope: "external",
@@ -693,26 +745,91 @@
         });
       }
     } else {
-      replyText = `I can't launch ${classification.label} from the browser yet. AURA can still open supported websites here.`;
-      setAssistantState("error", "external:desktop_launch_unsupported");
-      setComposerStatus("I can't launch that from the browser yet.");
-      updateWorkspaceSummary("Desktop app launches still need a native bridge outside this browser.");
+      state.requestInFlight = true;
+      setComposerStatus("Opening that for you.");
+      updateWorkspaceSummary("AURA is asking the desktop controller to launch this outside the workspace.");
       showPresence({
         mode: "floating",
-        eyebrow: "Browser limitation",
-        title: "I couldn't complete that yet.",
-        text: "Desktop app launches still need a native bridge.",
-        duration: 2400,
+        eyebrow: "Desktop control",
+        title: "Opening that for you.",
+        text: `${classification.label} is being launched through the AURA backend.`,
+        duration: 2200,
       });
+      renderRightPanel();
+
+      try {
+        const payload = await apiJson("/api/chat", {
+          method: "POST",
+          body: JSON.stringify({ message: commandText, mode: "real" }),
+        });
+        replyText = String(payload.reply || payload.content || "").trim() || "I can't open that yet.";
+        state.currentTask.launchStatus = payload.desktop_launch_status || (payload.execution_mode === "external_desktop" ? "opened" : "unknown");
+        state.currentTask.launchMessage = replyText;
+        const launched = Boolean(payload.desktop_launch_success) || (
+          payload.execution_mode === "external_desktop" && /^opening\b/i.test(replyText)
+        );
+        const unavailable = payload.desktop_launch_status === "unavailable";
+
+        if (launched) {
+          setAssistantState("responding", "external:desktop_launch_succeeded");
+          setComposerStatus("Opening that for you.");
+          updateWorkspaceSummary(`${classification.label} is opening outside AURA while the assistant stays nearby.`);
+          showPresence({
+            mode: "floating",
+            eyebrow: "Desktop control",
+            title: "Opening that for you.",
+            text: `${classification.label} is launching outside AURA while I stay present here.`,
+            duration: 2200,
+          });
+        } else {
+          setAssistantState("error", "external:desktop_launch_unavailable");
+          setComposerStatus(replyText);
+          updateWorkspaceSummary(
+            unavailable
+              ? `${classification.label} is not available on this system.`
+              : `${classification.label} could not be launched from the AURA backend.`
+          );
+          showPresence({
+            mode: "floating",
+            eyebrow: "Desktop control",
+            title: "I couldn't complete that yet.",
+            text: replyText,
+            duration: 2400,
+          });
+        }
+
+        await loadSessions();
+        renderSidebarSessions();
+      } catch (error) {
+        replyText = error.message || "I couldn't complete that yet.";
+        state.currentTask.launchStatus = "failed";
+        state.currentTask.launchMessage = replyText;
+        setAssistantState("error", "external:desktop_launch_failed");
+        setComposerStatus(replyText);
+        updateWorkspaceSummary(`${classification.label} could not be launched from the AURA backend.`);
+        showPresence({
+          mode: "floating",
+          eyebrow: "Desktop control",
+          title: "I couldn't complete that yet.",
+          text: replyText,
+          duration: 2400,
+        });
+      } finally {
+        state.requestInFlight = false;
+        renderRightPanel();
+      }
     }
 
-    appendMessage({
+    await revealAssistantMessage({
       role: "assistant",
       text: replyText,
       badge: "External action",
       timestamp: new Date().toISOString(),
+    }, {
+      delayMs: 240,
+      stateName: state.assistantState === "error" ? "error" : "responding",
+      event: state.assistantState === "error" ? "external:reply_error_revealed" : "external:reply_revealed",
     });
-    renderConversation();
     renderRightPanel();
     resetToCalmIdle();
   }
@@ -772,7 +889,36 @@
     state.messages.push(message);
     renderConversation();
     scrollConversationToBottom();
+    if (message.effect) {
+      window.setTimeout(() => {
+        delete message.effect;
+      }, 1000);
+    }
     return message;
+  }
+
+  function responseRevealDelay(message) {
+    const textLength = String(message?.text || "").length;
+    if (textLength > 900 || message?.delivery) {
+      return 420;
+    }
+    if (textLength > 280) {
+      return 320;
+    }
+    return 240;
+  }
+
+  async function revealAssistantMessage(message, options = {}) {
+    if (options.stateName) {
+      setAssistantState(options.stateName, options.event || "ui:assistant_reply_ready");
+    }
+    await delay(Number.isFinite(options.delayMs) ? options.delayMs : responseRevealDelay(message));
+    const revealed = appendMessage({
+      ...message,
+      effect: options.effect || "response",
+    });
+    triggerOrbResponsePulse();
+    return revealed;
   }
 
   function renderConversation() {
@@ -789,6 +935,9 @@
   function buildMessageRow(message) {
     const row = document.createElement("article");
     row.className = `message-row message-row--${message.role === "user" ? "user" : "assistant"}`;
+    if (message.effect === "response" && message.role !== "user") {
+      row.classList.add("message-row--response");
+    }
 
     const card = document.createElement("div");
     card.className = "message-card";
@@ -1084,6 +1233,9 @@
     if (state.panelMode === "profile") {
       el.rightPanelTitle.textContent = "Profile";
       el.rightPanelBody.appendChild(buildProfileCard());
+      if (state.desktopApps.length) {
+        el.rightPanelBody.appendChild(buildDesktopAppsCard());
+      }
       return;
     }
 
@@ -1098,6 +1250,10 @@
 
     if (state.recentOutputs.length) {
       el.rightPanelBody.appendChild(buildOutputsCard());
+    }
+
+    if (state.currentTask?.scope === "external" && state.desktopApps.length) {
+      el.rightPanelBody.appendChild(buildDesktopAppsCard(true));
     }
 
     if (!state.currentTask && !state.recentOutputs.length) {
@@ -1161,6 +1317,52 @@
     return card;
   }
 
+  function buildDesktopAppsCard(compact) {
+    const card = document.createElement("section");
+    card.className = "panel-card";
+
+    const title = document.createElement("p");
+    title.className = "panel-card__title";
+    title.textContent = compact ? "Desktop apps" : "Desktop apps";
+
+    const body = document.createElement("p");
+    body.className = "panel-card__body";
+    body.textContent = compact
+      ? "These are the safe desktop apps AURA can try to launch from this system."
+      : "AURA only launches a small safe allowlist. Availability reflects what the backend can actually find right now.";
+
+    const list = document.createElement("div");
+    list.className = "desktop-apps-list";
+
+    state.desktopApps.forEach((app) => {
+      const item = document.createElement("div");
+      item.className = "desktop-app-item";
+
+      const copy = document.createElement("div");
+      copy.className = "desktop-app-item__copy";
+
+      const name = document.createElement("strong");
+      name.textContent = app.display_name || app.app_id || "Desktop app";
+
+      const aliases = document.createElement("span");
+      const aliasList = Array.isArray(app.aliases) ? app.aliases : [];
+      aliases.textContent = aliasList.length ? aliasList.join(", ") : "No aliases";
+
+      copy.append(name, aliases);
+
+      const status = document.createElement("span");
+      const isAvailable = Boolean(app.available);
+      status.className = `desktop-app-status desktop-app-status--${isAvailable ? "available" : "unavailable"}`;
+      status.textContent = isAvailable ? "Available" : "Unavailable";
+
+      item.append(copy, status);
+      list.appendChild(item);
+    });
+
+    card.append(title, body, list);
+    return card;
+  }
+
   function buildTaskCard() {
     const card = document.createElement("section");
     card.className = "panel-card";
@@ -1179,12 +1381,18 @@
 
     const grid = document.createElement("div");
     grid.className = "panel-card__grid";
-    [
+    const fields = [
       ["Task label", state.currentTask.label],
       ["Scope", capitalize(state.currentTask.scope)],
       ["Request", state.currentTask.text],
       ["Orb layout", humanizeBadge(state.orbLayout)],
-    ].forEach(([label, value]) => {
+    ];
+
+    if (state.currentTask.scope === "external" && state.currentTask.launchStatus) {
+      fields.push(["Launch status", humanizeBadge(state.currentTask.launchStatus)]);
+    }
+
+    fields.forEach(([label, value]) => {
       const field = document.createElement("div");
       field.className = "panel-field";
       const labelNode = document.createElement("span");
@@ -1196,6 +1404,12 @@
     });
 
     card.append(title, body, grid);
+    if (state.currentTask.scope === "external" && state.currentTask.launchMessage) {
+      const note = document.createElement("p");
+      note.className = "panel-card__body";
+      note.textContent = state.currentTask.launchMessage;
+      card.appendChild(note);
+    }
     return card;
   }
 
@@ -1432,7 +1646,7 @@
         updateVoiceTranscript(wakeMatch.remainingText, { final: true });
         const classification = classifyCommand(wakeMatch.remainingText);
         if (classification.kind === "external") {
-          handleExternalCommand(wakeMatch.remainingText, classification);
+          await handleExternalCommand(wakeMatch.remainingText, classification);
         } else {
           await handleInternalCommand(wakeMatch.remainingText, classification);
         }
@@ -1456,7 +1670,7 @@
 
     const classification = classifyCommand(commandText);
     if (classification.kind === "external") {
-      handleExternalCommand(commandText, classification);
+      await handleExternalCommand(commandText, classification);
       return;
     }
 
@@ -1831,6 +2045,7 @@
 
     if (shouldLog) {
       logOrbState(nextState, nextEvent);
+      triggerOrbStateShift();
     }
 
     if (el.stateChipLabel) {
@@ -1848,6 +2063,9 @@
   }
 
   function setOrbLayout(layout) {
+    if (state.orbLayout !== layout) {
+      pulseOrbClass("assistant-orb--moving", 760);
+    }
     state.orbLayout = layout;
     el.body.dataset.orbLayout = layout;
     if (el.orbModeLabel) {
@@ -1928,6 +2146,7 @@
     if (state.requestInFlight || state.recognitionActive || state.speechCommandInFlight) {
       return;
     }
+    triggerOrbRipple();
     void runWakeSequence().then(() => {
       resetToCalmIdle(1800);
       window.setTimeout(() => {

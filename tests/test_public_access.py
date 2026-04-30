@@ -158,6 +158,37 @@ class PublicAccessTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["status"], "error")
 
+    def test_desktop_apps_endpoint_is_public_and_returns_truthful_app_list(self):
+        with patch.object(
+            api_server,
+            "get_supported_desktop_apps",
+            return_value=[
+                {
+                    "app_id": "chrome",
+                    "display_name": "Chrome",
+                    "aliases": ["chrome", "google chrome"],
+                    "available": True,
+                    "status": "available",
+                },
+                {
+                    "app_id": "vs code",
+                    "display_name": "VS Code",
+                    "aliases": ["vs code", "vscode", "visual studio code"],
+                    "available": False,
+                    "status": "unavailable",
+                },
+            ],
+        ):
+            response = self.client.get("/api/desktop/apps")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["success"])
+        self.assertEqual(body["status"], "ok")
+        self.assertEqual(len(body["apps"]), 2)
+        self.assertEqual(body["apps"][0]["app_id"], "chrome")
+        self.assertFalse(body["apps"][1]["available"])
+
 
 if __name__ == "__main__":
     unittest.main()

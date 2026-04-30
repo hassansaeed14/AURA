@@ -11,7 +11,7 @@ from typing import Any, Iterable, Optional
 from uuid import uuid4
 from xml.sax.saxutils import escape as xml_escape
 
-from brain.response_engine import generate_document_content_payload
+from brain.response_engine import generate_document_content_payload, stabilize_assignment_content
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -205,6 +205,25 @@ def normalize_citation_style(value: Optional[str]) -> Optional[str]:
 def _normalize_topic(value: str) -> str:
     topic = str(value or "").strip()
     topic = re.sub(r"\s+", " ", topic)
+    if re.search(r"\b(?:notes|assignment|document|essay|report|page|pages|download|format|style)\b", topic, flags=re.IGNORECASE):
+        anchor_matches = list(re.finditer(r"\b(?:on|about|regarding)\s+(.+)$", topic, flags=re.IGNORECASE))
+        if anchor_matches:
+            topic = anchor_matches[-1].group(1).strip()
+        else:
+            for_match = re.search(r"\b(?:notes|assignment|document|essay|report)\s+for\s+(.+)$", topic, flags=re.IGNORECASE)
+            if for_match:
+                topic = for_match.group(1).strip()
+    topic = re.sub(r"^(?:please\s+)?(?:make|create|generate|prepare|give me|write)\s+", "", topic, flags=re.IGNORECASE)
+    topic = re.sub(r"^(?:a|an|the)\s+", "", topic, flags=re.IGNORECASE)
+    topic = re.sub(r"^(?:at\s+least\s+|minimum\s+|at\s+most\s+|maximum\s+|around\s+|about\s+)?\d{1,2}\s*(?:page|pages)\b\s*", "", topic, flags=re.IGNORECASE)
+    topic = re.sub(
+        r"^(?:(?:at\s+least\s+|minimum\s+|around\s+|about\s+)?\d{1,2}\s*(?:page|pages)\s+)?"
+        r"(?:notes|assignment|document|essay|report)\s*(?:on|about|for)?\s+",
+        "",
+        topic,
+        flags=re.IGNORECASE,
+    )
+    topic = re.sub(r"^(?:on|about|for)\s+", "", topic, flags=re.IGNORECASE)
     # Strip comma + command phrases: ", write at least 7 pages in professional format..."
     topic = re.sub(r"\s*,\s+(?:write|make|create|format|generate|add|include|prepare|produce|use)\b.*$", "", topic, flags=re.IGNORECASE)
     # Strip "in detail" intensifier (filler phrase)
@@ -214,6 +233,7 @@ def _normalize_topic(value: str) -> str:
     topic = re.sub(r"\s+\d{1,2}\s*(?:page|pages)\b", "", topic, flags=re.IGNORECASE)
     # Strip "in a professional/formal/academic format/style"
     topic = re.sub(r"\s+in\s+(?:a\s+)?(?:professional|simple|detailed|formal|academic|standard)\s+(?:format|style|manner|way|tone)\b.*$", "", topic, flags=re.IGNORECASE)
+    topic = re.sub(r"\s+(?:professional|simple|detailed|formal|academic|standard)\s+(?:format|style|manner|way|tone)\b.*$", "", topic, flags=re.IGNORECASE)
     # Strip delivery phrases including "give me its download link"
     topic = re.sub(
         r"\s+(?:and\s+)?(?:give|send|get|provide|email|share)\s+(?:me\s+)?(?:its\s+|a\s+|an\s+|the\s+)?(?:pdf|docx|word|txt|text|pptx|ppt|slides?|presentation|file|link|download)\b.*$",
@@ -229,6 +249,7 @@ def _normalize_topic(value: str) -> str:
         flags=re.IGNORECASE,
     )
     topic = re.sub(r"\s+(?:in|as)\s+(?:pdf|docx|word|txt|text|pptx|ppt)\b$", "", topic, flags=re.IGNORECASE)
+    topic = re.sub(r"\s+(?:pdf|docx|word|txt|text|pptx|ppt|slides?|presentation)\b$", "", topic, flags=re.IGNORECASE)
     topic = re.sub(r"\s+(?:in|as)\s+(?:professional|simple|detailed)\b$", "", topic, flags=re.IGNORECASE)
     topic = re.sub(
         r"\s+(?:and|also|with)\s+(?:pdf|docx|word|txt|text|pptx|ppt|slides?|presentation)(?:\s+(?:and|also)\s+(?:pdf|docx|word|txt|text|pptx|ppt|slides?|presentation))*$",
@@ -236,6 +257,13 @@ def _normalize_topic(value: str) -> str:
         topic,
         flags=re.IGNORECASE,
     )
+    topic = re.sub(
+        r"\s+(?:and|also|with)\s+(?:also\s+)?(?:pdf|docx|word|txt|text|pptx|ppt|slides?|presentation)\b.*$",
+        "",
+        topic,
+        flags=re.IGNORECASE,
+    )
+    topic = re.sub(r"\s+(?:download\s+)?link\b.*$", "", topic, flags=re.IGNORECASE)
     topic = re.sub(r"\s+with\s+(?:references|citation|citations|bibliography|works cited)\b.*$", "", topic, flags=re.IGNORECASE)
     topic = re.sub(r"\s+(?:and|also|with)$", "", topic, flags=re.IGNORECASE)
     return topic.strip(" .,!?:;-")
@@ -737,11 +765,12 @@ def resolve_document_request(text: str, *, session_id: Optional[str] = None) -> 
 def _smart_title_case(text: str) -> str:
     tokens = re.split(r"(\s+)", str(text or "").strip())
     formatted: list[str] = []
+    acronym_words = {"ai", "ml", "nlp", "llm", "api", "iot"}
     for token in tokens:
         if not token or token.isspace():
             formatted.append(token)
             continue
-        if token.isupper() and len(token) <= 5:
+        if token.lower() in acronym_words or (token.isupper() and len(token) <= 5):
             formatted.append(token)
         else:
             formatted.append(token[:1].upper() + token[1:].lower())
@@ -791,14 +820,25 @@ def _normalize_section_title(title: str) -> str:
     candidate = candidate.rstrip(":")
     lowered = candidate.lower()
     title_aliases = {
-        "background and history": "Background",
-        "background and context": "Background",
-        "technical background and context": "Background",
-        "comparison context": "Background",
+        "background": "Background / History",
+        "background and history": "Background / History",
+        "background / history": "Background / History",
+        "background and context": "Background / History",
+        "technical background and context": "Background / History",
+        "comparison context": "Background / History",
+        "historical development": "Background / History",
+        "history": "Background / History",
+        "key criteria and core differences": "Core Concepts",
+        "architecture and mechanism": "Core Concepts",
+        "how it works": "Core Concepts",
         "applications and use cases": "Applications",
         "best-fit use cases": "Applications",
-        "challenges and limitations": "Challenges",
-        "tradeoffs and limitations": "Challenges",
+        "case studies and practical examples": "Applications",
+        "advantages and importance": "Advantages",
+        "relative strengths": "Advantages",
+        "challenges": "Limitations",
+        "challenges and limitations": "Limitations",
+        "tradeoffs and limitations": "Limitations",
     }
     if lowered in title_aliases:
         return title_aliases[lowered]
@@ -840,6 +880,19 @@ def _append_default_summary_sections(document_type: str, sections: list[Document
             )
         )
     return sections
+
+
+def _merge_duplicate_sections(sections: list[DocumentSection]) -> list[DocumentSection]:
+    merged: list[DocumentSection] = []
+    title_index: dict[str, int] = {}
+    for section in sections:
+        key = section.title.strip().lower()
+        if key in title_index:
+            merged[title_index[key]].lines.extend(section.lines)
+            continue
+        title_index[key] = len(merged)
+        merged.append(section)
+    return merged
 
 
 def _strengthen_assignment_sections(sections: list[DocumentSection], topic: str) -> list[DocumentSection]:
@@ -895,6 +948,7 @@ def _parse_document_sections(document_type: str, topic: str, content: str) -> li
 
     sections = _append_default_summary_sections(document_type, sections, topic)
     if document_type == "assignment":
+        sections = _merge_duplicate_sections(sections)
         sections = _enforce_assignment_section_order(sections)
         sections = _strengthen_assignment_sections(sections, topic)
     return sections
@@ -1896,7 +1950,18 @@ def generate_document(
         content = _deduplicate_content(str(content_payload.get("content") or "").strip())
         if not content:
             raise RuntimeError("Document generation returned empty content.")
-        _warn_low_word_count(content, normalized_type, page_target)
+    if normalized_type == "assignment":
+        content = stabilize_assignment_content(
+            content,
+            normalized_topic,
+            page_target=page_target,
+            style=normalized_style,
+            include_references=include_references,
+            citation_style=normalized_citation_style,
+        )
+    else:
+        content = _deduplicate_content(content)
+    _warn_low_word_count(content, normalized_type, page_target)
 
     layout = _build_document_layout(
         normalized_type,

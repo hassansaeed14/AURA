@@ -23,6 +23,9 @@ class DocumentGeneratorTests(unittest.TestCase):
         inferred_assignment_request = document_generator.detect_document_request("make me a 10 page pdf on transformers")
         inline_assignment_request = document_generator.detect_document_request("write assignment in pdf on artificial intelligence")
         multi_output_request = document_generator.detect_document_request("make assignment on artificial intelligence and also slides with references in apa style")
+        noisy_assignment_request = document_generator.detect_document_request(
+            "write 10 pages professional format assignment on sociology give download link in pdf"
+        )
 
         self.assertIsNotNone(notes_request)
         self.assertEqual(notes_request.document_type, "notes")
@@ -62,6 +65,12 @@ class DocumentGeneratorTests(unittest.TestCase):
         self.assertEqual(multi_output_request.style, "professional")
         self.assertTrue(multi_output_request.include_references)
         self.assertEqual(multi_output_request.citation_style, "apa")
+
+        self.assertIsNotNone(noisy_assignment_request)
+        self.assertEqual(noisy_assignment_request.document_type, "assignment")
+        self.assertEqual(noisy_assignment_request.topic, "sociology")
+        self.assertEqual(noisy_assignment_request.export_format, "pdf")
+        self.assertEqual(noisy_assignment_request.page_target, 10)
 
     def test_generate_document_writes_requested_export_file(self):
         with tempfile.TemporaryDirectory() as tmp_dir, patch.object(
@@ -120,6 +129,59 @@ class DocumentGeneratorTests(unittest.TestCase):
                 archived_names = set(presentation_archive.namelist())
             self.assertIn("ppt/presentation.xml", archived_names)
             self.assertIn("ppt/slides/slide1.xml", archived_names)
+
+    def test_assignment_generation_enforces_structure_length_and_topic_quality(self):
+        weak_payload = {
+            "success": True,
+            "content": "Introduction\nThis section explains what should be discussed.",
+            "provider": "local",
+            "model": "template",
+            "source": "local_template",
+            "degraded": True,
+            "providers_tried": [],
+        }
+        required_headings = [
+            "Introduction",
+            "Background / History",
+            "Core Concepts",
+            "Applications",
+            "Advantages",
+            "Limitations",
+            "Conclusion",
+        ]
+        topic_keywords = {
+            "sociology": "social institutions",
+            "AI": "machine learning",
+            "climate change": "greenhouse gas emissions",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir, patch.object(
+            document_generator,
+            "GENERATED_DIR",
+            Path(tmp_dir),
+        ), patch.object(
+            document_generator,
+            "generate_document_content_payload",
+            return_value=weak_payload,
+        ):
+            for topic, keyword in topic_keywords.items():
+                result = document_generator.generate_document(
+                    "assignment",
+                    f"write 3 pages professional format assignment on {topic} give download link",
+                    "txt",
+                    page_target=3,
+                )
+                content = result["content"]
+                content_lines = set(content.splitlines())
+
+                self.assertEqual(result["topic"], topic)
+                for heading in required_headings:
+                    self.assertIn(heading, content_lines)
+                self.assertGreaterEqual(len(content.split()), 3 * 180)
+                self.assertLessEqual(len(content.split()), 3 * 230)
+                self.assertIn(keyword, content.lower())
+                self.assertNotIn("this section explains", content.lower())
+                self.assertNotIn("you should discuss", content.lower())
 
     def test_resolve_document_request_supports_format_followup(self):
         first_request = document_generator.resolve_document_request(

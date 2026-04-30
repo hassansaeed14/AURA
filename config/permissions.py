@@ -214,6 +214,7 @@ _register("diagram_generation", "safe", description="Diagram generation pipeline
 _register("slides", "safe", description="Slide deck pipeline.")
 _register("notes", "safe", description="Notes pipeline.")
 _register("assignment", "safe", description="Assignment pipeline.")
+_register("desktop_launch", "safe", description="Launch a whitelisted local desktop application.")
 
 # --- PRIVATE: reads into user-owned data, needs user confirmation ---
 _register("memory_read", "private", description="Read personal memory entries.",

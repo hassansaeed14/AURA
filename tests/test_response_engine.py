@@ -63,8 +63,81 @@ class ResponseEngineTests(unittest.TestCase):
             payload = response_engine.generate_response_payload("What is wrong with my setup?")
 
         self.assertFalse(payload["success"])
-        self.assertIn("live ai providers", payload["degraded_reply"].lower())
+        self.assertIn("clean live answer", payload["degraded_reply"].lower())
         self.assertIn("gemini", payload["degraded_reply"].lower())
+        self.assertNotIn("check provider health", payload["degraded_reply"].lower())
+
+    def test_build_degraded_reply_uses_natural_tone(self):
+        reply = response_engine.build_degraded_reply(
+            "What is quantum computing?",
+            providers_tried=[{"provider": "groq", "status": "rate_limited"}],
+        )
+
+        self.assertIn("clean live answer", reply.lower())
+        self.assertIn("groq", reply.lower())
+        self.assertNotIn("live ai providers", reply.lower())
+        self.assertNotIn("check provider health", reply.lower())
+
+    def test_generate_response_payload_retries_before_using_fallback_provider(self):
+        with patch.object(
+            response_engine,
+            "generate_with_best_provider",
+            side_effect=[
+                {
+                    "success": True,
+                    "provider": "groq",
+                    "model": "llama-3.3-70b-versatile",
+                    "text": "I don't see a specific question or request. Could you provide more context?",
+                    "attempts": [{"provider": "groq", "status": "success"}],
+                    "routing_order": ["groq"],
+                    "latency_ms": 12.0,
+                },
+                {
+                    "success": False,
+                    "reason": "Primary retry failed.",
+                    "attempts": [{"provider": "groq", "status": "rate_limited", "reason": "retry failed"}],
+                    "routing_order": ["groq"],
+                },
+                {
+                    "success": True,
+                    "provider": "openai",
+                    "model": "gpt-5.4",
+                    "text": "Quantum computing uses qubits to process probabilities and interference effects.",
+                    "attempts": [{"provider": "openai", "status": "success"}],
+                    "routing_order": ["groq", "openai"],
+                    "latency_ms": 28.0,
+                },
+            ],
+        ) as provider_mock:
+            payload = response_engine.generate_response_payload("What is quantum computing?")
+
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["provider"], "openai")
+        self.assertEqual(payload["response_stage"], "fallback_provider")
+        self.assertEqual(
+            payload["content"],
+            "Quantum computing uses qubits to process probabilities and interference effects.",
+        )
+        self.assertEqual(provider_mock.call_count, 3)
+        self.assertTrue(provider_mock.call_args_list[0].kwargs["preferred_only"])
+        self.assertTrue(provider_mock.call_args_list[1].kwargs["preferred_only"])
+        self.assertFalse(provider_mock.call_args_list[2].kwargs["preferred_only"])
+
+    def test_generate_response_returns_structured_degraded_reply(self):
+        with patch.object(
+            response_engine,
+            "generate_with_best_provider",
+            return_value={
+                "success": False,
+                "reason": "No healthy AI provider completed the request.",
+                "attempts": [{"provider": "groq", "status": "rate_limited"}],
+                "routing_order": ["groq"],
+            },
+        ):
+            reply = response_engine.generate_response("What is quantum computing?")
+
+        self.assertIn("clean live answer", reply.lower())
+        self.assertNotIn("check provider health", reply.lower())
 
     def test_generate_response_payload_strips_canned_filler_for_questions(self):
         with patch.object(
@@ -208,17 +281,27 @@ class ResponseEngineTests(unittest.TestCase):
             response_engine.generate_response_payload("What is quantum computing?")
 
         self.assertTrue(provider_mock.called)
-        self.assertTrue(provider_mock.call_args.kwargs["preferred_only"])
-        self.assertEqual(provider_mock.call_args.kwargs["preferred"], response_engine.DEFAULT_REASONING_PROVIDER)
+        self.assertTrue(provider_mock.call_args_list[0].kwargs["preferred_only"])
+        self.assertEqual(provider_mock.call_args_list[0].kwargs["preferred"], response_engine.DEFAULT_REASONING_PROVIDER)
 
     def test_local_assignment_content_expands_for_large_page_targets(self):
         content = response_engine._build_local_assignment_content("transformers", page_target=10)
 
-        self.assertIn("Historical Development", content)
-        self.assertIn("Ethical and Social Impact", content)
-        self.assertIn("Comparative Perspective", content)
-        self.assertIn("Architecture and Mechanism", content)
-        self.assertIn("This section should stay centered on practical use and visible outcomes", content)
+        for heading in (
+            "Introduction",
+            "Background / History",
+            "Core Concepts",
+            "Applications",
+            "Advantages",
+            "Limitations",
+            "Conclusion",
+        ):
+            self.assertIn(heading, content.splitlines())
+        self.assertGreaterEqual(len(content.split()), 10 * 180)
+        self.assertLessEqual(len(content.split()), 10 * 230)
+        self.assertIn("machine learning", content.lower())
+        self.assertNotIn("this section should", content.lower())
+        self.assertNotIn("this assignment has examined", content.lower())
 
     def test_assignment_depth_profile_scales_by_page_band(self):
         compact = response_engine._build_assignment_depth_profile(4)
@@ -265,21 +348,21 @@ class ResponseEngineTests(unittest.TestCase):
         purposes = {section["title"]: section["purpose"] for section in plan}
 
         self.assertIn("Architecture and Mechanism", titles)
-        self.assertIn("Applications and Use Cases", titles)
+        self.assertIn("Applications", titles)
         self.assertIn("implementation considerations", kinds)
-        self.assertLess(titles.index("Architecture and Mechanism"), titles.index("Applications and Use Cases"))
-        self.assertIn("without moving into full definitions or mechanism detail", purposes["Technical Background and Context"])
-        self.assertIn("without re-explaining the mechanism in full", purposes["Applications and Use Cases"])
+        self.assertLess(titles.index("Architecture and Mechanism"), titles.index("Applications"))
+        self.assertIn("without moving into full definitions or mechanism detail", purposes["Background"])
+        self.assertIn("without re-explaining the mechanism in full", purposes["Applications"])
 
     def test_assignment_section_plan_uses_comparative_style_for_comparison_topics(self):
         plan = response_engine._build_assignment_section_plan("python vs rust", 7)
         titles = [section["title"] for section in plan]
         kinds = [section["kind"] for section in plan]
 
-        self.assertIn("Comparison Context", titles)
+        self.assertIn("Background", titles)
         self.assertIn("Comparative Analysis", titles)
-        self.assertIn("Best-Fit Use Cases", titles)
-        self.assertIn("Tradeoffs and Limitations", titles)
+        self.assertIn("Applications", titles)
+        self.assertIn("Challenges", titles)
         self.assertIn("comparative perspective", kinds)
         self.assertNotIn("How It Works", titles)
 
@@ -379,9 +462,10 @@ class ResponseEngineTests(unittest.TestCase):
         self.assertTrue(payload["success"])
         self.assertEqual(payload["source"], "provider_chunked")
         self.assertEqual(payload["provider"], "groq")
-        self.assertIn("Historical Development", payload["content"])
-        self.assertIn("Implementation Considerations", payload["content"])
-        self.assertIn("Comparative Perspective", payload["content"])
+        self.assertIn("Background / History", payload["content"])
+        self.assertIn("Advantages", payload["content"])
+        self.assertIn("Limitations", payload["content"])
+        self.assertGreaterEqual(len(payload["content"].split()), 10 * 180)
         self.assertGreaterEqual(payload_mock.call_count, 10)
         intro_call = next(call for call in captured_calls if call["heading"] == "Introduction")
         core_call = next(call for call in captured_calls if call["heading"] == "Core Concepts")
@@ -445,12 +529,9 @@ class ResponseEngineTests(unittest.TestCase):
             display_title="Core Concepts",
         )
 
-        intro_paragraphs = intro_body.split("\n\n")
-        core_paragraphs = core_body.split("\n\n")
-
-        self.assertEqual(len(intro_paragraphs), 2)
-        self.assertEqual(len(core_paragraphs), 4)
-        self.assertLess(len(intro_paragraphs), len(core_paragraphs))
+        self.assertLess(len(intro_body.split()), len(core_body.split()))
+        self.assertIn("machine learning", core_body.lower())
+        self.assertNotIn("this section should", intro_body.lower())
 
     def test_local_assignment_section_body_adds_distinctness_guidance_for_adjacent_sections(self):
         background_body = response_engine._build_local_assignment_section_body(
@@ -472,9 +553,10 @@ class ResponseEngineTests(unittest.TestCase):
             display_title="Applications and Use Cases",
         )
 
-        self.assertIn("rather than define every technical idea or explain the full internal workflow", background_body)
-        self.assertIn("understanding the mechanism in motion", mechanism_body)
-        self.assertIn("practical use and visible outcomes", applications_body)
+        self.assertIn("historical growth", background_body)
+        self.assertIn("machine learning", mechanism_body.lower())
+        self.assertIn("medical decision support", applications_body)
+        self.assertNotIn("this section should", background_body.lower())
 
     def test_local_assignment_section_body_uses_topic_sensitive_domain_support(self):
         technical_body = response_engine._build_local_assignment_section_body(
@@ -496,18 +578,19 @@ class ResponseEngineTests(unittest.TestCase):
             display_title="Comparative Analysis",
         )
 
-        self.assertIn("data flow, processing stages, architectural roles", technical_body)
-        self.assertIn("institutions, communities, policy environments", social_body)
-        self.assertIn("alternatives, suitability, tradeoffs", comparative_body)
+        self.assertIn("machine learning", technical_body.lower())
+        self.assertIn("greenhouse gas emissions", social_body)
+        self.assertIn("alternatives", comparative_body.lower())
 
     def test_local_assignment_content_uses_style_variant_titles(self):
         technical_content = response_engine._build_local_assignment_content("transformers", page_target=10)
         comparative_content = response_engine._build_local_assignment_content("python vs rust", page_target=7)
 
-        self.assertIn("Architecture and Mechanism", technical_content)
-        self.assertIn("Applications and Use Cases", technical_content)
-        self.assertIn("Comparison Context", comparative_content)
-        self.assertIn("Comparative Analysis", comparative_content)
+        self.assertIn("Core Concepts", technical_content)
+        self.assertIn("Applications", technical_content)
+        self.assertIn("Background / History", comparative_content)
+        self.assertIn("Limitations", comparative_content)
+        self.assertNotIn("this section should", technical_content.lower())
 
     def test_infer_explanation_mode_prefers_simple_when_user_says_simply(self):
         mode = response_engine.infer_explanation_mode("Explain artificial intelligence simply")

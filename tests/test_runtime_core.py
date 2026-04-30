@@ -390,6 +390,60 @@ class RuntimeCoreTests(unittest.TestCase):
         self.assertIsNone(result["provider"])
         self.assertIn("can't answer it reliably", result["response"].lower())
 
+    def test_supported_desktop_open_request_routes_to_desktop_controller(self):
+        with patch.object(
+            runtime_core,
+            "open_application",
+            return_value={
+                "success": True,
+                "status": "opened",
+                "app_name": "notepad",
+                "label": "Notepad",
+                "message": "Opening Notepad.",
+                "launched_with": "C:\\Windows\\System32\\notepad.exe",
+                "pid": 4312,
+            },
+        ), patch.object(
+            runtime_core,
+            "respond_in_language",
+            side_effect=lambda response, language: response,
+        ), patch.object(runtime_core, "store_and_learn"), patch("builtins.print") as print_mock:
+            result = runtime_core.process_single_command_detailed("open notepad")
+
+        self.assertEqual(result["detected_intent"], "desktop_open")
+        self.assertEqual(result["used_agents"], ["desktop_controller"])
+        self.assertEqual(result["execution_mode"], "external_desktop")
+        self.assertEqual(result["permission_action"], "desktop_launch")
+        self.assertEqual(result["response"], "Opening Notepad.")
+        self.assertTrue(result["desktop_launch_success"])
+        self.assertEqual(result["desktop_app"], "notepad")
+        print_mock.assert_any_call("[ROUTING] open \u2192 desktop_controller")
+
+    def test_desktop_open_request_returns_clean_unavailable_message(self):
+        with patch.object(
+            runtime_core,
+            "open_application",
+            return_value={
+                "success": False,
+                "status": "unavailable",
+                "app_name": "vs code",
+                "label": "VS Code",
+                "message": "I couldn't find VS Code on this system.",
+                "error": "Application is not installed or not discoverable from the safe allowlist.",
+            },
+        ), patch.object(
+            runtime_core,
+            "respond_in_language",
+            side_effect=lambda response, language: response,
+        ), patch.object(runtime_core, "store_and_learn"):
+            result = runtime_core.process_single_command_detailed("open vs code")
+
+        self.assertEqual(result["execution_mode"], "external_desktop")
+        self.assertEqual(result["used_agents"], ["desktop_controller"])
+        self.assertEqual(result["response"], "I couldn't find VS Code on this system.")
+        self.assertFalse(result["desktop_launch_success"])
+        self.assertEqual(result["desktop_app"], "vs code")
+
     def test_agent_failure_is_hardened_into_meaningful_degraded_reply(self):
         orchestration = {
             "primary_agent": "write",

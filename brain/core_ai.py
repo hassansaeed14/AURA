@@ -16,6 +16,13 @@ from brain.response_engine import FALLBACK_USER_MESSAGE, build_degraded_reply, c
 from config.settings import GROQ_API_KEY, MODEL_NAME
 from memory.chat_history import get_history
 from memory.knowledge_base import get_user_age, get_user_city, get_user_name
+from memory.personalization import (
+    append_relevant_suggestion,
+    build_personal_context,
+    build_personalized_system_prompt,
+    remember_explicit_personal_signals,
+    remember_profile_identity,
+)
 from memory.working_memory import load_working_memory
 from security.enforcement import enforce_action
 
@@ -65,7 +72,12 @@ def _load_persisted_history(session_id: str) -> list[dict[str, str]]:
     return messages
 
 
-def build_messages_with_history(user_input: str, session_id: str) -> list[dict[str, str]]:
+def build_messages_with_history(
+    user_input: str,
+    session_id: str,
+    user_profile: Optional[dict[str, Any]] = None,
+    personal_context: Optional[dict[str, Any]] = None,
+) -> list[dict[str, str]]:
     persisted_history = _load_persisted_history(session_id)
     in_memory_history = list(_get_session_history(session_id))
     merged: list[dict[str, str]] = []
@@ -80,16 +92,28 @@ def build_messages_with_history(user_input: str, session_id: str) -> list[dict[s
             continue
         merged.append(normalized)
 
+    context = personal_context or build_personal_context(
+        user_input,
+        session_id=session_id,
+        user_profile=user_profile,
+        history=merged,
+    )
+    system_prompt = build_personalized_system_prompt(JARVIS_SYSTEM_PROMPT, context)
+
     return response_engine_module.build_messages(
         user_input,
-        JARVIS_SYSTEM_PROMPT,
+        system_prompt,
         history=merged[-MAX_SESSION_EXCHANGES * 2 :],
     )
 
 
-def _sync_context_into_response_engine(session_id: str) -> None:
+def _sync_context_into_response_engine(
+    session_id: str,
+    user_profile: Optional[dict[str, Any]] = None,
+    personal_context: Optional[dict[str, Any]] = None,
+) -> None:
     response_engine_module.clear_history()
-    merged_messages = build_messages_with_history("", session_id)
+    merged_messages = build_messages_with_history("", session_id, user_profile=user_profile, personal_context=personal_context)
     for item in merged_messages:
         if item.get("role") in {"user", "assistant"} and str(item.get("content", "")).strip():
             response_engine_module.add_to_history(item.get("role", "user"), item.get("content", ""))
@@ -111,8 +135,10 @@ def _build_user_reference(user_profile: Optional[dict[str, Any]]) -> str:
     preferred_name = str(profile.get("preferred_name") or "").strip()
     if preferred_name:
         return preferred_name
-    title = str(profile.get("title") or "sir").strip()
-    return title or "sir"
+    username = str(profile.get("username") or "").strip()
+    if username:
+        return username
+    return ""
 
 
 def _knowledge_base_request(command: str) -> Optional[dict[str, str]]:
@@ -162,6 +188,7 @@ def _jarvisize_response(
     user_profile: Optional[dict[str, Any]],
     session_id: str,
     command: str,
+    personal_context: Optional[dict[str, Any]] = None,
 ) -> str:
     text = response_engine_module.polish_assistant_reply(response, user_input=command)
     if not text:
@@ -173,10 +200,14 @@ def _jarvisize_response(
     if prefix and not re.match(r"^(certainly|analysis complete|right away|welcome back|task complete|processing your request)\b", text, flags=re.IGNORECASE):
         text = f"{prefix}{text[0].lower() + text[1:] if len(text) > 1 and text[0].isupper() else text}"
 
-    if user_profile is None or bool(user_profile.get("proactive_suggestions", True)):
-        suggestion = _infer_proactive_suggestion(intent, command)
-        if suggestion and "Would you also like me to" not in text:
-            text += f"\n\nWould you also like me to {suggestion}?"
+    suggestions_enabled = user_profile is None or bool(user_profile.get("proactive_suggestions", True))
+    if suggestions_enabled and str(execution_mode or "").strip().lower() not in {
+        "document_generation",
+        "permission_blocked",
+        "action_plan",
+        "action_plan_failed",
+    }:
+        text = append_relevant_suggestion(text, personal_context)
 
     return clean_response(text)
 
@@ -206,6 +237,16 @@ def _build_context(session_id: str, user_profile: Optional[dict[str, Any]] = Non
     )
 
 
+def _security_context_with_personal_context(
+    security_context: Optional[dict[str, Any]],
+    personal_context: dict[str, Any],
+) -> dict[str, Any]:
+    context = dict(security_context or {})
+    if personal_context:
+        context["personal_context"] = personal_context
+    return context
+
+
 def _is_unusable_response(text: Optional[str]) -> bool:
     normalized = clean_response(text).strip().lower()
     if not normalized:
@@ -225,13 +266,20 @@ def _ensure_meaningful_brain_response(
     *,
     command: str,
     session_id: str,
+    user_profile: Optional[dict[str, Any]] = None,
+    personal_context: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     response_text = clean_response(enriched.get("response"))
     if not _is_unusable_response(response_text):
         return enriched
 
     print("[BRAIN ERROR] Runtime pipeline produced an unusable response. Attempting live provider fallback.")
-    fallback = _call_live_brain_direct(command, session_id)
+    fallback = _call_live_brain_direct(
+        command,
+        session_id,
+        user_profile=user_profile,
+        personal_context=personal_context,
+    )
     fallback_text = clean_response(fallback.get("content"))
     if fallback.get("success") and not _is_unusable_response(fallback_text):
         enriched["response"] = fallback_text
@@ -256,9 +304,27 @@ def _ensure_meaningful_brain_response(
     return enriched
 
 
-def _call_live_brain_direct(command: str, session_id: str) -> dict[str, Any]:
-    messages = build_messages_with_history(command, session_id)
-    payload = generate_response_payload(messages, system_override=JARVIS_SYSTEM_PROMPT)
+def _call_live_brain_direct(
+    command: str,
+    session_id: str,
+    *,
+    user_profile: Optional[dict[str, Any]] = None,
+    personal_context: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    context = personal_context or build_personal_context(
+        command,
+        session_id=session_id,
+        user_profile=user_profile,
+        history=list(_get_session_history(session_id)),
+    )
+    system_prompt = build_personalized_system_prompt(JARVIS_SYSTEM_PROMPT, context)
+    messages = build_messages_with_history(
+        command,
+        session_id,
+        user_profile=user_profile,
+        personal_context=context,
+    )
+    payload = generate_response_payload(messages, system_override=system_prompt)
     if not payload.get("success"):
         print(f"[BRAIN ERROR] Live provider fallback failed: {payload.get('error')}")
     return payload
@@ -337,13 +403,22 @@ def _knowledge_base_result(
     field = str(lookup.get("field") or "").strip().lower()
     if field == "name":
         value = get_user_name()
-        reply = f"Certainly {user_reference}. Your name is {value}." if value else None
+        if value:
+            reply = f"{user_reference}, your name is {value}." if user_reference else f"Your name is {value}."
+        else:
+            reply = None
     elif field == "age":
         value = get_user_age()
-        reply = f"Certainly {user_reference}. Your age is {value}." if value else None
+        if value:
+            reply = f"{user_reference}, your age is {value}." if user_reference else f"Your age is {value}."
+        else:
+            reply = None
     else:
         value = get_user_city()
-        reply = f"Certainly {user_reference}. You previously said you are in {value}." if value else None
+        if value:
+            reply = f"{user_reference}, you're in {value}." if user_reference else f"You're in {value}."
+        else:
+            reply = None
     if not reply:
         return None
     context = _build_context(session_id, user_profile=profile, current_mode=current_mode)
@@ -388,6 +463,7 @@ def _enrich_result(
     user_profile: Optional[dict[str, Any]],
     current_mode: str,
     elapsed_ms: float,
+    personal_context: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     enriched = dict(result)
     execution_mode = str(result.get("execution_mode") or "chat")
@@ -401,6 +477,7 @@ def _enrich_result(
             user_profile=user_profile,
             session_id=session_id,
             command=command,
+            personal_context=personal_context,
         )
     enriched["mode"] = current_mode
     enriched["reasoning_trace"] = _build_reasoning_trace(enriched, elapsed_ms)
@@ -413,6 +490,11 @@ def _enrich_result(
     enriched["model"] = enriched.get("model") or None
     enriched["providers_tried"] = list(enriched.get("providers_tried") or [])
     enriched["context_window"] = list(_get_session_history(session_id))
+    enriched["personal_context"] = {
+        "display_name": (personal_context or {}).get("display_name"),
+        "preferences": list((personal_context or {}).get("preferences") or [])[:3],
+        "suggestion": (personal_context or {}).get("suggestion"),
+    }
     agent_bus.publish(
         "brain.response.completed",
         {
@@ -438,13 +520,25 @@ def process_single_command_detailed(
         _record_exchange(normalized_session, command, kb_result["response"])
         return kb_result
 
-    _sync_context_into_response_engine(normalized_session)
+    profile = dict(user_profile or {})
+    history = list(_get_session_history(normalized_session))
+    personal_context = build_personal_context(
+        command,
+        session_id=normalized_session,
+        user_profile=profile,
+        history=history,
+    )
+    runtime_security_context = _security_context_with_personal_context(security_context, personal_context)
+    remember_profile_identity(profile)
+    remember_explicit_personal_signals(command)
+
+    _sync_context_into_response_engine(normalized_session, user_profile=profile, personal_context=personal_context)
     started = time.perf_counter()
     try:
         result = runtime_core_module.process_single_command_detailed(
             command,
             session_id=normalized_session,
-            security_context=security_context,
+            security_context=runtime_security_context,
         )
     except Exception as error:
         print(f"[BRAIN ERROR] Runtime pipeline failed: {error}")
@@ -457,11 +551,14 @@ def process_single_command_detailed(
         user_profile=user_profile,
         current_mode=current_mode,
         elapsed_ms=elapsed_ms,
+        personal_context=personal_context,
     )
     enriched = _ensure_meaningful_brain_response(
         enriched,
         command=command,
         session_id=normalized_session,
+        user_profile=profile,
+        personal_context=personal_context,
     )
     _record_exchange(normalized_session, command, enriched["response"])
     return enriched
@@ -481,13 +578,25 @@ def process_command_detailed(
         _record_exchange(normalized_session, command, kb_result["response"])
         return kb_result
 
-    _sync_context_into_response_engine(normalized_session)
+    profile = dict(user_profile or {})
+    history = list(_get_session_history(normalized_session))
+    personal_context = build_personal_context(
+        command,
+        session_id=normalized_session,
+        user_profile=profile,
+        history=history,
+    )
+    runtime_security_context = _security_context_with_personal_context(security_context, personal_context)
+    remember_profile_identity(profile)
+    remember_explicit_personal_signals(command)
+
+    _sync_context_into_response_engine(normalized_session, user_profile=profile, personal_context=personal_context)
     started = time.perf_counter()
     try:
         result = runtime_core_module.process_command_detailed(
             command,
             session_id=normalized_session,
-            security_context=security_context,
+            security_context=runtime_security_context,
         )
     except Exception as error:
         print(f"[BRAIN ERROR] Runtime pipeline failed: {error}")
@@ -500,11 +609,14 @@ def process_command_detailed(
         user_profile=user_profile,
         current_mode=current_mode,
         elapsed_ms=elapsed_ms,
+        personal_context=personal_context,
     )
     enriched = _ensure_meaningful_brain_response(
         enriched,
         command=command,
         session_id=normalized_session,
+        user_profile=profile,
+        personal_context=personal_context,
     )
     _record_exchange(normalized_session, command, enriched["response"])
     return enriched
