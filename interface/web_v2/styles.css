@@ -858,6 +858,168 @@ body.auth-page {
   background: linear-gradient(135deg, rgba(126, 214, 255, 0.22), rgba(53, 121, 171, 0.34));
 }
 
+.action-plan-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(126, 214, 255, 0.18);
+  background:
+    radial-gradient(circle at top left, rgba(126, 214, 255, 0.12), transparent 34%),
+    rgba(255, 255, 255, 0.025);
+}
+
+.action-plan-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.action-plan-card__eyebrow,
+.action-suggestions__label {
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.action-plan-card__title {
+  margin: 0;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.action-plan-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(126, 214, 255, 0.18);
+  background: rgba(126, 214, 255, 0.07);
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.action-plan-status--success,
+.action-plan-status--completed {
+  border-color: rgba(91, 224, 163, 0.32);
+  color: var(--green);
+}
+
+.action-plan-status--failed {
+  border-color: rgba(255, 93, 107, 0.32);
+  color: var(--red);
+}
+
+.action-steps {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.action-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(126, 214, 255, 0.12);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.action-step__marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid rgba(126, 214, 255, 0.2);
+  color: var(--cyan-bright);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+}
+
+.action-step--success .action-step__marker {
+  border-color: rgba(91, 224, 163, 0.36);
+  color: var(--green);
+}
+
+.action-step--failed .action-step__marker {
+  border-color: rgba(255, 93, 107, 0.36);
+  color: var(--red);
+}
+
+.action-step__details {
+  display: grid;
+  gap: 4px;
+}
+
+.action-step__details strong {
+  color: var(--text-primary);
+}
+
+.action-step__details span,
+.action-step__details p,
+.action-suggestions__item {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.55;
+  font-size: 0.84rem;
+}
+
+.action-suggestions {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(242, 196, 107, 0.18);
+  background: rgba(242, 196, 107, 0.055);
+}
+
+.automation-warning {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(126, 214, 255, 0.18);
+  background: rgba(126, 214, 255, 0.05);
+}
+
+.automation-warning--pending {
+  border-color: rgba(242, 196, 107, 0.34);
+  background: rgba(242, 196, 107, 0.07);
+}
+
+.automation-warning p {
+  margin: 0;
+  color: var(--text-primary);
+  line-height: 1.55;
+  font-size: 0.86rem;
+}
+
+.automation-warning__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.automation-confirm-button {
+  border-color: rgba(91, 224, 163, 0.32);
+  background: rgba(91, 224, 163, 0.09);
+}
+
+.automation-stop-button {
+  border-color: rgba(255, 123, 143, 0.28);
+  background: rgba(255, 123, 143, 0.07);
+}
+
 .composer {
   display: grid;
   gap: 12px;

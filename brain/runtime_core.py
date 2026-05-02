@@ -2448,7 +2448,12 @@ def _process_action_plan_command(
         }, active_telemetry, publish=True)
 
     started = time.perf_counter()
-    execution = execute_action_plan(action_plan)
+    execution = execute_action_plan(
+        action_plan,
+        session_id=runtime_session_id,
+        username=runtime_username,
+        automation_confirmed=bool((security_context or {}).get("confirmed")),
+    )
     execution_time_ms = (time.perf_counter() - started) * 1000
     feedback = [str(item).strip() for item in execution.get("feedback", []) if str(item).strip()]
     response = "\n".join(feedback) or (
@@ -2458,8 +2463,10 @@ def _process_action_plan_command(
     used_agents = ["action_planner"]
     if "desktop_open" in step_types:
         used_agents.append("desktop_controller")
-    if "browser_search" in step_types:
+    if any(step_type.startswith("browser_") for step_type in step_types):
         used_agents.append("browser_action")
+    if any(step_type.startswith("automation_") for step_type in step_types):
+        used_agents.append("os_automation")
 
     active_telemetry.record_intent("action_plan", 1.0, [], 0.0)
     active_telemetry.record_routing(
@@ -2505,6 +2512,10 @@ def _process_action_plan_command(
     result["action_success"] = bool(execution.get("success"))
     result["action_status"] = execution.get("status")
     result["failed_action_step"] = execution.get("failed_step")
+    result["action_suggestions"] = execution.get("suggestions", [])
+    result["action_memory"] = execution.get("action_memory", {})
+    result["automation_confirmation_required"] = bool(execution.get("automation_confirmation_required"))
+    result["automation_control"] = bool(execution.get("automation_control"))
     return result
 
 

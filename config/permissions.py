@@ -215,6 +215,9 @@ _register("slides", "safe", description="Slide deck pipeline.")
 _register("notes", "safe", description="Notes pipeline.")
 _register("assignment", "safe", description="Assignment pipeline.")
 _register("desktop_launch", "safe", description="Launch a whitelisted local desktop application.")
+_register("os_automation_focus", "safe", description="Focus a whitelisted supported application window.")
+_register("os_automation_control", "sensitive", description="Controlled keyboard/mouse automation in whitelisted apps.")
+_register("os_automation_critical", "critical", description="Blocked destructive or sensitive OS automation.")
 
 # --- PRIVATE: reads into user-owned data, needs user confirmation ---
 _register("memory_read", "private", description="Read personal memory entries.",

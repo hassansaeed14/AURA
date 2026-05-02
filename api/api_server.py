@@ -127,6 +127,7 @@ from tools.document_generator import (
 from tools.content_extractor import extract_content
 from brain.response_engine import generate_transformation_content_payload
 from tools.desktop_controller import get_supported_desktop_apps
+from tools.os_automation import request_stop as request_os_automation_stop
 
 
 app = FastAPI()
@@ -1184,6 +1185,10 @@ def _execute_chat_pipeline(context: dict[str, Any]) -> dict[str, Any]:
         "action_success",
         "action_status",
         "failed_action_step",
+        "action_suggestions",
+        "action_memory",
+        "automation_confirmation_required",
+        "automation_control",
     ):
         if field in result:
             payload[field] = result.get(field)
@@ -2236,6 +2241,12 @@ async def api_desktop_apps():
         },
         headers=_cors_headers(),
     )
+
+
+@app.post("/api/os-automation/stop")
+async def api_os_automation_stop():
+    result = request_os_automation_stop()
+    return JSONResponse(content=result, headers=_cors_headers())
 
 
 @app.get("/api/admin/users")

@@ -19,6 +19,18 @@ CONNECTOR_PATTERNS: Tuple[str, ...] = (
 
 ACTION_PREFIXES: Tuple[str, ...] = (
     "open",
+    "go",
+    "visit",
+    "navigate",
+    "rerun",
+    "repeat",
+    "type",
+    "press",
+    "hit",
+    "use",
+    "scroll",
+    "focus",
+    "switch",
     "remind",
     "translate",
     "summarize",
@@ -114,10 +126,10 @@ def _split_on_and(part: str) -> List[str]:
         return [part.strip(" ,")]
 
     if _looks_like_command(left) and _looks_like_command(right):
-        return [left, right]
+        return [left, *_split_on_and(right)]
 
-    if right.lower().startswith(("remind me", "save", "make", "create", "translate", "open")):
-        return [left, right]
+    if right.lower().startswith(("remind me", "save", "make", "create", "translate", "open", "go to", "visit", "navigate", "rerun", "repeat", "type", "press", "hit", "use", "scroll", "focus", "switch")):
+        return [left, *_split_on_and(right)]
 
     return [part.strip(" ,")]
 

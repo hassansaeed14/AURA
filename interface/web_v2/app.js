@@ -53,6 +53,8 @@
     { pattern: /\b(?:open|launch|start)\s+(?:calculator|calc)\b/i, label: "Calculator", type: "desktop" },
   ];
 
+  const CONTROLLED_BROWSER_ACTION_RE = /\b(?:open\s+(?:a\s+)?new\s+(?:browser\s+)?tab|navigate\s+to|go\s+to\s+(?:https?:\/\/|[a-z0-9.-]+\.[a-z]{2,})|visit\s+(?:https?:\/\/|[a-z0-9.-]+\.[a-z]{2,})|re[-\s]?run\s+(?:the\s+)?search|open\s+(?:the\s+)?(?:first|top|next)\s+(?:search\s+)?(?:result|link)|open\s+chrome\s+and\s+(?:search|go\s+to|navigate\s+to|open\s+new\s+tab)|open\s+(?:notepad|vs\s*code|vscode|visual studio code|calculator|calc|chrome)\s+and\s+(?:type|write|enter|press|scroll|focus)|(?:type|write|enter)\s+.+\s+(?:in|into)\s+(?:notepad|vs\s*code|vscode|visual studio code|calculator|calc|chrome)|(?:press|hit|scroll|focus|switch\s+to)\s+(?:.+\s+)?(?:notepad|vs\s*code|vscode|visual studio code|calculator|calc|chrome))\b/i;
+
   const INTERNAL_HINTS = [
     { pattern: /\b(notes?|assignment|assignments?|essay|report|slides?|presentation|pdf|docx|txt|pptx)\b/i, label: "Document task", kind: "document" },
     { pattern: /\b(code|coding|program|python|javascript|typescript|debug|function|api|build)\b/i, label: "Coding task", kind: "coding" },
@@ -619,13 +621,34 @@
       });
 
       const delivery = normalizeDocumentDeliveryPayload(payload);
+      const actionPlan = normalizeActionPlanPayload(payload);
+      const actionSuggestions = normalizeActionSuggestions(payload);
       const replyText = String(payload.reply || payload.content || "").trim() || "Done.";
+      if (actionPlan) {
+        state.currentTask = {
+          scope: "external",
+          label: "Controlled browser action",
+          kind: "action_plan",
+          text: commandText,
+          actionPlan,
+          actionSuggestions,
+          launchStatus: payload.action_status || actionPlan.status,
+          launchMessage: replyText,
+        };
+        state.currentExternal = { type: "browser", label: "Browser action" };
+        setTaskScope("external");
+        setOrbLayout("floating");
+        state.panelVisible = true;
+        state.panelMode = "context";
+      }
       await revealAssistantMessage({
         role: "assistant",
         text: replyText,
-        badge: humanizeBadge(payload.execution_mode || classification.taskKind || "Assistant"),
+        badge: humanizeBadge(payload.execution_mode || (actionPlan ? "action_plan" : classification.taskKind) || "Assistant"),
         timestamp: new Date().toISOString(),
         delivery,
+        actionPlan,
+        actionSuggestions,
       }, {
         stateName: "responding",
         event: "api:response_ready",
@@ -644,20 +667,26 @@
           : "Done. I've handled that inside AURA.");
       updateWorkspaceSummary(delivery
         ? `${capitalize(delivery.documentType)} ready with a preview and direct downloads.`
-        : payload.degraded
+        : actionPlan
+          ? "AURA ran the controlled browser action plan and exposed each step clearly."
+          : payload.degraded
           ? "AURA stayed inside the workspace and finished with a fallback path."
           : "AURA handled the work inside the workspace.");
       showPresence({
-        mode: "docked",
-        eyebrow: delivery ? "Work completed" : payload.degraded ? "Fallback result" : "Work completed",
+        mode: actionPlan ? "floating" : "docked",
+        eyebrow: actionPlan ? "Controlled browser action" : delivery ? "Work completed" : payload.degraded ? "Fallback result" : "Work completed",
         title: delivery
           ? "Done. I've prepared it."
+          : actionPlan
+            ? "Action plan complete."
           : payload.degraded
             ? "I couldn't complete that cleanly."
             : "Done. I've handled that inside AURA.",
         text: delivery
           ? `Your ${delivery.documentType} is ready below with direct downloads and a preview.`
-          : payload.degraded
+          : actionPlan
+            ? "The browser action plan is shown below with exact step statuses."
+            : payload.degraded
             ? "I used the best available path and kept the work inside AURA."
             : "The result is ready here in the workspace.",
         duration: 2200,
@@ -762,12 +791,16 @@
           method: "POST",
           body: JSON.stringify({ message: commandText, mode: "real" }),
         });
+        const actionPlan = normalizeActionPlanPayload(payload);
+        const actionSuggestions = normalizeActionSuggestions(payload);
         replyText = String(payload.reply || payload.content || "").trim() || "I can't open that yet.";
-        state.currentTask.launchStatus = payload.desktop_launch_status || (payload.execution_mode === "external_desktop" ? "opened" : "unknown");
+        state.currentTask.launchStatus = payload.action_status || payload.desktop_launch_status || (payload.execution_mode === "external_desktop" ? "opened" : "unknown");
         state.currentTask.launchMessage = replyText;
+        state.currentTask.actionPlan = actionPlan;
+        state.currentTask.actionSuggestions = actionSuggestions;
         const launched = Boolean(payload.desktop_launch_success) || (
           payload.execution_mode === "external_desktop" && /^opening\b/i.test(replyText)
-        );
+        ) || Boolean(payload.action_success);
         const unavailable = payload.desktop_launch_status === "unavailable";
 
         if (launched) {
@@ -825,6 +858,8 @@
       text: replyText,
       badge: "External action",
       timestamp: new Date().toISOString(),
+      actionPlan: state.currentTask?.actionPlan || null,
+      actionSuggestions: state.currentTask?.actionSuggestions || [],
     }, {
       delayMs: 240,
       stateName: state.assistantState === "error" ? "error" : "responding",
@@ -836,6 +871,15 @@
 
   function classifyCommand(text) {
     const normalized = String(text || "").trim();
+    if (CONTROLLED_BROWSER_ACTION_RE.test(normalized)) {
+      return {
+        kind: "external",
+        type: "browser-action",
+        label: "Controlled browser action",
+        taskKind: "external",
+      };
+    }
+
     const directUrlMatch = normalized.match(/\bhttps?:\/\/[^\s]+/i);
     if (directUrlMatch) {
       return {
@@ -974,6 +1018,10 @@
 
     if (message.delivery) {
       card.appendChild(buildDocumentCard(message.delivery));
+    }
+
+    if (message.actionPlan) {
+      card.appendChild(buildActionPlanCard(message.actionPlan, message.actionSuggestions || []));
     }
 
     row.appendChild(card);
@@ -1211,6 +1259,269 @@
     return link;
   }
 
+  function normalizeActionPlanPayload(payload) {
+    const rawPlan = payload && typeof payload.action_plan === "object" ? payload.action_plan : null;
+    const rawSteps = Array.isArray(payload?.action_steps)
+      ? payload.action_steps
+      : Array.isArray(rawPlan?.steps)
+        ? rawPlan.steps
+        : [];
+    if (!rawPlan && !rawSteps.length) {
+      return null;
+    }
+    const steps = rawSteps.map((step, index) => ({
+      id: String(step?.step_id || `step-${index + 1}`),
+      actionType: String(step?.action_type || "action").trim(),
+      label: String(step?.label || step?.message || `Step ${index + 1}`).trim(),
+      target: String(step?.target || "").trim(),
+      status: normalizeStepStatus(step?.status),
+      message: String(step?.message || step?.result?.message || "").trim(),
+      resultStatus: String(step?.result?.status || "").trim(),
+      recovered: Boolean(step?.result?.recovered),
+    }));
+    return {
+      planId: String(rawPlan?.plan_id || "").trim(),
+      originalCommand: String(rawPlan?.original_command || "").trim(),
+      status: normalizeStepStatus(payload.action_status || rawPlan?.status || "pending"),
+      success: Boolean(payload.action_success),
+      confirmationRequired: Boolean(payload.automation_confirmation_required),
+      automationControl: Boolean(payload.automation_control)
+        || steps.some((step) => String(step.actionType || "").startsWith("automation_")),
+      steps,
+    };
+  }
+
+  function normalizeActionSuggestions(payload) {
+    const suggestions = Array.isArray(payload?.action_suggestions) ? payload.action_suggestions : [];
+    return suggestions.map((item) => ({
+      kind: String(item?.kind || "").trim(),
+      label: String(item?.label || "").trim(),
+      text: String(item?.text || "").trim(),
+      count: Number(item?.count || 0),
+    })).filter((item) => item.text || item.label).slice(0, 3);
+  }
+
+  function normalizeStepStatus(value) {
+    const status = String(value || "pending").trim().toLowerCase();
+    if (["success", "completed", "opened", "searched"].includes(status)) {
+      return "success";
+    }
+    if (["failed", "error", "unavailable", "launch_failed", "invalid_url", "invalid_query", "critical_blocked"].includes(status)) {
+      return "failed";
+    }
+    if (["skipped"].includes(status)) {
+      return "skipped";
+    }
+    return "pending";
+  }
+
+  function buildActionPlanCard(actionPlan, suggestions = []) {
+    const card = document.createElement("section");
+    card.className = "action-plan-card";
+
+    const head = document.createElement("div");
+    head.className = "action-plan-card__head";
+
+    const copy = document.createElement("div");
+    const eyebrow = document.createElement("p");
+    eyebrow.className = "action-plan-card__eyebrow";
+    eyebrow.textContent = "Controlled action plan";
+    const title = document.createElement("p");
+    title.className = "action-plan-card__title";
+    title.textContent = actionPlan.originalCommand || "Browser action";
+    copy.append(eyebrow, title);
+
+    const status = document.createElement("span");
+    status.className = `action-plan-status action-plan-status--${actionPlan.status}`;
+    status.textContent = humanizeBadge(actionPlan.status);
+    head.append(copy, status);
+
+    const list = document.createElement("ol");
+    list.className = "action-steps";
+    actionPlan.steps.forEach((step) => {
+      const item = document.createElement("li");
+      item.className = `action-step action-step--${step.status}`;
+
+      const marker = document.createElement("span");
+      marker.className = "action-step__marker";
+      marker.textContent = step.status === "success" ? "OK" : step.status === "failed" ? "!" : "…";
+
+      const details = document.createElement("div");
+      details.className = "action-step__details";
+      const stepTitle = document.createElement("strong");
+      stepTitle.textContent = step.label;
+      const stepMeta = document.createElement("span");
+      stepMeta.textContent = [
+        humanizeBadge(step.actionType),
+        step.resultStatus ? humanizeBadge(step.resultStatus) : "",
+        step.recovered ? "Recovered safely" : "",
+      ].filter(Boolean).join(" • ");
+      details.append(stepTitle, stepMeta);
+      if (step.message) {
+        const message = document.createElement("p");
+        message.textContent = step.message;
+        details.appendChild(message);
+      }
+
+      item.append(marker, details);
+      list.appendChild(item);
+    });
+
+    card.append(head, list);
+    if (actionPlan.automationControl) {
+      const warning = document.createElement("div");
+      warning.className = `automation-warning${actionPlan.confirmationRequired ? " automation-warning--pending" : ""}`;
+
+      const warningText = document.createElement("p");
+      warningText.textContent = actionPlan.confirmationRequired
+        ? "Keyboard/mouse control is pending. AURA will not type, press keys, click, or scroll until you approve this one action."
+        : "Controlled OS automation is visible and limited to whitelisted app windows.";
+      warning.appendChild(warningText);
+
+      const actions = document.createElement("div");
+      actions.className = "automation-warning__actions";
+      if (actionPlan.confirmationRequired) {
+        const approve = document.createElement("button");
+        approve.type = "button";
+        approve.className = "link-button automation-confirm-button";
+        approve.textContent = "Allow control once";
+        approve.addEventListener("click", () => {
+          void approveAutomationControl(actionPlan);
+        });
+        actions.appendChild(approve);
+      }
+
+      const stop = document.createElement("button");
+      stop.type = "button";
+      stop.className = "link-button automation-stop-button";
+      stop.textContent = "Stop control";
+      stop.addEventListener("click", () => {
+        void stopAutomationControl();
+      });
+      actions.appendChild(stop);
+      warning.appendChild(actions);
+      card.appendChild(warning);
+    }
+    const suggestionCard = buildActionSuggestions(suggestions);
+    if (suggestionCard) {
+      card.appendChild(suggestionCard);
+    }
+    return card;
+  }
+
+  function buildActionSuggestions(suggestions = []) {
+    if (!suggestions.length) {
+      return null;
+    }
+    const box = document.createElement("div");
+    box.className = "action-suggestions";
+    const label = document.createElement("p");
+    label.className = "action-suggestions__label";
+    label.textContent = "Pattern noticed";
+    box.appendChild(label);
+    suggestions.forEach((suggestion) => {
+      const item = document.createElement("p");
+      item.className = "action-suggestions__item";
+      item.textContent = suggestion.text || suggestion.label;
+      box.appendChild(item);
+    });
+    return box;
+  }
+
+  async function approveAutomationControl(actionPlan) {
+    const command = String(actionPlan?.originalCommand || "").trim();
+    if (!command || state.requestInFlight) {
+      return;
+    }
+    state.requestInFlight = true;
+    setAssistantState("thinking", "automation:confirmation_submitted");
+    setComposerStatus("Control approved for this one action.");
+    updateWorkspaceSummary("AURA is running the approved controlled automation path now.");
+
+    appendMessage({
+      role: "user",
+      text: "Approved keyboard/mouse control for this action.",
+      badge: "Confirm",
+      timestamp: new Date().toISOString(),
+    });
+
+    try {
+      const payload = await apiJson("/api/chat", {
+        method: "POST",
+        body: JSON.stringify({ message: command, mode: "real", confirmed: true }),
+      });
+      const confirmedPlan = normalizeActionPlanPayload(payload);
+      const actionSuggestions = normalizeActionSuggestions(payload);
+      state.currentTask = {
+        scope: "external",
+        label: "Controlled OS automation",
+        kind: "os_automation",
+        text: command,
+        actionPlan: confirmedPlan,
+        actionSuggestions,
+        launchStatus: payload.action_status || confirmedPlan?.status || "unknown",
+        launchMessage: String(payload.reply || payload.content || "").trim(),
+      };
+      state.panelVisible = true;
+      state.panelMode = "context";
+      setOrbLayout("floating");
+      await revealAssistantMessage({
+        role: "assistant",
+        text: String(payload.reply || payload.content || "").trim() || "Control action finished.",
+        badge: humanizeBadge(payload.execution_mode || "os_automation"),
+        timestamp: new Date().toISOString(),
+        actionPlan: confirmedPlan,
+        actionSuggestions,
+      }, {
+        stateName: payload.action_success ? "responding" : "error",
+        event: payload.action_success ? "automation:confirmed_complete" : "automation:confirmed_failed",
+      });
+      setComposerStatus(payload.action_success ? "Controlled action completed." : "Controlled action did not complete.");
+    } catch (error) {
+      setAssistantState("error", "automation:confirmation_failed");
+      await revealAssistantMessage({
+        role: "assistant",
+        text: error.message || "I couldn't run the approved control action.",
+        badge: "Automation error",
+        timestamp: new Date().toISOString(),
+      }, {
+        delayMs: 220,
+        stateName: "error",
+        event: "automation:error_revealed",
+      });
+    } finally {
+      state.requestInFlight = false;
+      renderRightPanel();
+      resetToCalmIdle();
+    }
+  }
+
+  async function stopAutomationControl() {
+    try {
+      const payload = await apiJson("/api/os-automation/stop", { method: "POST" });
+      const reply = String(payload.message || "Control stop requested.").trim();
+      setAssistantState("error", "automation:stop_requested");
+      setComposerStatus(reply);
+      updateWorkspaceSummary("AURA has requested the automation stop flag.");
+      await revealAssistantMessage({
+        role: "assistant",
+        text: reply,
+        badge: "Stop control",
+        timestamp: new Date().toISOString(),
+      }, {
+        delayMs: 160,
+        stateName: "error",
+        event: "automation:stop_revealed",
+      });
+    } catch (error) {
+      setAssistantState("error", "automation:stop_failed");
+      setComposerStatus(error.message || "I couldn't request stop control.");
+    } finally {
+      renderRightPanel();
+      resetToCalmIdle();
+    }
+  }
+
   function renderRightPanel() {
     if (!el.rightPanel || !el.rightPanelBody || !el.rightPanelTitle) {
       return;
@@ -1404,6 +1715,9 @@
     });
 
     card.append(title, body, grid);
+    if (state.currentTask.actionPlan) {
+      card.appendChild(buildActionPlanCard(state.currentTask.actionPlan, state.currentTask.actionSuggestions || []));
+    }
     if (state.currentTask.scope === "external" && state.currentTask.launchMessage) {
       const note = document.createElement("p");
       note.className = "panel-card__body";
