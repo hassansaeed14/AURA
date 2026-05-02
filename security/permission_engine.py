@@ -253,11 +253,14 @@ def classify_action(command: str) -> str:
     critical_keywords = (
         "buy", "purchase", "pay", "payment", "send money",
         "credit card", "debit card", "unlock locked chat",
-        "delete all", "wipe", "factory reset", "change password",
+        "delete all", "delete file", "delete files", "wipe", "factory reset",
+        "change password", "password", "otp", "pin", "bank", "banking",
+        "credentials",
     )
     sensitive_keywords = (
         "login", "log in", "sign in", "send email", "send message",
-        "upload file", "modify file", "write file",
+        "upload file", "modify file", "write file", "type ", "enter ",
+        "ask it to", "tell it to",
     )
     private_keywords = (
         "open whatsapp", "open gallery", "open files",

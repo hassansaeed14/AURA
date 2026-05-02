@@ -108,6 +108,12 @@ from voice.voice_controller import (
     transcribe_microphone_request,
     update_voice_preferences,
 )
+from voice.assistant_runtime import get_assistant_runtime_status
+from voice.desktop_voice_runtime import (
+    interrupt_desktop_voice,
+    start_desktop_voice,
+    stop_desktop_voice,
+)
 from voice.voice_pipeline import process_voice_text
 from voice.voice_manager import load_user_profile, save_user_profile
 from tools.document_generator import (
@@ -1315,6 +1321,10 @@ PUBLIC_PATHS = {
     "/api/providers",
     "/api/telemetry/providers",
     "/api/system/health",
+    "/api/assistant/runtime",
+    "/api/voice/desktop/start",
+    "/api/voice/desktop/stop",
+    "/api/voice/desktop/interrupt",
     "/api/voice/status",
     "/api/voice/text",
     "/api/desktop/apps",
@@ -2901,6 +2911,31 @@ async def run_agent_endpoint(agent_id: str, payload: AgentRunRequest, request: R
 @app.get("/api/voice/status")
 async def get_voice_runtime_status():
     return get_voice_status()
+
+
+@app.get("/api/assistant/runtime")
+async def get_assistant_runtime_endpoint():
+    return get_assistant_runtime_status()
+
+
+@app.post("/api/voice/desktop/start")
+async def start_desktop_voice_endpoint(request: Request):
+    user = _current_user(request)
+    session_id = _resolve_session_id(request)
+    return start_desktop_voice(
+        session_id=session_id,
+        user_profile=user or load_user_profile(),
+    )
+
+
+@app.post("/api/voice/desktop/stop")
+async def stop_desktop_voice_endpoint():
+    return stop_desktop_voice()
+
+
+@app.post("/api/voice/desktop/interrupt")
+async def interrupt_desktop_voice_endpoint():
+    return interrupt_desktop_voice()
 
 
 @app.patch("/api/voice/settings")

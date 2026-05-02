@@ -17,6 +17,47 @@ class ActionIntelligenceTests(unittest.TestCase):
         self.assertEqual(plan.steps[0].target, "chrome")
         self.assertEqual(plan.steps[1].target, "AI trends")
 
+    def test_safe_external_search_is_not_critical(self):
+        classification = action_intelligence.classify_external_command_safety("open YouTube and search carryminati")
+        plan = action_intelligence.build_action_plan("open YouTube and search carryminati")
+
+        self.assertEqual(classification["trust_level"], "safe")
+        self.assertIsNotNone(plan)
+        self.assertEqual([step.action_type for step in plan.steps], ["browser_open_url", "browser_search"])
+        self.assertEqual(plan.steps[0].target, "https://www.youtube.com/")
+        self.assertEqual(plan.steps[1].target, "carryminati")
+
+    def test_third_party_typing_is_sensitive_not_critical(self):
+        classification = action_intelligence.classify_external_command_safety(
+            "open ChatGPT and ask it to write an assignment"
+        )
+        plan = action_intelligence.build_action_plan("open ChatGPT and ask it to write an assignment")
+
+        self.assertEqual(classification["trust_level"], "sensitive")
+        self.assertIsNotNone(plan)
+        self.assertEqual(
+            [step.action_type for step in plan.steps],
+            ["browser_open_url", "automation_confirm", "automation_type"],
+        )
+        self.assertEqual(plan.steps[2].target, "chrome")
+        self.assertEqual(plan.steps[2].params["trust_level"], "sensitive")
+
+    def test_password_payment_banking_and_delete_are_critical(self):
+        samples = [
+            "type my password",
+            "open chrome and pay the bill",
+            "type bank details in notepad",
+            "delete files",
+        ]
+
+        for sample in samples:
+            with self.subTest(sample=sample):
+                classification = action_intelligence.classify_external_command_safety(sample)
+                plan = action_intelligence.build_action_plan(sample)
+                self.assertEqual(classification["trust_level"], "critical")
+                self.assertIsNotNone(plan)
+                self.assertTrue(any(step.action_type == "automation_critical_blocked" for step in plan.steps))
+
     def test_build_action_plan_decomposes_open_and_go_to_url(self):
         plan = action_intelligence.build_action_plan("open chrome and go to example.com")
 

@@ -46,6 +46,8 @@ ACTION_PREFIXES: Tuple[str, ...] = (
     "read",
     "analyze",
     "show",
+    "ask",
+    "tell",
     "list",
     "add",
     "delete",
@@ -128,7 +130,7 @@ def _split_on_and(part: str) -> List[str]:
     if _looks_like_command(left) and _looks_like_command(right):
         return [left, *_split_on_and(right)]
 
-    if right.lower().startswith(("remind me", "save", "make", "create", "translate", "open", "go to", "visit", "navigate", "rerun", "repeat", "type", "press", "hit", "use", "scroll", "focus", "switch")):
+    if right.lower().startswith(("remind me", "save", "make", "create", "translate", "open", "go to", "visit", "navigate", "rerun", "repeat", "type", "press", "hit", "use", "scroll", "focus", "switch", "ask", "tell")):
         return [left, *_split_on_and(right)]
 
     return [part.strip(" ,")]

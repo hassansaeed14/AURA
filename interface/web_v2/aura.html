@@ -87,13 +87,19 @@
             <h2>AURA</h2>
             <span class="access-chip" id="accessChip">Public</span>
           </div>
-          <p class="topbar__summary" id="workspaceSummary">Calm, present, and ready for chat, push-to-talk voice, and document work.</p>
+          <p class="topbar__summary" id="workspaceSummary">Ready for chat, documents, and safe app actions.</p>
         </div>
 
         <div class="topbar__status">
           <div class="state-chip" id="stateChip">
             <span class="state-chip__dot" aria-hidden="true"></span>
             <span id="stateChipLabel">Idle</span>
+          </div>
+          <div class="mode-chip" id="assistantModeChip" title="Current assistant mode">
+            <span id="assistantModeLabel">Text mode</span>
+          </div>
+          <div class="mode-chip mode-chip--voice" id="voiceRuntimeChip" title="Desktop voice runtime status">
+            <span id="voiceRuntimeLabel">Desktop voice inactive</span>
           </div>
         </div>
       </header>
@@ -106,7 +112,7 @@
 
           <form class="composer" id="composerForm">
             <div class="composer__status-row">
-              <p class="composer__status" id="composerStatus">Type a message or click the orb. Talk is optional beta.</p>
+              <p class="composer__status" id="composerStatus">Message AURA. Talk is beta when available.</p>
             </div>
 
             <p class="composer__transcript" id="voiceTranscript" hidden></p>
@@ -122,6 +128,14 @@
                 </span>
                 <span class="tool-button__label">Talk</span>
                 <span class="tool-badge">Beta</span>
+              </button>
+
+              <button class="tool-button tool-button--speech" id="speechToggleButton" type="button" aria-pressed="false">
+                <span class="tool-button__label">Speech off</span>
+              </button>
+
+              <button class="tool-button tool-button--desktop-voice" id="desktopVoiceButton" type="button" aria-pressed="false">
+                <span class="tool-button__label">Enable desktop voice</span>
               </button>
 
               <button class="tool-button tool-button--interrupt" id="interruptButton" type="button" hidden aria-label="Interrupt AURA">

@@ -2,6 +2,7 @@
   const STORAGE_KEYS = {
     sessionId: "aura-v2-session-id",
     sessionTitles: "aura-v2-session-titles",
+    speechEnabled: "aura-v2-speech-enabled",
   };
 
   const WAKE_FALLBACK = "hey aura";
@@ -54,6 +55,8 @@
   ];
 
   const CONTROLLED_BROWSER_ACTION_RE = /\b(?:open\s+(?:a\s+)?new\s+(?:browser\s+)?tab|navigate\s+to|go\s+to\s+(?:https?:\/\/|[a-z0-9.-]+\.[a-z]{2,})|visit\s+(?:https?:\/\/|[a-z0-9.-]+\.[a-z]{2,})|re[-\s]?run\s+(?:the\s+)?search|open\s+(?:the\s+)?(?:first|top|next)\s+(?:search\s+)?(?:result|link)|open\s+chrome\s+and\s+(?:search|go\s+to|navigate\s+to|open\s+new\s+tab)|open\s+(?:notepad|vs\s*code|vscode|visual studio code|calculator|calc|chrome)\s+and\s+(?:type|write|enter|press|scroll|focus)|(?:type|write|enter)\s+.+\s+(?:in|into)\s+(?:notepad|vs\s*code|vscode|visual studio code|calculator|calc|chrome)|(?:press|hit|scroll|focus|switch\s+to)\s+(?:.+\s+)?(?:notepad|vs\s*code|vscode|visual studio code|calculator|calc|chrome))\b/i;
+  const CRITICAL_DIRECT_CONTROL_RE = /\b(?:type|enter|write)\s+(?:my\s+)?(?:password|otp|pin|credit\s*card|debit\s*card|bank|banking|payment|credentials?)\b/i;
+  const SAFE_WEB_ACTION_PLAN_RE = /\bopen\s+(?:youtube|google|chatgpt|facebook|github|chrome)\b.+\band\s+(?:search|ask|tell|go\s+to|navigate|open)\b/i;
 
   const INTERNAL_HINTS = [
     { pattern: /\b(notes?|assignment|assignments?|essay|report|slides?|presentation|pdf|docx|txt|pptx)\b/i, label: "Document task", kind: "document" },
@@ -70,6 +73,8 @@
     sessionTitles: readSessionTitles(),
     auth: null,
     voiceStatus: null,
+    assistantRuntime: null,
+    desktopVoiceStatus: null,
     assistantState: "idle",
     assistantStateEvent: "boot:uninitialized",
     orbLayout: "topbar",
@@ -93,6 +98,10 @@
     recognitionActive: false,
     recognitionStopReason: "",
     speechCommandInFlight: false,
+    speechEnabled: readSpeechEnabled(),
+    speechSynthesisSupported: Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance),
+    speakingMessageId: "",
+    desktopVoicePollId: 0,
     wakeModeEnabled: false,
     presenceHideTimer: 0,
   };
@@ -160,11 +169,13 @@
   async function initialize() {
     await Promise.allSettled([
       refreshAuthSession(),
+      loadAssistantRuntime(),
       loadVoiceStatus(),
       refreshDesktopApps(),
       loadSessions(),
     ]);
     syncVoiceControls();
+    syncAssistantModeChrome();
     logVoiceDebug("Voice support check", {
       speechRecognition: Boolean(window.SpeechRecognition),
       webkitSpeechRecognition: Boolean(window.webkitSpeechRecognition),
@@ -211,6 +222,8 @@
       profileEntryStatus: document.getElementById("profileEntryStatus"),
       accessChip: document.getElementById("accessChip"),
       stateChipLabel: document.getElementById("stateChipLabel"),
+      assistantModeLabel: document.getElementById("assistantModeLabel"),
+      voiceRuntimeLabel: document.getElementById("voiceRuntimeLabel"),
       workspaceSummary: document.getElementById("workspaceSummary"),
       screenChipLabel: document.getElementById("screenChipLabel"),
       conversationThread: document.getElementById("conversationThread"),
@@ -221,6 +234,8 @@
       voiceTranscript: document.getElementById("voiceTranscript"),
       screenShareButton: document.getElementById("screenShareButton"),
       talkButton: document.getElementById("talkButton"),
+      speechToggleButton: document.getElementById("speechToggleButton"),
+      desktopVoiceButton: document.getElementById("desktopVoiceButton"),
       wakeButton: document.getElementById("wakeButton"),
       interruptButton: document.getElementById("interruptButton"),
       sendButton: document.getElementById("sendButton"),
@@ -258,6 +273,10 @@
         handleOrbActivation();
       }
     });
+    el.speechToggleButton?.addEventListener("click", toggleSpeechEnabled);
+    el.desktopVoiceButton?.addEventListener("click", () => {
+      void toggleDesktopVoice();
+    });
     if (el.talkButton) {
       logVoiceDebug("Talk button bound", {
         id: el.talkButton.id,
@@ -292,9 +311,15 @@
     });
   }
 
-  function handleInterrupt() {
+  async function handleInterrupt() {
     if (state.recognitionActive) {
       stopRecognition("Listening stopped.");
+    }
+    if (state.speakingMessageId || window.speechSynthesis?.speaking) {
+      stopSpeaking("user:interrupt");
+    }
+    if (state.desktopVoiceStatus?.active) {
+      await interruptDesktopVoice();
     }
     if (el.interruptButton) {
       el.interruptButton.hidden = true;
@@ -434,6 +459,19 @@
     }
   }
 
+  async function loadAssistantRuntime() {
+    try {
+      state.assistantRuntime = await apiJson("/api/assistant/runtime", { method: "GET" });
+      state.desktopVoiceStatus = state.assistantRuntime?.voice_runtime
+        || state.assistantRuntime?.modes?.desktop_voice
+        || null;
+    } catch (_error) {
+      state.assistantRuntime = null;
+      state.desktopVoiceStatus = null;
+    }
+    syncDesktopVoicePolling();
+  }
+
   async function getMicrophonePermissionState() {
     if (!navigator.permissions || !navigator.permissions.query) {
       return "prompt";
@@ -455,6 +493,7 @@
     if (!el.talkButton) {
       return;
     }
+    const desktopActive = Boolean(state.desktopVoiceStatus?.active);
 
     if (state.voiceSupported) {
       el.talkButton.hidden = false;
@@ -464,9 +503,10 @@
         el.wakeButton.classList.remove("is-active");
       }
       if (el.interruptButton) {
-        el.interruptButton.hidden = !state.recognitionActive;
-        el.interruptButton.classList.toggle("is-active", state.recognitionActive);
+        el.interruptButton.hidden = !state.recognitionActive && !state.speakingMessageId && !desktopActive;
+        el.interruptButton.classList.toggle("is-active", state.recognitionActive || Boolean(state.speakingMessageId) || desktopActive);
       }
+      syncAssistantModeChrome();
       return;
     }
 
@@ -477,7 +517,62 @@
     }
     el.talkButton.classList.remove("is-active");
     if (el.interruptButton) {
-      el.interruptButton.hidden = true;
+      el.interruptButton.hidden = !state.speakingMessageId && !desktopActive;
+    }
+    syncAssistantModeChrome();
+  }
+
+  function syncAssistantModeChrome() {
+    const desktopVoice = state.desktopVoiceStatus
+      || state.assistantRuntime?.voice_runtime
+      || state.assistantRuntime?.modes?.desktop_voice
+      || {};
+    const desktopStateLabel = desktopVoice.active
+      ? desktopVoice.processing
+        ? "Desktop voice processing"
+        : desktopVoice.speaking
+          ? "Desktop voice speaking"
+          : desktopVoice.awake
+            ? "Desktop voice awake"
+            : desktopVoice.listening
+              ? 'Listening for "Hey AURA"'
+              : "Desktop voice active"
+      : desktopVoice.available === false
+        ? "Desktop voice unavailable"
+        : "Desktop voice inactive";
+    const currentMode = state.recognitionActive
+      ? "Push-to-talk"
+      : desktopVoice.active
+        ? "Desktop voice"
+      : state.speakingMessageId
+        ? "Speaking"
+        : "Text mode";
+    if (el.assistantModeLabel) {
+      el.assistantModeLabel.textContent = currentMode;
+    }
+    if (el.voiceRuntimeLabel) {
+      const message = String(desktopVoice.message || "Desktop voice runtime is not active.").trim();
+      el.voiceRuntimeLabel.textContent = desktopVoice.active ? desktopStateLabel : message;
+    }
+    if (el.speechToggleButton) {
+      el.speechToggleButton.hidden = !state.speechSynthesisSupported;
+      el.speechToggleButton.classList.toggle("is-active", state.speechEnabled);
+      el.speechToggleButton.setAttribute("aria-pressed", state.speechEnabled ? "true" : "false");
+      const label = el.speechToggleButton.querySelector(".tool-button__label") || el.speechToggleButton;
+      label.textContent = state.speechEnabled ? "Speech on" : "Speech off";
+    }
+    if (el.desktopVoiceButton) {
+      const unavailable = desktopVoice.available === false;
+      el.desktopVoiceButton.disabled = Boolean(unavailable);
+      el.desktopVoiceButton.classList.toggle("is-active", Boolean(desktopVoice.active));
+      el.desktopVoiceButton.setAttribute("aria-pressed", desktopVoice.active ? "true" : "false");
+      const desktopLabel = el.desktopVoiceButton.querySelector(".tool-button__label") || el.desktopVoiceButton;
+      desktopLabel.textContent = unavailable
+        ? "Desktop voice unavailable"
+        : desktopVoice.active
+          ? "Stop desktop voice"
+          : "Enable desktop voice";
+      el.desktopVoiceButton.title = String(desktopVoice.message || desktopStateLabel);
     }
   }
 
@@ -598,8 +693,8 @@
       kind: classification.taskKind,
       text: commandText,
     };
-    state.panelVisible = true;
-    state.panelMode = "context";
+    state.panelVisible = false;
+    state.panelMode = "";
     setOrbLayout("left");
     setAssistantState("thinking", "api:request_started");
     setComposerStatus("Working on that now.");
@@ -623,7 +718,7 @@
       const delivery = normalizeDocumentDeliveryPayload(payload);
       const actionPlan = normalizeActionPlanPayload(payload);
       const actionSuggestions = normalizeActionSuggestions(payload);
-      const replyText = String(payload.reply || payload.content || "").trim() || "Done.";
+      const replyText = cleanAssistantReply(payload.reply || payload.content) || "Done.";
       if (actionPlan) {
         state.currentTask = {
           scope: "external",
@@ -723,6 +818,11 @@
   }
 
   async function handleExternalCommand(commandText, classification) {
+    const externalModeLabel = classification.type === "browser-action"
+      ? "Controlled action"
+      : classification.type === "os-automation"
+        ? "Controlled OS automation"
+        : "Desktop control";
     setTaskScope("external");
     state.currentTask = {
       scope: "external",
@@ -731,8 +831,9 @@
       text: commandText,
     };
     state.currentExternal = classification;
-    state.panelVisible = true;
-    state.panelMode = "context";
+    const shouldShowExternalPanel = classification.type !== "web";
+    state.panelVisible = shouldShowExternalPanel;
+    state.panelMode = shouldShowExternalPanel ? "context" : "";
     setOrbLayout("floating");
     setAssistantState("analyzing", "external:routing_started");
     setComposerStatus("Let me route that outside AURA.");
@@ -779,7 +880,7 @@
       updateWorkspaceSummary("AURA is asking the desktop controller to launch this outside the workspace.");
       showPresence({
         mode: "floating",
-        eyebrow: "Desktop control",
+        eyebrow: externalModeLabel,
         title: "Opening that for you.",
         text: `${classification.label} is being launched through the AURA backend.`,
         duration: 2200,
@@ -793,7 +894,7 @@
         });
         const actionPlan = normalizeActionPlanPayload(payload);
         const actionSuggestions = normalizeActionSuggestions(payload);
-        replyText = String(payload.reply || payload.content || "").trim() || "I can't open that yet.";
+        replyText = cleanAssistantReply(payload.reply || payload.content) || "I can't open that yet.";
         state.currentTask.launchStatus = payload.action_status || payload.desktop_launch_status || (payload.execution_mode === "external_desktop" ? "opened" : "unknown");
         state.currentTask.launchMessage = replyText;
         state.currentTask.actionPlan = actionPlan;
@@ -802,6 +903,9 @@
           payload.execution_mode === "external_desktop" && /^opening\b/i.test(replyText)
         ) || Boolean(payload.action_success);
         const unavailable = payload.desktop_launch_status === "unavailable";
+        const needsConfirmation = Boolean(payload.automation_confirmation_required)
+          || Boolean(actionPlan?.confirmationRequired)
+          || state.currentTask.launchStatus === "needs_confirmation";
 
         if (launched) {
           setAssistantState("responding", "external:desktop_launch_succeeded");
@@ -809,10 +913,21 @@
           updateWorkspaceSummary(`${classification.label} is opening outside AURA while the assistant stays nearby.`);
           showPresence({
             mode: "floating",
-            eyebrow: "Desktop control",
+            eyebrow: externalModeLabel,
             title: "Opening that for you.",
             text: `${classification.label} is launching outside AURA while I stay present here.`,
             duration: 2200,
+          });
+        } else if (needsConfirmation) {
+          setAssistantState("responding", "automation:confirmation_required");
+          setComposerStatus("Control approval is needed before AURA types or clicks.");
+          updateWorkspaceSummary("AURA is waiting for your one-time approval before keyboard or mouse control.");
+          showPresence({
+            mode: "floating",
+            eyebrow: externalModeLabel,
+            title: "Approval needed before control.",
+            text: "AURA will not type, press keys, click, or scroll until you approve this action.",
+            duration: 2600,
           });
         } else {
           setAssistantState("error", "external:desktop_launch_unavailable");
@@ -824,7 +939,7 @@
           );
           showPresence({
             mode: "floating",
-            eyebrow: "Desktop control",
+            eyebrow: externalModeLabel,
             title: "I couldn't complete that yet.",
             text: replyText,
             duration: 2400,
@@ -842,7 +957,7 @@
         updateWorkspaceSummary(`${classification.label} could not be launched from the AURA backend.`);
         showPresence({
           mode: "floating",
-          eyebrow: "Desktop control",
+          eyebrow: externalModeLabel,
           title: "I couldn't complete that yet.",
           text: replyText,
           duration: 2400,
@@ -871,11 +986,15 @@
 
   function classifyCommand(text) {
     const normalized = String(text || "").trim();
-    if (CONTROLLED_BROWSER_ACTION_RE.test(normalized)) {
+    if (CRITICAL_DIRECT_CONTROL_RE.test(normalized) || CONTROLLED_BROWSER_ACTION_RE.test(normalized) || SAFE_WEB_ACTION_PLAN_RE.test(normalized)) {
+      const isOsAutomation = /\b(?:notepad|vs\s*code|vscode|visual studio code|calculator|calc|chrome)\b.*\b(?:type|write|enter|press|scroll|focus)\b/i.test(normalized)
+        || /\b(?:type|write|enter|press|scroll|focus)\b.*\b(?:notepad|vs\s*code|vscode|visual studio code|calculator|calc|chrome)\b/i.test(normalized)
+        || /\b(?:ask|tell)\s+(?:it|chatgpt|the\s+(?:site|page|website))\s+to\b/i.test(normalized)
+        || CRITICAL_DIRECT_CONTROL_RE.test(normalized);
       return {
         kind: "external",
-        type: "browser-action",
-        label: "Controlled browser action",
+        type: isOsAutomation ? "os-automation" : "browser-action",
+        label: isOsAutomation ? "Controlled OS automation" : "Controlled browser action",
         taskKind: "external",
       };
     }
@@ -930,6 +1049,9 @@
   }
 
   function appendMessage(message) {
+    if (!message.id) {
+      message.id = `msg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    }
     state.messages.push(message);
     renderConversation();
     scrollConversationToBottom();
@@ -962,7 +1084,19 @@
       effect: options.effect || "response",
     });
     triggerOrbResponsePulse();
+    maybeSpeakAssistantMessage(revealed, options);
     return revealed;
+  }
+
+  function maybeSpeakAssistantMessage(message, options = {}) {
+    if (message.role !== "assistant") {
+      return;
+    }
+    const shouldSpeak = Boolean(options.speak) || Boolean(state.speechEnabled && state.speechCommandInFlight);
+    if (!shouldSpeak) {
+      return;
+    }
+    speakMessage(message);
   }
 
   function renderConversation() {
@@ -1009,6 +1143,10 @@
     time.textContent = formatClock(message.timestamp);
     metaRight.appendChild(time);
 
+    if (message.role !== "user") {
+      metaRight.appendChild(buildMessageActions(message));
+    }
+
     meta.append(label, metaRight);
     card.appendChild(meta);
 
@@ -1026,6 +1164,217 @@
 
     row.appendChild(card);
     return row;
+  }
+
+  function buildMessageActions(message) {
+    const actions = document.createElement("div");
+    actions.className = "message-actions";
+
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "message-action-button";
+    copy.textContent = "Copy";
+    copy.setAttribute("aria-label", "Copy AURA response");
+    copy.addEventListener("click", () => {
+      void copyMessageText(message, copy);
+    });
+    actions.appendChild(copy);
+
+    if (state.speechSynthesisSupported) {
+      const isSpeakingThis = state.speakingMessageId === message.id;
+      const speak = document.createElement("button");
+      speak.type = "button";
+      speak.className = `message-action-button${isSpeakingThis ? " is-active" : ""}`;
+      speak.textContent = isSpeakingThis ? "Stop" : "Speak";
+      speak.setAttribute("aria-label", isSpeakingThis ? "Stop speaking this response" : "Speak this response");
+      speak.addEventListener("click", () => {
+        if (state.speakingMessageId === message.id) {
+          stopSpeaking("message:stop_clicked");
+          return;
+        }
+        speakMessage(message);
+      });
+      actions.appendChild(speak);
+    }
+
+    return actions;
+  }
+
+  async function copyMessageText(message, trigger) {
+    const text = String(message?.text || "").trim();
+    if (!text) {
+      return;
+    }
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        fallbackCopyText(text);
+      }
+      if (trigger) {
+        trigger.textContent = "Copied";
+        window.setTimeout(() => {
+          trigger.textContent = "Copy";
+        }, 1200);
+      }
+      setComposerStatus("Copied AURA's response.");
+    } catch (_error) {
+      fallbackCopyText(text);
+      setComposerStatus("Copied AURA's response.");
+    }
+  }
+
+  function fallbackCopyText(text) {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "readonly");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+
+  function speakMessage(message) {
+    const text = String(message?.text || "").trim();
+    if (!text || !state.speechSynthesisSupported) {
+      setComposerStatus("Speech is not available in this browser.");
+      return;
+    }
+    stopSpeaking("speech:new_message");
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = state.voiceStatus?.settings?.language || "en-US";
+    utterance.rate = 0.96;
+    utterance.pitch = 0.98;
+    utterance.onstart = () => {
+      state.speakingMessageId = message.id || "";
+      setAssistantState("responding", "tts:speech_started");
+      setComposerStatus("Speaking AURA's response.");
+      syncAssistantModeChrome();
+      renderConversation();
+    };
+    utterance.onend = () => {
+      if (state.speakingMessageId === message.id) {
+        state.speakingMessageId = "";
+      }
+      syncAssistantModeChrome();
+      renderConversation();
+      if (!state.requestInFlight && !state.recognitionActive) {
+        setAssistantState("idle", "tts:speech_finished");
+        settleToIdleLayout();
+      }
+    };
+    utterance.onerror = (event) => {
+      state.speakingMessageId = "";
+      syncAssistantModeChrome();
+      renderConversation();
+      setAssistantState("error", "tts:speech_error");
+      setComposerStatus(`Speech failed: ${event?.error || "unknown error"}`);
+      resetToCalmIdle(1200);
+    };
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function stopSpeaking(eventName = "tts:stop") {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    if (state.speakingMessageId) {
+      state.speakingMessageId = "";
+      syncAssistantModeChrome();
+      renderConversation();
+      setComposerStatus("Speech stopped.");
+      if (!state.requestInFlight && !state.recognitionActive) {
+        setAssistantState("idle", eventName);
+      }
+    }
+  }
+
+  function toggleSpeechEnabled() {
+    state.speechEnabled = !state.speechEnabled;
+    localStorage.setItem(STORAGE_KEYS.speechEnabled, state.speechEnabled ? "true" : "false");
+    if (!state.speechEnabled) {
+      stopSpeaking("tts:toggled_off");
+    }
+    syncAssistantModeChrome();
+    setComposerStatus(state.speechEnabled
+      ? "Speech is on for voice responses. Text chat stays silent unless you press Speak."
+      : "Speech is off. You can still press Speak on any AURA message.");
+  }
+
+  async function toggleDesktopVoice() {
+    if (state.requestInFlight) {
+      setComposerStatus("Wait for the current request to finish before changing desktop voice.");
+      return;
+    }
+    const active = Boolean(state.desktopVoiceStatus?.active);
+    const endpoint = active ? "/api/voice/desktop/stop" : "/api/voice/desktop/start";
+    setComposerStatus(active ? "Stopping desktop voice." : "Starting desktop voice.");
+    try {
+      const payload = await apiJson(endpoint, { method: "POST" });
+      state.desktopVoiceStatus = payload;
+      await loadAssistantRuntime();
+      syncVoiceControls();
+      const failed = payload.success === false || payload.available === false;
+      if (failed) {
+        setAssistantState("error", "desktop_voice:unavailable");
+        setComposerStatus(payload.message || "Desktop voice runtime is not available on this system.");
+        updateWorkspaceSummary("Desktop voice could not start on this machine.");
+        showPresence({
+          mode: "docked",
+          eyebrow: "Desktop voice",
+          title: "Desktop voice is unavailable.",
+          text: payload.message || "Required local voice dependencies or microphone access are missing.",
+          duration: 2400,
+        });
+        resetToCalmIdle(1600);
+        return;
+      }
+      if (payload.active) {
+        setAssistantState("listening", "desktop_voice:started");
+        setComposerStatus('Desktop voice is listening for "Hey AURA".');
+        updateWorkspaceSummary('Desktop voice is active locally and listening for "Hey AURA".');
+      } else {
+        setAssistantState("idle", "desktop_voice:stopped");
+        setComposerStatus("Desktop voice stopped.");
+        updateWorkspaceSummary("AURA is back to text mode and browser push-to-talk.");
+      }
+    } catch (error) {
+      setAssistantState("error", "desktop_voice:toggle_failed");
+      setComposerStatus(error.message || "Desktop voice could not be toggled.");
+      updateWorkspaceSummary("The desktop voice endpoint did not complete cleanly.");
+      resetToCalmIdle(1600);
+    }
+  }
+
+  async function interruptDesktopVoice() {
+    try {
+      const payload = await apiJson("/api/voice/desktop/interrupt", { method: "POST" });
+      state.desktopVoiceStatus = payload;
+      await loadAssistantRuntime();
+      syncVoiceControls();
+      setComposerStatus(payload.message || "Desktop voice interrupted.");
+      updateWorkspaceSummary("AURA interrupted the desktop voice runtime and returned to a safe listening state.");
+    } catch (error) {
+      setComposerStatus(error.message || "Desktop voice interrupt failed.");
+    }
+  }
+
+  function syncDesktopVoicePolling() {
+    const active = Boolean(state.desktopVoiceStatus?.active);
+    if (active && !state.desktopVoicePollId) {
+      state.desktopVoicePollId = window.setInterval(() => {
+        void loadAssistantRuntime().then(() => {
+          syncVoiceControls();
+        });
+      }, 2000);
+      return;
+    }
+    if (!active && state.desktopVoicePollId) {
+      window.clearInterval(state.desktopVoicePollId);
+      state.desktopVoicePollId = 0;
+    }
   }
 
   function renderRichText(text) {
@@ -1055,33 +1404,57 @@
         if (!lines.length) {
           return;
         }
+
         if (lines.every((line) => /^[-*]\s+/.test(line))) {
           const list = document.createElement("ul");
           lines.forEach((line) => {
             const item = document.createElement("li");
-            item.textContent = line.replace(/^[-*]\s+/, "");
+            item.textContent = cleanInlineMarkdown(line.replace(/^[-*]\s+/, ""));
             list.appendChild(item);
           });
           container.appendChild(list);
           return;
         }
+
         if (lines.every((line) => /^\d+\.\s+/.test(line))) {
           const list = document.createElement("ol");
           lines.forEach((line) => {
             const item = document.createElement("li");
-            item.textContent = line.replace(/^\d+\.\s+/, "");
+            item.textContent = cleanInlineMarkdown(line.replace(/^\d+\.\s+/, ""));
             list.appendChild(item);
           });
           container.appendChild(list);
           return;
         }
+
+        if (lines.length === 1 && /^#{1,4}\s+/.test(lines[0])) {
+          const heading = document.createElement("h4");
+          heading.textContent = cleanInlineMarkdown(lines[0].replace(/^#{1,4}\s+/, ""));
+          container.appendChild(heading);
+          return;
+        }
+
         const paragraph = document.createElement("p");
-        paragraph.textContent = lines.join(" ");
+        paragraph.textContent = cleanInlineMarkdown(lines.join(" "));
         container.appendChild(paragraph);
       });
     });
 
     return container;
+  }
+
+  function cleanInlineMarkdown(value) {
+    return String(value || "")
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/__([^_]+)__/g, "$1")
+      .replace(/`([^`]+)`/g, "$1")
+      .trim();
+  }
+
+  function cleanAssistantReply(value) {
+    return String(value || "")
+      .replace(/\s+Next,\s+based on your recent pattern around .+?\(\d+\),\s+I can keep the next step focused\.?$/i, "")
+      .trim();
   }
 
   function normalizeDocumentDeliveryPayload(payload) {
@@ -1269,13 +1642,15 @@
     if (!rawPlan && !rawSteps.length) {
       return null;
     }
+    const confirmationRequired = Boolean(payload.automation_confirmation_required)
+      || Boolean(rawPlan?.automation_confirmation_required);
     const steps = rawSteps.map((step, index) => ({
       id: String(step?.step_id || `step-${index + 1}`),
       actionType: String(step?.action_type || "action").trim(),
       label: String(step?.label || step?.message || `Step ${index + 1}`).trim(),
       target: String(step?.target || "").trim(),
       status: normalizeStepStatus(step?.status),
-      message: String(step?.message || step?.result?.message || "").trim(),
+      message: normalizeActionStepMessage(step?.message || step?.result?.message || "", confirmationRequired),
       resultStatus: String(step?.result?.status || "").trim(),
       recovered: Boolean(step?.result?.recovered),
     }));
@@ -1284,11 +1659,22 @@
       originalCommand: String(rawPlan?.original_command || "").trim(),
       status: normalizeStepStatus(payload.action_status || rawPlan?.status || "pending"),
       success: Boolean(payload.action_success),
-      confirmationRequired: Boolean(payload.automation_confirmation_required),
+      confirmationRequired,
       automationControl: Boolean(payload.automation_control)
-        || steps.some((step) => String(step.actionType || "").startsWith("automation_")),
+        || steps.some((step) => {
+          const actionType = String(step.actionType || "");
+          return actionType.startsWith("automation_") && actionType !== "automation_critical_blocked";
+        }),
       steps,
     };
+  }
+
+  function normalizeActionStepMessage(value, confirmationRequired) {
+    const message = String(value || "").trim();
+    if (confirmationRequired && /skipped because an earlier step failed/i.test(message)) {
+      return "Waiting for approval before this step runs.";
+    }
+    return message;
   }
 
   function normalizeActionSuggestions(payload) {
@@ -1402,10 +1788,6 @@
       warning.appendChild(actions);
       card.appendChild(warning);
     }
-    const suggestionCard = buildActionSuggestions(suggestions);
-    if (suggestionCard) {
-      card.appendChild(suggestionCard);
-    }
     return card;
   }
 
@@ -1460,14 +1842,14 @@
         actionPlan: confirmedPlan,
         actionSuggestions,
         launchStatus: payload.action_status || confirmedPlan?.status || "unknown",
-        launchMessage: String(payload.reply || payload.content || "").trim(),
+        launchMessage: cleanAssistantReply(payload.reply || payload.content),
       };
       state.panelVisible = true;
       state.panelMode = "context";
       setOrbLayout("floating");
       await revealAssistantMessage({
         role: "assistant",
-        text: String(payload.reply || payload.content || "").trim() || "Control action finished.",
+        text: cleanAssistantReply(payload.reply || payload.content) || "Control action finished.",
         badge: humanizeBadge(payload.execution_mode || "os_automation"),
         timestamp: new Date().toISOString(),
         actionPlan: confirmedPlan,
@@ -1533,11 +1915,13 @@
       || (state.panelVisible && (hasOutputs || hasTaskContext));
 
     if (!shouldShowPanel) {
+      setPanelOpen(false);
       el.rightPanel.hidden = true;
       el.rightPanelBody.innerHTML = "";
       return;
     }
 
+    setPanelOpen(true);
     el.rightPanel.hidden = false;
     el.rightPanelBody.innerHTML = "";
 
@@ -1559,16 +1943,18 @@
       el.rightPanelTitle.textContent = "AURA context";
     }
 
-    if (state.recentOutputs.length) {
+    if (state.panelMode === "outputs" && state.recentOutputs.length) {
       el.rightPanelBody.appendChild(buildOutputsCard());
-    }
-
-    if (state.currentTask?.scope === "external" && state.desktopApps.length) {
-      el.rightPanelBody.appendChild(buildDesktopAppsCard(true));
     }
 
     if (!state.currentTask && !state.recentOutputs.length) {
       el.rightPanelBody.appendChild(buildProfileCard(true));
+    }
+  }
+
+  function setPanelOpen(isOpen) {
+    if (el.body) {
+      el.body.dataset.panelOpen = isOpen ? "true" : "false";
     }
   }
 
@@ -2374,6 +2760,7 @@
     if (el.orbModeLabel) {
       el.orbModeLabel.textContent = orbModeLabel(state.orbLayout, copy.orb);
     }
+    syncAssistantModeChrome();
   }
 
   function setOrbLayout(layout) {
@@ -2394,6 +2781,11 @@
       return;
     }
     if (state.currentTask?.scope === "internal" && state.messages.length) {
+      if (state.currentTask.kind === "chat") {
+        setTaskScope("none");
+        setOrbLayout("topbar");
+        return;
+      }
       setTaskScope("internal");
       setOrbLayout("left");
       return;
@@ -2416,12 +2808,12 @@
       el.screenChipLabel.textContent = state.screenShareActive ? "On" : "Off";
     }
     if (!el.workspaceSummary?.textContent) {
-      updateWorkspaceSummary("AURA is ready for chat, push-to-talk voice, and document generation.");
+      updateWorkspaceSummary("AURA is ready for chat, documents, and safe app actions.");
     }
     if (el.composerStatus && !state.requestInFlight && !state.recognitionActive && !state.speechCommandInFlight) {
       el.composerStatus.textContent = state.auth?.authenticated
-        ? "Type a message, click the orb, or use Talk beta."
-        : "Type a message or click the orb. Talk is optional beta.";
+        ? "Message AURA. Talk is beta when available."
+        : "Message AURA. Click the orb to wake.";
     }
   }
 
@@ -2507,6 +2899,10 @@
     } catch (_error) {
       return {};
     }
+  }
+
+  function readSpeechEnabled() {
+    return localStorage.getItem(STORAGE_KEYS.speechEnabled) === "true";
   }
 
   function persistSessionTitles() {
@@ -2643,6 +3039,19 @@
 
   function humanizeBadge(value) {
     const text = String(value || "").replace(/[_-]+/g, " ").trim();
+    const normalized = text.toLowerCase();
+    if (["assistant llm", "fallback llm", "conversation llm", "casual local", "general", "chat"].includes(normalized)) {
+      return "Assistant";
+    }
+    if (normalized.includes("document")) {
+      return "Document";
+    }
+    if (normalized.includes("action plan") || normalized.includes("browser action")) {
+      return "Action";
+    }
+    if (normalized.includes("os automation")) {
+      return "Control";
+    }
     return text ? text.replace(/\b\w/g, (character) => character.toUpperCase()) : "Assistant";
   }
 
@@ -2689,10 +3098,17 @@
   }
 
   function scrollConversationToBottom() {
-    window.requestAnimationFrame(() => {
+    const scroll = () => {
       if (el.chatScroll) {
-        el.chatScroll.scrollTop = el.chatScroll.scrollHeight;
+        el.chatScroll.scrollTo({
+          top: el.chatScroll.scrollHeight,
+          behavior: "smooth",
+        });
       }
+    };
+    window.requestAnimationFrame(() => {
+      scroll();
+      window.requestAnimationFrame(scroll);
     });
   }
 

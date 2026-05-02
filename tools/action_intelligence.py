@@ -29,6 +29,10 @@ OPEN_ACTION_RE = re.compile(
     r"^(?:please\s+)?(?:open|launch|start)\s+(?:the\s+)?(?P<target>[a-z0-9 .-]+?)(?:\s+(?:app|application|browser))?[.!?]*$",
     flags=re.IGNORECASE,
 )
+THIRD_PARTY_ASK_ACTION_RE = re.compile(
+    r"^(?:please\s+)?(?:ask|tell)\s+(?:it|chatgpt|the\s+(?:site|page|website))\s+to\s+(?P<text>.+?)\s*[.!?]*$",
+    flags=re.IGNORECASE,
+)
 SEARCH_ACTION_RE = re.compile(
     r"^(?:please\s+)?(?:(?:search|google|look\s+up|find)\s+(?:for\s+)?|search\s+the\s+web\s+for\s+)(?P<query>.+?)\s*[.!?]*$",
     flags=re.IGNORECASE,
@@ -70,9 +74,16 @@ SCROLL_ACTION_RE = re.compile(
     flags=re.IGNORECASE,
 )
 CRITICAL_AUTOMATION_RE = re.compile(
-    r"\b(delete|remove|wipe|format|purchase|buy|pay|payment|checkout|password|bank|banking)\b",
+    r"\b(delete|remove|wipe|format|purchase|buy|pay|payment|checkout|password|bank|banking|otp|pin|credential|credentials|credit\s+card|debit\s+card)\b",
     flags=re.IGNORECASE,
 )
+SAFE_WEB_TARGETS = {
+    "youtube": ("YouTube", "https://www.youtube.com/"),
+    "google": ("Google", "https://www.google.com/"),
+    "chatgpt": ("ChatGPT", "https://chatgpt.com/"),
+    "facebook": ("Facebook", "https://www.facebook.com/"),
+    "github": ("GitHub", "https://github.com/"),
+}
 SAFE_ACTION_TYPES = {
     "desktop_open",
     "browser_search",
@@ -92,6 +103,33 @@ SAFE_ACTION_TYPES = {
 CONTROL_ACTION_TYPES = {"automation_type", "automation_press_key", "automation_hotkey", "automation_scroll"}
 AUTOMATION_ACTION_TYPES = CONTROL_ACTION_TYPES | {"automation_focus", "automation_confirm"}
 ACTION_STEP_COOLDOWN_SECONDS = 0.08
+
+
+def classify_external_command_safety(command: str) -> Dict[str, str]:
+    """Classify external/action-style free text without over-blocking searches."""
+
+    text = str(command or "").strip().lower()
+    if not text:
+        return {"trust_level": "safe", "action_name": "general", "reason": "empty command"}
+    if CRITICAL_AUTOMATION_RE.search(text):
+        return {
+            "trust_level": "critical",
+            "action_name": "os_automation_critical",
+            "reason": "critical terms such as passwords, payments, banking, credentials, or deletion are blocked",
+        }
+    if re.search(r"\b(?:type|write|enter|ask|tell)\b", text):
+        return {
+            "trust_level": "sensitive",
+            "action_name": "os_automation_control",
+            "reason": "the request may type user-provided text into an app or website",
+        }
+    if re.search(r"\b(?:open|launch|go to|visit|navigate|search|google|look up|find)\b", text):
+        return {
+            "trust_level": "safe",
+            "action_name": "desktop_launch",
+            "reason": "safe whitelisted app, URL, or search navigation",
+        }
+    return {"trust_level": "safe", "action_name": "general", "reason": "no controlled action detected"}
 
 
 @dataclass
@@ -139,6 +177,18 @@ def _parse_open_step(fragment: str, index: int) -> Optional[ActionStep]:
     match = OPEN_ACTION_RE.match(str(fragment or "").strip())
     if not match:
         return None
+    raw_target = _clean_target(match.group("target")).lower()
+    web_target = SAFE_WEB_TARGETS.get(raw_target)
+    if web_target:
+        label, url = web_target
+        return ActionStep(
+            step_id=f"step-{index}",
+            action_type="browser_open_url",
+            target=url,
+            label=f"Open {label}",
+            source_text=str(fragment or "").strip(),
+        )
+
     app_name = normalize_application_name(match.group("target"))
     if not app_name:
         return None
@@ -149,6 +199,32 @@ def _parse_open_step(fragment: str, index: int) -> Optional[ActionStep]:
         target=app_name,
         label=f"Open {label}",
         source_text=str(fragment or "").strip(),
+    )
+
+
+def _parse_third_party_ask_step(fragment: str, index: int) -> Optional[ActionStep]:
+    match = THIRD_PARTY_ASK_ACTION_RE.match(str(fragment or "").strip())
+    if not match:
+        return None
+    text = _clean_target(match.group("text"), limit=1000)
+    if not text:
+        return None
+    if appears_critical_text(text) or CRITICAL_AUTOMATION_RE.search(text):
+        return ActionStep(
+            step_id=f"step-{index}",
+            action_type="automation_critical_blocked",
+            target="",
+            label="Block critical automation",
+            source_text=str(fragment or "").strip(),
+            params={"reason": "critical_text", "trust_level": "critical"},
+        )
+    return ActionStep(
+        step_id=f"step-{index}",
+        action_type="automation_type",
+        target="chrome",
+        label="Type prompt into browser",
+        source_text=str(fragment or "").strip(),
+        params={"text": text, "trust_level": "sensitive", "requires_confirmation": True},
     )
 
 
@@ -352,6 +428,7 @@ def parse_action_step(fragment: str, index: int) -> Optional[ActionStep]:
         _parse_new_tab_step(fragment, index)
         or _parse_rerun_search_step(fragment, index)
         or _parse_focus_step(fragment, index)
+        or _parse_third_party_ask_step(fragment, index)
         or _parse_type_step(fragment, index)
         or _parse_critical_step(fragment, index)
         or _parse_press_key_step(fragment, index)
@@ -370,6 +447,8 @@ def _hydrate_result_steps(steps: List[ActionStep]) -> None:
     for step in steps:
         if step.action_type == "desktop_open" and step.target:
             last_app = step.target
+        if step.action_type.startswith("browser_"):
+            last_app = "chrome"
         if step.action_type in {"browser_search", "browser_rerun_search"} and step.target:
             last_query = step.target
         if step.action_type in {"browser_open_result", "browser_rerun_search"} and not step.target and last_query:

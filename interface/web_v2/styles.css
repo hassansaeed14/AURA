@@ -462,6 +462,7 @@ body.auth-page {
 
 .access-chip,
 .state-chip,
+.mode-chip,
 .screen-chip {
   display: inline-flex;
   align-items: center;
@@ -481,6 +482,23 @@ body.auth-page {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--orb-color) 10%, transparent);
 }
 
+.mode-chip {
+  max-width: 260px;
+  border-color: rgba(126, 214, 255, 0.14);
+  background: rgba(126, 214, 255, 0.045);
+  color: var(--text-secondary);
+}
+
+.mode-chip--voice {
+  color: var(--text-muted);
+}
+
+.mode-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .state-chip__dot {
   width: 8px;
   height: 8px;
@@ -493,9 +511,14 @@ body.auth-page {
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, var(--panel-width));
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
   overflow: hidden;
+  transition: grid-template-columns 0.28s ease;
+}
+
+body[data-panel-open="true"] .workspace__body {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, var(--panel-width));
 }
 
 .chat-stage {
@@ -685,6 +708,34 @@ body.auth-page {
   font-size: 0.74rem;
 }
 
+.message-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.message-action-button {
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(126, 214, 255, 0.16);
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.message-action-button:hover,
+.message-action-button.is-active {
+  color: var(--cyan-bright);
+  border-color: rgba(126, 214, 255, 0.32);
+  background: rgba(126, 214, 255, 0.08);
+}
+
 @keyframes cardRise {
   from {
     opacity: 0;
@@ -745,6 +796,13 @@ body.auth-page {
 .rich-text p {
   margin: 0;
   line-height: 1.7;
+}
+
+.rich-text h4 {
+  margin: 4px 0 0;
+  color: var(--cyan-bright);
+  font-size: 0.98rem;
+  letter-spacing: -0.01em;
 }
 
 .rich-text ul,
@@ -1053,7 +1111,7 @@ body.auth-page {
 
 .composer__row {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto auto auto minmax(0, 1fr) auto;
   gap: 10px;
   align-items: end;
 }
@@ -1103,6 +1161,11 @@ body.auth-page {
   box-shadow: 0 10px 24px rgba(57, 132, 194, 0.14);
 }
 
+.tool-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .tool-button[hidden] {
   display: none !important;
 }
@@ -1140,6 +1203,10 @@ body.auth-page {
   border-radius: 24px;
   padding: 16px;
   animation: panelReveal 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.right-panel[hidden] {
+  display: none !important;
 }
 
 @keyframes panelReveal {
