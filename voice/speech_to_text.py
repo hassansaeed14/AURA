@@ -63,7 +63,42 @@ def transcribe_microphone(*, timeout: int = 5, phrase_time_limit: int | None = N
                 recognizer.adjust_for_ambient_noise(source, duration=0.5)
             audio = recognizer.listen(source, timeout=timeout, phrase_time_limit=limit)
         text = recognizer.recognize_google(audio, language=settings.language)
+        if not str(text or "").strip():
+            return {
+                "success": False,
+                "status": "empty_transcript",
+                "message": "No speech transcript was captured.",
+                "source": "microphone",
+            }
         return {"success": True, "status": "transcribed", "text": text, "source": "microphone"}
+    except sr.WaitTimeoutError:
+        return {
+            "success": False,
+            "status": "timeout",
+            "message": "Listening timed out waiting for speech.",
+            "source": "microphone",
+        }
+    except sr.UnknownValueError:
+        return {
+            "success": False,
+            "status": "no_speech",
+            "message": "I couldn't understand any speech.",
+            "source": "microphone",
+        }
+    except sr.RequestError as error:
+        return {
+            "success": False,
+            "status": "stt_service_error",
+            "message": str(error),
+            "source": "microphone",
+        }
+    except OSError as error:
+        return {
+            "success": False,
+            "status": "microphone_error",
+            "message": str(error),
+            "source": "microphone",
+        }
     except Exception as error:
         return {"success": False, "status": "transcription_error", "message": str(error), "source": "microphone"}
 

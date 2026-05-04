@@ -9,22 +9,16 @@ from memory.working_memory import WorkingMemoryState
 
 class PersonalIntelligenceTests(unittest.TestCase):
     def test_personal_context_combines_identity_preferences_history_and_memory(self):
-        learning_snapshot = {
-            "user_profile": {"preferences": {"answer_style": "concise"}},
-            "learned_facts": ["I usually prefer bullet points"],
-            "topic_frequency": {"code": 4, "research": 2},
-            "behavior_stats": {"short_queries": 6, "medium_queries": 2, "long_queries": 1},
-        }
         working_state = WorkingMemoryState(
             active_topic="transformer notes",
             last_agent="summary_runtime",
             recent_references=["AI", "Rust", "transformers"],
         )
 
-        with patch.object(personalization.learning_agent, "load_data", return_value=learning_snapshot), patch.object(
+        with patch.object(
             personalization,
             "list_facts",
-            return_value=[{"key": "user_preference", "value": "I prefer short technical answers"}],
+            return_value=[{"key": "user:hassan:user_preference", "value": "I prefer short technical answers"}],
         ), patch.object(
             personalization,
             "load_working_memory",
@@ -35,7 +29,7 @@ class PersonalIntelligenceTests(unittest.TestCase):
             return_value=[
                 {
                     "text": "User asked for transformer notes yesterday.",
-                    "metadata": {"session_id": "session-1"},
+                    "metadata": {"username": "hassan", "session_id": "session-1"},
                 }
             ],
         ):
@@ -56,7 +50,7 @@ class PersonalIntelligenceTests(unittest.TestCase):
         self.assertTrue(any("active topic" in line for line in context["working_memory"]))
         self.assertEqual(context["relevant_memories"], ["User asked for transformer notes yesterday."])
         self.assertIn("recent user flow", context["history_hint"])
-        self.assertEqual(context["top_topics"][0], "code (4)")
+        self.assertEqual(context["top_topics"], [])
 
     def test_personalized_system_prompt_is_quiet_and_bounded(self):
         prompt = personalization.build_personalized_system_prompt(
@@ -136,6 +130,79 @@ class PersonalIntelligenceTests(unittest.TestCase):
             reply = api_server._build_casual_conversation_reply("hello", {})
 
         self.assertEqual(reply, "Hey. What can I help you with?")
+
+    def test_public_context_ignores_legacy_global_names(self):
+        personalization.clear_session_personal_context()
+
+        with patch.object(personalization, "recall_fact", return_value={"value": "Jerry"}), patch.object(
+            personalization,
+            "get_user_name",
+            create=True,
+            return_value="Jerry",
+        ):
+            context = personalization.build_personal_context(
+                "hello",
+                session_id="public-a",
+                user_profile={},
+            )
+
+        self.assertEqual(context["display_name"], "")
+        self.assertEqual(context["preferences"], [])
+        self.assertEqual(context["relevant_memories"], [])
+
+    def test_public_session_name_is_temporary_and_isolated(self):
+        personalization.clear_session_personal_context()
+        personalization.remember_explicit_personal_signals("my name is Hassan", session_id="public-a")
+
+        first = personalization.build_personal_context("hi", session_id="public-a", user_profile={})
+        second = personalization.build_personal_context("hi", session_id="public-b", user_profile={})
+
+        self.assertEqual(first["display_name"], "Hassan")
+        self.assertEqual(second["display_name"], "")
+
+    def test_name_overwrite_uses_latest_explicit_signal(self):
+        personalization.clear_session_personal_context()
+        personalization.remember_explicit_personal_signals("my name is Hassan", session_id="public-a")
+        personalization.remember_explicit_personal_signals("call me Ali", session_id="public-a")
+
+        context = personalization.build_personal_context("hi", session_id="public-a", user_profile={})
+
+        self.assertEqual(context["display_name"], "Ali")
+
+    def test_authenticated_scoped_memory_does_not_cross_users(self):
+        facts = {
+            "user:u1:user_name": {"key": "user:u1:user_name", "value": "Hassan"},
+            "user:u2:user_name": {"key": "user:u2:user_name", "value": "Ali"},
+            "user:hassan:user_name": {"key": "user:hassan:user_name", "value": "Captain"},
+        }
+
+        with patch.object(personalization, "recall_fact", side_effect=lambda key: facts.get(key)):
+            user_a = personalization.get_personal_display_name({"id": "u1"}, session_id="session-a")
+            user_b = personalization.get_personal_display_name({"id": "u2"}, session_id="session-b")
+            username_with_alias = personalization.get_personal_display_name({"username": "hassan"}, session_id="session-c")
+            public = personalization.get_personal_display_name({}, session_id="session-a")
+
+        self.assertEqual(user_a, "Hassan")
+        self.assertEqual(user_b, "Ali")
+        self.assertEqual(username_with_alias, "Captain")
+        self.assertEqual(public, "")
+
+    def test_personal_prompt_does_not_claim_memory_when_empty(self):
+        prompt = personalization.build_personalized_system_prompt("Base prompt.", {})
+
+        self.assertEqual(prompt, "Base prompt.")
+        self.assertNotIn("I remember", prompt)
+
+    def test_clear_session_context_removes_short_term_identity(self):
+        personalization.clear_session_personal_context()
+        core_ai.SESSION_CONTEXT_HISTORY["public-a"] = [{"role": "user", "content": "my name is Hassan"}]
+        personalization.remember_explicit_personal_signals("my name is Hassan", session_id="public-a")
+
+        core_ai.clear_session_context("public-a")
+        context = personalization.build_personal_context("hi", session_id="public-a", user_profile={})
+
+        self.assertNotIn("public-a", core_ai.SESSION_CONTEXT_HISTORY)
+        self.assertEqual(context["display_name"], "")
 
 
 if __name__ == "__main__":

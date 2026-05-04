@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 import zipfile
+import re
 from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
@@ -15,6 +16,41 @@ import tools.document_generator as document_generator
 
 
 class DocumentGeneratorTests(unittest.TestCase):
+    REQUIRED_ASSIGNMENT_HEADINGS = [
+        "Introduction",
+        "Background / History",
+        "Core Concepts",
+        "Applications",
+        "Advantages",
+        "Limitations",
+        "Conclusion",
+    ]
+
+    def _assert_assignment_quality(self, content: str, *, pages: int, topic_keyword: str) -> None:
+        headings = [
+            line.strip()
+            for line in str(content or "").splitlines()
+            if line.strip() in self.REQUIRED_ASSIGNMENT_HEADINGS
+        ]
+        word_count = len(re.findall(r"[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)?", str(content or "")))
+        lowered = str(content or "").lower()
+
+        self.assertEqual(headings, self.REQUIRED_ASSIGNMENT_HEADINGS)
+        self.assertGreaterEqual(word_count, pages * 180)
+        self.assertLessEqual(word_count, pages * 230)
+        self.assertIn(topic_keyword, lowered)
+        for weak_phrase in (
+            "this section explains",
+            "this section should",
+            "you should discuss",
+            "the student should",
+            "a strong conclusion should",
+            "this assignment will",
+            "in this assignment",
+            "placeholder",
+        ):
+            self.assertNotIn(weak_phrase, lowered)
+
     def test_detect_document_request_parses_notes_assignment_and_format(self):
         notes_request = document_generator.detect_document_request("make notes on transformers in pdf")
         assignment_request = document_generator.detect_document_request("write 5 page assignment on machine learning in docx")
@@ -182,6 +218,95 @@ class DocumentGeneratorTests(unittest.TestCase):
                 self.assertIn(keyword, content.lower())
                 self.assertNotIn("this section explains", content.lower())
                 self.assertNotIn("you should discuss", content.lower())
+
+    def test_assignment_generation_respects_page_bands_and_exact_structure(self):
+        weak_payload = {
+            "success": True,
+            "content": (
+                "Introduction\n"
+                "This section explains what should be discussed.\n\n"
+                "Conclusion\n"
+                "A strong conclusion should summarize the topic."
+            ),
+            "provider": "local",
+            "model": "template",
+            "source": "local_template",
+            "degraded": True,
+            "providers_tried": [],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir, patch.object(
+            document_generator,
+            "GENERATED_DIR",
+            Path(tmp_dir),
+        ), patch.object(
+            document_generator,
+            "generate_document_content_payload",
+            return_value=weak_payload,
+        ):
+            for pages in (3, 7, 10):
+                result = document_generator.generate_document(
+                    "assignment",
+                    "climate change",
+                    "txt",
+                    page_target=pages,
+                )
+
+                self._assert_assignment_quality(
+                    result["content"],
+                    pages=pages,
+                    topic_keyword="greenhouse gas emissions",
+                )
+
+    def test_assignment_exports_preserve_clean_academic_structure(self):
+        weak_payload = {
+            "success": True,
+            "content": "Introduction\nThis section explains what should be discussed.",
+            "provider": "local",
+            "model": "template",
+            "source": "local_template",
+            "degraded": True,
+            "providers_tried": [],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir, patch.object(
+            document_generator,
+            "GENERATED_DIR",
+            Path(tmp_dir),
+        ), patch.object(
+            document_generator,
+            "generate_document_content_payload",
+            return_value=weak_payload,
+        ):
+            result = document_generator.generate_document(
+                "assignment",
+                "artificial intelligence",
+                "docx",
+                formats=("docx", "pdf", "txt", "pptx"),
+                page_target=3,
+            )
+
+            txt_content = Path(result["artifacts"]["txt"]["file_path"]).read_text(encoding="utf-8")
+            self.assertIn("1. Introduction", txt_content)
+            self.assertIn("7. Conclusion", txt_content)
+
+            pdf_bytes = Path(result["artifacts"]["pdf"]["file_path"]).read_bytes()
+            self.assertIn(b"1. Introduction", pdf_bytes)
+            self.assertIn(b"7. Conclusion", pdf_bytes)
+
+            with zipfile.ZipFile(result["artifacts"]["docx"]["file_path"]) as docx_archive:
+                document_xml = docx_archive.read("word/document.xml").decode("utf-8")
+            self.assertIn("1. Introduction", document_xml)
+            self.assertIn("7. Conclusion", document_xml)
+
+            with zipfile.ZipFile(result["artifacts"]["pptx"]["file_path"]) as pptx_archive:
+                slide_xml = "\n".join(
+                    pptx_archive.read(name).decode("utf-8")
+                    for name in pptx_archive.namelist()
+                    if name.startswith("ppt/slides/slide") and name.endswith(".xml")
+                )
+            self.assertIn("Introduction", slide_xml)
+            self.assertIn("Conclusion", slide_xml)
 
     def test_resolve_document_request_supports_format_followup(self):
         first_request = document_generator.resolve_document_request(

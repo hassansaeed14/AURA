@@ -910,41 +910,63 @@ def _strengthen_assignment_sections(sections: list[DocumentSection], topic: str)
 
 
 def _enforce_assignment_section_order(sections: list[DocumentSection]) -> list[DocumentSection]:
-    """Guarantee Introduction is first body section and Conclusion is last."""
+    """Guarantee assignment body sections render in the canonical academic order."""
     if not sections:
         return sections
-    intro_indices = [i for i, s in enumerate(sections) if s.title.strip().lower() in {"introduction", "overview"}]
-    conclusion_indices = [i for i, s in enumerate(sections) if s.title.strip().lower() == "conclusion"]
-    if intro_indices and intro_indices[0] != 0:
-        intro = sections.pop(intro_indices[0])
-        sections.insert(0, intro)
-    if conclusion_indices:
-        last_idx = conclusion_indices[-1]
-        if last_idx != len(sections) - 1:
-            conclusion = sections.pop(last_idx)
-            sections.append(conclusion)
-    return sections
+    canonical_order = [
+        "Introduction",
+        "Background / History",
+        "Core Concepts",
+        "Applications",
+        "Advantages",
+        "Limitations",
+        "Conclusion",
+    ]
+    canonical_lookup = {title.lower(): index for index, title in enumerate(canonical_order)}
+    ordered: list[DocumentSection] = []
+    extras: list[DocumentSection] = []
+    by_title: dict[str, DocumentSection] = {}
+
+    for section in sections:
+        normalized_title = _normalize_section_title(section.title)
+        key = normalized_title.lower()
+        normalized_section = DocumentSection(normalized_title, list(section.lines), section.level)
+        if key in canonical_lookup:
+            if key in by_title:
+                by_title[key].lines.extend(normalized_section.lines)
+            else:
+                by_title[key] = normalized_section
+        else:
+            extras.append(normalized_section)
+
+    for title in canonical_order:
+        section = by_title.get(title.lower())
+        if section:
+            ordered.append(section)
+
+    return [*ordered, *extras]
 
 
 def _parse_document_sections(document_type: str, topic: str, content: str) -> list[DocumentSection]:
     cleaned_content = str(content or "").replace("\r\n", "\n").strip()
-    raw_blocks = re.split(r"\n\s*\n+", cleaned_content)
     sections: list[DocumentSection] = []
 
-    for raw_block in raw_blocks:
-        lines = [_normalize_body_line(line) for line in raw_block.splitlines() if _normalize_body_line(line)]
-        if not lines:
+    for raw_line in cleaned_content.splitlines():
+        line = _normalize_body_line(raw_line)
+        if not line:
             continue
-        if _looks_like_heading(lines[0]) and len(lines) > 1:
-            title = _normalize_section_title(lines[0])
-            body_lines = lines[1:]
-        elif sections:
-            sections[-1].lines.extend(lines)
+        if _looks_like_heading(line):
+            sections.append(DocumentSection(title=_normalize_section_title(line), lines=[]))
             continue
-        else:
-            title = "Overview" if document_type == "notes" else "Introduction"
-            body_lines = lines
-        sections.append(DocumentSection(title=title, lines=body_lines))
+        if sections:
+            sections[-1].lines.append(line)
+            continue
+        sections.append(
+            DocumentSection(
+                title="Overview" if document_type == "notes" else "Introduction",
+                lines=[line],
+            )
+        )
 
     sections = _append_default_summary_sections(document_type, sections, topic)
     if document_type == "assignment":

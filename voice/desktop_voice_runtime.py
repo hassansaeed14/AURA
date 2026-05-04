@@ -18,12 +18,19 @@ except Exception:  # pragma: no cover
 WAKE_PHRASE = "hey aura"
 UNAVAILABLE_MESSAGE = "Desktop voice runtime is not available on this system."
 INACTIVE_MESSAGE = "Desktop voice runtime is not active."
+VOICE_STATES = ("idle", "listening", "awake", "processing", "speaking", "error")
+TRANSIENT_LISTEN_STATUSES = {"timeout", "no_speech", "empty_transcript"}
+FATAL_LISTEN_STATUSES = {"unavailable", "microphone_error", "stt_service_error"}
+COMMAND_DEDUP_WINDOW_SECONDS = 1.5
 
 _LOCK = threading.RLock()
+_TTS_LOCK = threading.RLock()
 _STOP_EVENT = threading.Event()
 _INTERRUPT_EVENT = threading.Event()
 _THREAD: Optional[threading.Thread] = None
 _TTS_ENGINE: Any = None
+_LAST_COMMAND_SIGNATURE = ""
+_LAST_COMMAND_AT = 0.0
 
 _STATE: Dict[str, Any] = {
     "available": False,
@@ -35,7 +42,7 @@ _STATE: Dict[str, Any] = {
     "last_error": "",
     "mode": "desktop_voice",
     "status": "inactive",
-    "state": "off",
+    "state": "idle",
     "message": INACTIVE_MESSAGE,
     "wake_phrase": WAKE_PHRASE,
     "last_transcript": "",
@@ -68,9 +75,20 @@ def _dependency_snapshot() -> Dict[str, Any]:
     }
 
 
+def _log_voice(message: str, *, error: bool = False) -> None:
+    prefix = "[VOICE ERROR]" if error else "[VOICE]"
+    try:
+        print(f"{prefix} {message}")
+    except UnicodeEncodeError:
+        safe_message = str(message or "").encode("ascii", "replace").decode("ascii")
+        print(f"{prefix} {safe_message}")
+
+
 def _derive_state(payload: Dict[str, Any]) -> str:
-    if not payload.get("active"):
-        return "off"
+    if payload.get("last_error"):
+        return "error"
+    if payload.get("active") and not payload.get("available", True):
+        return "error"
     if payload.get("speaking"):
         return "speaking"
     if payload.get("processing"):
@@ -85,9 +103,11 @@ def _derive_state(payload: Dict[str, Any]) -> str:
 def _message_for_state(payload: Dict[str, Any]) -> str:
     if not payload.get("available"):
         return UNAVAILABLE_MESSAGE
+    state = _derive_state(payload)
+    if state == "error":
+        return str(payload.get("last_error") or "Desktop voice runtime encountered an error.")
     if not payload.get("active"):
         return INACTIVE_MESSAGE
-    state = _derive_state(payload)
     if state == "listening":
         return 'Listening for "Hey AURA".'
     if state == "awake":
@@ -114,6 +134,12 @@ def _status_payload() -> Dict[str, Any]:
     with _LOCK:
         payload = dict(_STATE)
         payload["available"] = bool(dependencies.get("available"))
+        if payload.get("active") and not payload["available"]:
+            payload["listening"] = False
+            payload["awake"] = False
+            payload["processing"] = False
+            payload["speaking"] = False
+            payload["last_error"] = payload.get("last_error") or UNAVAILABLE_MESSAGE
         payload["dependencies"] = dependencies
         payload["message"] = _message_for_state(payload)
         payload["state"] = _derive_state(payload)
@@ -144,6 +170,7 @@ def start_desktop_voice(
             speaking=False,
             last_error=UNAVAILABLE_MESSAGE,
         )
+        _log_voice(UNAVAILABLE_MESSAGE, error=True)
         status["success"] = False
         status["dependencies"] = dependencies
         return status
@@ -171,6 +198,7 @@ def start_desktop_voice(
             last_response="",
             last_spoken_text="",
         )
+        _log_voice("listening")
         if start_loop:
             _THREAD = threading.Thread(
                 target=_desktop_voice_loop,
@@ -193,6 +221,7 @@ def stop_desktop_voice() -> Dict[str, Any]:
     _STOP_EVENT.set()
     _INTERRUPT_EVENT.set()
     _stop_desktop_tts()
+    _set_state(active=False, listening=False, awake=False, processing=False, speaking=False)
     thread = _THREAD
     if thread and thread.is_alive() and thread is not threading.current_thread():
         thread.join(timeout=1.0)
@@ -205,6 +234,8 @@ def stop_desktop_voice() -> Dict[str, Any]:
         speaking=False,
         last_error="",
     )
+    _reset_command_dedupe()
+    _log_voice("stopped")
     status["success"] = True
     status["message"] = "Desktop voice runtime stopped."
     return status
@@ -222,6 +253,7 @@ def interrupt_desktop_voice() -> Dict[str, Any]:
         speaking=False,
         last_error="",
     )
+    _log_voice("stopped")
     status["success"] = True
     status["message"] = "Desktop voice runtime interrupted."
     return status
@@ -231,12 +263,26 @@ def _desktop_voice_loop(*, session_id: str, user_profile: dict[str, Any]) -> Non
     settings = load_voice_settings()
     while not _STOP_EVENT.is_set():
         _INTERRUPT_EVENT.clear()
+        dependencies = _dependency_snapshot()
+        if not dependencies.get("available"):
+            _set_state(
+                active=False,
+                listening=False,
+                awake=False,
+                processing=False,
+                speaking=False,
+                last_error=UNAVAILABLE_MESSAGE,
+            )
+            _log_voice(UNAVAILABLE_MESSAGE, error=True)
+            break
         _set_state(listening=True, awake=False, processing=False, speaking=False)
+        _log_voice("listening")
         wake_result = _listen_once(timeout=4, phrase_time_limit=4)
         if _STOP_EVENT.is_set():
             break
         if not wake_result.get("success"):
-            _handle_listen_failure(wake_result)
+            if _handle_listen_failure(wake_result) == "error":
+                break
             continue
 
         transcript = str(wake_result.get("text") or "").strip()
@@ -249,35 +295,56 @@ def _desktop_voice_loop(*, session_id: str, user_profile: dict[str, Any]) -> Non
 
         command_text = str(wake.get("remaining_text") or "").strip()
         _set_state(listening=False, awake=True)
+        _log_voice("wake detected")
         if not command_text:
             command_result = _listen_once(timeout=6, phrase_time_limit=settings.phrase_time_limit)
             if _STOP_EVENT.is_set():
                 break
             if not command_result.get("success"):
-                _handle_listen_failure(command_result)
+                _set_state(listening=True, awake=False, processing=False, speaking=False)
+                if _handle_listen_failure(command_result) == "error":
+                    break
                 continue
             command_text = str(command_result.get("text") or "").strip()
         if not command_text:
             _set_state(listening=True, awake=False)
             continue
 
+        _log_voice(f"command captured: {_preview(command_text)}")
         process_desktop_voice_command(command_text, session_id=session_id, user_profile=user_profile, speak=True)
 
     _set_state(active=False, listening=False, awake=False, processing=False, speaking=False)
+    _log_voice("stopped")
 
 
 def _listen_once(*, timeout: int, phrase_time_limit: int) -> Dict[str, Any]:
     return transcribe_microphone(timeout=timeout, phrase_time_limit=phrase_time_limit)
 
 
-def _handle_listen_failure(result: Dict[str, Any]) -> None:
+def _preview(value: str, limit: int = 80) -> str:
+    text = " ".join(str(value or "").strip().split())
+    if len(text) > limit:
+        return text[: limit - 1].rstrip() + "..."
+    return text
+
+
+def _handle_listen_failure(result: Dict[str, Any]) -> str:
+    status = str(result.get("status") or "").strip().lower()
     message = str(result.get("message") or "").strip()
     lower = message.lower()
-    expected_timeout = "timed out" in lower or "timeout" in lower or "phrase" in lower
+    expected_timeout = status in TRANSIENT_LISTEN_STATUSES or "timed out" in lower or "timeout" in lower or "phrase" in lower
     if expected_timeout:
-        _set_state(last_error="")
-        return
-    _set_state(last_error=message or "Desktop voice transcription failed.")
+        _set_state(listening=bool(_STATE.get("active")), awake=False, processing=False, speaking=False, last_error="")
+        return "timeout"
+
+    fatal = status in FATAL_LISTEN_STATUSES
+    error_message = message or "Desktop voice transcription failed."
+    if fatal:
+        _set_state(active=False, listening=False, awake=False, processing=False, speaking=False, last_error=error_message)
+    else:
+        _set_state(listening=bool(_STATE.get("active")), awake=False, processing=False, speaking=False, last_error=error_message)
+    _log_voice(error_message, error=True)
+    return "error"
 
 
 def _run_runtime_command(command_text: str, *, session_id: str, user_profile: Optional[dict[str, Any]]) -> Dict[str, Any]:
@@ -291,6 +358,30 @@ def _run_runtime_command(command_text: str, *, session_id: str, user_profile: Op
     )
 
 
+def _reset_command_dedupe() -> None:
+    global _LAST_COMMAND_SIGNATURE, _LAST_COMMAND_AT
+    with _LOCK:
+        _LAST_COMMAND_SIGNATURE = ""
+        _LAST_COMMAND_AT = 0.0
+
+
+def _accept_command_once(command: str) -> bool:
+    global _LAST_COMMAND_SIGNATURE, _LAST_COMMAND_AT
+    signature = " ".join(str(command or "").lower().split())
+    now = time.monotonic()
+    with _LOCK:
+        duplicate = (
+            bool(signature)
+            and signature == _LAST_COMMAND_SIGNATURE
+            and now - _LAST_COMMAND_AT < COMMAND_DEDUP_WINDOW_SECONDS
+        )
+        if duplicate:
+            return False
+        _LAST_COMMAND_SIGNATURE = signature
+        _LAST_COMMAND_AT = now
+        return True
+
+
 def process_desktop_voice_command(
     command_text: str,
     *,
@@ -300,21 +391,30 @@ def process_desktop_voice_command(
 ) -> Dict[str, Any]:
     command = str(command_text or "").strip()
     if not command:
+        _set_state(listening=bool(_STATE.get("active")), awake=False, processing=False, speaking=False, last_error="")
         return {"success": False, "status": "empty_command", "message": "No desktop voice command was captured."}
 
+    if not _accept_command_once(command):
+        _set_state(listening=bool(_STATE.get("active")), awake=False, processing=False, speaking=False, last_error="")
+        return {"success": False, "status": "duplicate_ignored", "message": "Duplicate desktop voice command ignored.", "command_text": command}
+
     _set_state(listening=False, awake=False, processing=True, speaking=False, last_command=command, last_error="")
+    _log_voice("processing")
     try:
         result = _run_runtime_command(command, session_id=session_id, user_profile=user_profile)
     except Exception as error:
         error_message = str(error)
-        _set_state(processing=False, last_error=error_message)
+        _set_state(listening=bool(_STATE.get("active")), awake=False, processing=False, speaking=False, last_error=error_message)
+        _log_voice(error_message, error=True)
         return {"success": False, "status": "runtime_error", "message": error_message, "command_text": command}
 
     response_text = str(result.get("response") or result.get("reply") or result.get("content") or "").strip()
     spoken_text = _safe_spoken_text(result, response_text)
     speech_result = {"success": False, "status": "skipped", "message": "Speech skipped."}
     _set_state(processing=False, last_response=response_text, last_spoken_text=spoken_text)
-    if speak and spoken_text and not _STOP_EVENT.is_set() and not _INTERRUPT_EVENT.is_set():
+    if _INTERRUPT_EVENT.is_set():
+        speech_result = {"success": False, "status": "interrupted", "message": "Desktop voice command was interrupted before speech."}
+    elif speak and spoken_text and not _STOP_EVENT.is_set():
         speech_result = speak_desktop_text(spoken_text)
     if not _STOP_EVENT.is_set():
         _set_state(listening=bool(_STATE.get("active")), awake=False, processing=False, speaking=False)
@@ -371,21 +471,34 @@ def speak_desktop_text(text: str) -> Dict[str, Any]:
         }
 
     global _TTS_ENGINE
-    try:
-        _set_state(speaking=True, processing=False)
-        engine = pyttsx3.init()
-        with _LOCK:
-            _TTS_ENGINE = engine
-        engine.say(clean_text)
-        engine.runAndWait()
-        return {"success": True, "status": "spoken", "message": "Desktop voice response spoken.", "backend": "pyttsx3"}
-    except Exception as error:
-        _set_state(last_error=str(error))
-        return {"success": False, "status": "tts_error", "message": str(error), "backend": "pyttsx3"}
-    finally:
-        with _LOCK:
-            _TTS_ENGINE = None
-        _set_state(speaking=False)
+    with _TTS_LOCK:
+        if _STOP_EVENT.is_set() or _INTERRUPT_EVENT.is_set():
+            return {"success": False, "status": "interrupted", "message": "Desktop voice speech was interrupted.", "backend": "pyttsx3"}
+        try:
+            _set_state(speaking=True, processing=False, listening=False, awake=False, last_error="")
+            _log_voice("speaking")
+            engine = pyttsx3.init()
+            settings = load_voice_settings()
+            try:
+                engine.setProperty("rate", int(max(80, min(240, settings.rate * 180))))
+                engine.setProperty("volume", max(0.0, min(1.0, float(settings.volume))))
+            except Exception:
+                pass
+            with _LOCK:
+                _TTS_ENGINE = engine
+            engine.say(clean_text)
+            engine.runAndWait()
+            if _STOP_EVENT.is_set() or _INTERRUPT_EVENT.is_set():
+                return {"success": False, "status": "interrupted", "message": "Desktop voice speech was interrupted.", "backend": "pyttsx3"}
+            return {"success": True, "status": "spoken", "message": "Desktop voice response spoken.", "backend": "pyttsx3"}
+        except Exception as error:
+            _set_state(last_error=str(error))
+            _log_voice(str(error), error=True)
+            return {"success": False, "status": "tts_error", "message": str(error), "backend": "pyttsx3"}
+        finally:
+            with _LOCK:
+                _TTS_ENGINE = None
+            _set_state(speaking=False)
 
 
 def _stop_desktop_tts() -> None:

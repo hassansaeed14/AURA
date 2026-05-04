@@ -11,6 +11,7 @@
 # -------------------------
 
 **pycache**/
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
@@ -42,10 +43,14 @@ env/
 # -------------------------
 
 tmp_*
+tmp*
 tmp*/
 temp*/
 logs/
 *.log
+*.out.log
+*.err.log
+*.pid
 dev_log.txt
 
 # -------------------------
@@ -55,9 +60,14 @@ dev_log.txt
 # -------------------------
 
 memory/*.json
+memory/*.jsonl
 memory/*.db
+memory/*.sqlite
 memory/*.sqlite3
+memory/*.db-journal
+memory/*.sqlite3-*
 memory/vector_store/
+memory/vector_store_fallback.json
 
 # -------------------------
 
@@ -76,6 +86,7 @@ security/.secret.key
 # -------------------------
 
 screenshot_*.png
+tmp*.png
 
 # -------------------------
 
@@ -114,10 +125,12 @@ build/
 *.bak
 # Generated files
 generated/
+generated/**
 *.pdf
 *.docx
 *.pptx
 *.txt
+!requirements.txt
 
 # AURA outputs
 AI-*

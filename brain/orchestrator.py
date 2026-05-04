@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional
 from groq import Groq
 
 from config.settings import GROQ_API_KEY, MODEL_NAME
-from memory.knowledge_base import get_user_name, get_user_city
 
 
 client = Groq(api_key=GROQ_API_KEY)
@@ -132,10 +131,9 @@ class MasterOrchestrator:
         return "general"
 
     def get_context(self) -> Dict[str, Optional[str]]:
-        return {
-            "user_name": get_user_name(),
-            "user_city": get_user_city(),
-        }
+        # Legacy knowledge_base values are global and not owner-scoped. Do not
+        # inject them into synthesis until scoped context is explicitly passed.
+        return {}
 
     def _is_meaningful_text(self, value: Any) -> bool:
         if value is None:

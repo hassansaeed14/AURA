@@ -37,9 +37,8 @@ from brain.intent_engine import detect_intent_with_confidence, is_conversational
 from brain.understanding_engine import clean_user_input
 
 from config.settings import DEFAULT_REASONING_PROVIDER
-from memory.knowledge_base import get_user_name, store_user_name
 from memory.memory_controller import process_interaction_memory
-from memory.personalization import build_personalized_system_prompt
+from memory.personalization import build_personalized_system_prompt, get_personal_display_name, remember_explicit_personal_signals
 
 from agents.autonomous.planner_agent import create_plan, parse_plan_to_steps
 from agents.core.language_agent import detect_language, respond_in_language
@@ -61,12 +60,6 @@ from agents.integration.translation_agent import translate
 from agents.integration.weather_agent import get_weather
 from agents.integration.web_search_agent import web_search
 from agents.integration.youtube_agent import search_youtube_topic
-from agents.memory.learning_agent import (
-    build_context,
-    get_personalized_greeting,
-    get_user_insights,
-    learn_from_interaction,
-)
 from agents.productivity.coding_agent import code_help
 from agents.productivity.content_writer_agent import write_content
 from agents.productivity.email_writer_agent import write_email
@@ -572,12 +565,17 @@ def store_and_learn(
     session_id: str = "default",
     username: Optional[str] = None,
 ) -> None:
+    scoped_username = str(username or "").strip()
+    if scoped_username.lower() in {"", "guest", "public", "anonymous"}:
+        # Public/local sessions should remain temporary. Until durable learning
+        # stores carry owner metadata, do not persist them to global memory.
+        return
+
     metadata = {"type": "user_input", "intent": intent}
     if extra_metadata:
         metadata.update(extra_metadata)
     metadata["session_id"] = str(session_id or "default")
-    if username:
-        metadata["username"] = username
+    metadata["username"] = scoped_username
 
     try:
         process_interaction_memory(
@@ -586,12 +584,12 @@ def store_and_learn(
             intent,
             float(metadata.get("confidence", 1.0)),
             session_id=str(session_id or "default"),
+            username=scoped_username,
         )
     except Exception:
         pass
 
     store_memory(user_input, metadata)
-    learn_from_interaction(user_input, response, intent)
 
 
 def route_quiz_command(command: str) -> str:
@@ -809,7 +807,7 @@ def handle_special_intents(intent: str) -> Optional[str]:
         )
 
     if intent == "insights":
-        return get_user_insights()
+        return "I don't have scoped personal insights for this session yet."
 
     return None
 
@@ -1021,10 +1019,9 @@ def handle_transformation(
 
 
 def build_enhanced_input(raw_command: str, confidence: float) -> str:
-    try:
-        enhanced_input = build_context(raw_command)
-    except Exception:
-        enhanced_input = raw_command
+    # The previous enhancer pulled from global vector learning memory with no
+    # owner metadata. Keep this path identity-safe until scoped recall exists.
+    enhanced_input = raw_command
 
     if should_add_low_confidence_note(confidence):
         enhanced_input += (
@@ -1669,7 +1666,10 @@ def process_single_command_detailed(
             security_context=security_context,
             require_auth=False,
         )
-        response = get_personalized_greeting()
+        display_name = ""
+        if runtime_personal_context:
+            display_name = str(runtime_personal_context.get("display_name") or "").strip()
+        response = f"Hey {display_name}. I'm here." if display_name else "Hey. I'm here."
         active_telemetry.record_intent("greeting", 1.0, [], 0.0)
         active_telemetry.record_routing("general", "Greeting shortcut matched a known greeting input.", "safe", 0.0)
         active_telemetry.record_execution("general", response, True, 0.0)
@@ -1726,12 +1726,17 @@ def process_single_command_detailed(
             }, active_telemetry, publish=publish_telemetry)
 
         memory_operation = str(memory_response.get("operation") or "")
+        memory_profile = {"username": runtime_username} if runtime_username else {}
         if memory_operation == "store_name":
             name = str(memory_response.get("value") or "").strip()
-            store_user_name(name)
+            remember_explicit_personal_signals(
+                f"call me {name}",
+                session_id=runtime_session_id,
+                user_profile=memory_profile,
+            )
             final_memory_response = f"Nice to meet you {name}!"
         else:
-            name = get_user_name()
+            name = get_personal_display_name(memory_profile, session_id=runtime_session_id)
             final_memory_response = f"Your name is {name}." if name else "I don't know your name yet."
 
         active_telemetry.record_execution("memory", final_memory_response, True, 0.0)

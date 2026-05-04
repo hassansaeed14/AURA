@@ -1,4 +1,5 @@
 import unittest
+import time
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -13,7 +14,7 @@ def _fake_completion_result(text: str = "OK"):
 
 class ProviderHubTests(unittest.TestCase):
     def setUp(self):
-        provider_hub.provider_hub._status_cache.clear()
+        provider_hub.reset_provider_runtime_state()
 
     def test_provider_statuses_cover_major_backends(self):
         statuses = provider_hub.list_provider_statuses(fresh=False)
@@ -29,6 +30,7 @@ class ProviderHubTests(unittest.TestCase):
         self.assertFalse(status.available)
 
     def test_get_provider_status_preserves_last_verified_state_without_forcing_probe(self):
+        now = time.time()
         cached = provider_hub.ProviderStatus(
             "gemini",
             "gemini-2.5-flash",
@@ -39,14 +41,91 @@ class ProviderHubTests(unittest.TestCase):
             "Provider is rate limited.",
             status=provider_hub.STATUS_RATE_LIMITED,
             verified=True,
-            last_checked_at=1.0,
+            last_checked_at=now,
+            cooldown_until=now + 120,
+            error_type="rate_limit",
         )
         provider_hub.provider_hub._status_cache["gemini"] = cached
 
-        status = provider_hub.get_provider_status("gemini", fresh=False)
+        with patch.object(provider_hub, "GEMINI_API_KEY", "demo-key"), patch.object(provider_hub, "genai", object()):
+            status = provider_hub.get_provider_status("gemini", fresh=False)
 
         self.assertEqual(status.status, provider_hub.STATUS_RATE_LIMITED)
         self.assertTrue(status.verified)
+        self.assertEqual(status.error_type, "rate_limit")
+
+    def test_stale_healthy_provider_expires_to_configured_unverified(self):
+        cached = provider_hub.ProviderStatus(
+            "groq",
+            "llama-3.3-70b-versatile",
+            "real",
+            True,
+            True,
+            True,
+            "Recent live inference succeeded.",
+            status=provider_hub.STATUS_HEALTHY,
+            verified=True,
+            last_checked_at=time.time() - provider_hub.HEALTH_TTL_SECONDS - 5,
+            last_success_at=time.time() - provider_hub.HEALTH_TTL_SECONDS - 5,
+        )
+        provider_hub.provider_hub._status_cache["groq"] = cached
+
+        with patch.object(provider_hub, "GROQ_API_KEY", "demo-key"), patch.object(provider_hub, "Groq", object()):
+            status = provider_hub.get_provider_status("groq", fresh=False)
+
+        self.assertEqual(status.status, provider_hub.STATUS_CONFIGURED_UNVERIFIED)
+        self.assertFalse(status.available)
+        self.assertIn("stale", status.reason)
+
+    def test_rate_limit_error_updates_provider_cooldown(self):
+        with patch.object(provider_hub, "GROQ_API_KEY", "demo-key"), patch.object(provider_hub, "Groq", object()):
+            status = provider_hub.record_provider_failure("groq", "429 rate limit exceeded")
+            current = provider_hub.get_provider_status("groq", fresh=False)
+
+        self.assertEqual(status.status, provider_hub.STATUS_RATE_LIMITED)
+        self.assertEqual(status.error_type, "rate_limit")
+        self.assertIsNotNone(status.cooldown_until)
+        self.assertEqual(current.status, provider_hub.STATUS_RATE_LIMITED)
+        self.assertTrue(provider_hub.should_skip_provider("groq"))
+
+    def test_fresh_health_check_respects_active_rate_limit_cooldown(self):
+        now = time.time()
+        provider_hub.provider_hub._status_cache["groq"] = provider_hub.ProviderStatus(
+            "groq",
+            "llama-3.3-70b-versatile",
+            "hybrid",
+            True,
+            False,
+            True,
+            "Provider is rate limited.",
+            status=provider_hub.STATUS_RATE_LIMITED,
+            verified=True,
+            last_checked_at=now,
+            cooldown_until=now + 120,
+            error_type="rate_limit",
+        )
+
+        with patch.object(provider_hub, "GROQ_API_KEY", "demo-key"), patch.object(provider_hub, "Groq", object()), patch.object(
+            provider_hub.provider_hub,
+            "_call_provider",
+            side_effect=AssertionError("Cooldown providers should not be probed."),
+        ):
+            result = provider_hub.provider_hub.check_groq(fresh=True)
+
+        self.assertEqual(result["status"], provider_hub.STATUS_RATE_LIMITED)
+        self.assertEqual(result["error_type"], "rate_limit")
+
+    def test_auth_error_is_normalized(self):
+        classified = provider_hub.normalize_provider_error("401 invalid api key")
+
+        self.assertEqual(classified["status"], provider_hub.STATUS_AUTH_FAILED)
+        self.assertEqual(classified["error_type"], "authentication")
+
+    def test_timeout_error_is_normalized_to_unavailable(self):
+        classified = provider_hub.normalize_provider_error(TimeoutError("request timed out"))
+
+        self.assertEqual(classified["status"], provider_hub.STATUS_UNAVAILABLE)
+        self.assertEqual(classified["error_type"], "timeout")
 
     def test_successful_groq_check_marks_provider_healthy(self):
         fake_client = SimpleNamespace(
@@ -192,6 +271,49 @@ class ProviderHubTests(unittest.TestCase):
         self.assertEqual(result["provider"], "groq")
         self.assertEqual(result["attempts"][0]["provider"], "gemini")
         self.assertEqual(result["attempts"][0]["status"], provider_hub.STATUS_UNAVAILABLE)
+
+    def test_generate_with_best_provider_skips_unavailable_provider_in_cooldown(self):
+        statuses = {
+            "groq": provider_hub.ProviderStatus(
+                "groq",
+                "llama-3.3-70b-versatile",
+                "real",
+                True,
+                False,
+                True,
+                "Provider request timed out.",
+                status=provider_hub.STATUS_UNAVAILABLE,
+                cooldown_until=time.time() + 30,
+                error_type="timeout",
+            ),
+            "gemini": provider_hub.ProviderStatus("gemini", "gemini-2.5-flash", "real", True, True, True, "healthy", status=provider_hub.STATUS_HEALTHY),
+            "openai": provider_hub.ProviderStatus("openai", "gpt-4o-mini", "real", True, True, True, "healthy", status=provider_hub.STATUS_HEALTHY),
+        }
+
+        with patch.object(provider_hub, "get_provider_status", side_effect=lambda provider, fresh=False: statuses.get(provider) or provider_hub.ProviderStatus(provider, "x", "hybrid", False, False, True, "missing", status=provider_hub.STATUS_NOT_CONFIGURED)), patch.object(
+            provider_hub.provider_hub,
+            "generate_with_provider",
+            side_effect=lambda provider, messages, max_tokens, temperature: {
+                "success": True,
+                "provider": provider,
+                "model": statuses[provider].model,
+                "text": f"{provider} says hello",
+                "latency_ms": 12.0,
+                "status": provider_hub.STATUS_HEALTHY,
+            },
+        ) as generate_mock:
+            result = provider_hub.provider_hub.generate_with_best_provider(
+                [{"role": "user", "content": "ping"}],
+                preferred="groq",
+                max_tokens=10,
+                temperature=0.0,
+            )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["provider"], "gemini")
+        self.assertEqual(generate_mock.call_args.args[0], "gemini")
+        self.assertEqual(result["attempts"][0]["provider"], "groq")
+        self.assertTrue(result["attempts"][0]["skipped"])
 
     def test_generate_with_best_provider_can_lock_to_preferred_provider_only(self):
         statuses = {

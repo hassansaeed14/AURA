@@ -34,7 +34,7 @@ from brain.capability_registry import list_capabilities, summarize_capabilities
 from brain.understanding_engine import clean_user_input
 from brain.intent_engine import detect_intent_with_confidence
 from brain.decision_engine import build_decision_summary
-from brain.core_ai import AGENT_ROUTER, process_command_detailed
+from brain.core_ai import AGENT_ROUTER, clear_session_context, process_command_detailed
 from brain.telemetry_engine import get_last_telemetry
 from brain.response_engine import (
     FALLBACK_USER_MESSAGE,
@@ -51,6 +51,7 @@ from brain.provider_hub import (
     STATUS_NOT_CONFIGURED,
     STATUS_RATE_LIMITED,
     STATUS_UNAVAILABLE,
+    get_provider_state_version,
     get_provider_status as get_runtime_provider_status,
     get_runtime_provider_summary,
     list_provider_statuses,
@@ -145,8 +146,9 @@ PROVIDER_HEALTH_CACHE: dict[str, Any] = {
     "items": [],
     "providers": {},
     "assistant_runtime": {},
+    "provider_state_version": -1,
 }
-PROVIDER_REFRESH_INTERVAL_SECONDS = 300
+PROVIDER_REFRESH_INTERVAL_SECONDS = 60
 DOCUMENT_RATE_LIMIT_WINDOW_SECONDS = 300
 DOCUMENT_RATE_LIMIT_MAX_REQUESTS = 6
 DOCUMENT_RATE_LIMIT_STATE: dict[str, list[float]] = {}
@@ -378,10 +380,15 @@ def _cors_headers() -> dict[str, str]:
 
 def _provider_health_snapshot(*, force: bool = False) -> dict[str, Any]:
     now = time.time()
+    provider_state_version = get_provider_state_version()
     cache_age = now - float(PROVIDER_HEALTH_CACHE["checked_at_ts"] or 0.0)
-    should_probe = force or not PROVIDER_HEALTH_CACHE["items"] or cache_age >= PROVIDER_REFRESH_INTERVAL_SECONDS
-    summary = summarize_provider_statuses(fresh=should_probe)
-    runtime_summary = get_runtime_provider_summary(fresh=should_probe)
+    state_changed = int(PROVIDER_HEALTH_CACHE.get("provider_state_version", -1)) != provider_state_version
+    should_rebuild = force or not PROVIDER_HEALTH_CACHE["items"] or state_changed or cache_age >= PROVIDER_REFRESH_INTERVAL_SECONDS
+    if not should_rebuild:
+        return PROVIDER_HEALTH_CACHE
+
+    summary = summarize_provider_statuses(fresh=force)
+    runtime_summary = get_runtime_provider_summary(fresh=force)
     items = summary.get("items", [])
     snapshot = {
         "checked_at_ts": now,
@@ -392,6 +399,7 @@ def _provider_health_snapshot(*, force: bool = False) -> dict[str, Any]:
         "healthy": list(summary.get("healthy", [])),
         "configured": list(summary.get("configured", [])),
         "assistant_runtime": runtime_summary,
+        "provider_state_version": provider_state_version,
     }
     PROVIDER_HEALTH_CACHE.update(snapshot)
     return PROVIDER_HEALTH_CACHE
@@ -734,13 +742,22 @@ def _normalize_casual_conversation_input(message: str) -> str:
     return lowered.strip()
 
 
-def _build_casual_conversation_reply(message: str, user_profile: Optional[dict[str, Any]] = None) -> Optional[str]:
+def _build_casual_conversation_reply(
+    message: str,
+    user_profile: Optional[dict[str, Any]] = None,
+    *,
+    session_id: Optional[str] = None,
+) -> Optional[str]:
     normalized = _normalize_casual_conversation_input(message)
     if not normalized:
         return None
 
     profile = dict(user_profile or {})
-    display_name = get_personal_display_name(profile, allow_memory_fallback=bool(profile))
+    display_name = get_personal_display_name(
+        profile,
+        allow_memory_fallback=True,
+        session_id=session_id,
+    )
     greeting_prefix = f"Hey {display_name}." if display_name else "Hey."
 
     greeting_inputs = {
@@ -781,6 +798,7 @@ def _build_casual_chat_payload(context: dict[str, Any]) -> Optional[dict[str, An
     reply = _build_casual_conversation_reply(
         context.get("raw_message") or context.get("cleaned_message") or "",
         profile,
+        session_id=context.get("session_id"),
     )
     if not reply:
         return None
@@ -836,6 +854,8 @@ def _persist_chat_turn(context: dict[str, Any], reply: str, intent: str, agent_u
 
 
 def _attempt_persist_chat_turn(context: dict[str, Any], reply: str, intent: str, agent_used: Optional[str], mode: Optional[str]) -> dict[str, Any]:
+    if not context.get("user"):
+        return {"saved": False, "backend": "session", "reason": "public_memory_not_persisted"}
     try:
         _persist_chat_turn(context, reply, intent, agent_used, mode)
         return {"saved": True, "backend": "sqlite"}
@@ -963,7 +983,7 @@ def _prepare_chat_context(
         "permission": permission,
         "permission_action": permission_action,
         "user": user,
-        "user_profile": load_user_profile(),
+        "user_profile": dict(user or {}),
         "confirmation_required": confirmation_required,
         "confirmation_ok": confirmation_ok,
         "security_context": security_context,
@@ -1506,17 +1526,23 @@ async def setup_owner(data: SetupData):
 
 @app.post("/api/logout")
 async def logout_endpoint(request: Request):
+    session_id = _resolve_session_id(request)
+    clear_session_context(session_id)
     logout_request(request)
     response = JSONResponse({"success": True, "message": "Session secured."})
     clear_session_cookie(response, secure=_is_secure_request(request))
+    response.delete_cookie("aura_local_session", path="/")
     return response
 
 
 @app.get("/logout")
 async def logout_page(request: Request):
+    session_id = _resolve_session_id(request)
+    clear_session_context(session_id)
     logout_request(request)
     response = RedirectResponse("/login", status_code=302)
     clear_session_cookie(response, secure=_is_secure_request(request))
+    response.delete_cookie("aura_local_session", path="/")
     return response
 
 
@@ -2185,14 +2211,33 @@ async def download_generated_document(file_name: str, request: Request):
 
 
 @app.get("/history")
-async def history(session_id: str = "default"):
-    return get_history(session_id)
+async def history(request: Request, session_id: str = "default"):
+    user = _current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    normalized_session = _normalize_session_id(session_id)
+    if normalized_session != _resolve_session_id(request) and not is_admin_user(user):
+        raise HTTPException(status_code=403, detail="History access denied.")
+    return get_history(normalized_session)
 
 
 @app.get("/api/history")
-async def api_history(session_id: str = "default", limit: int = 50):
+async def api_history(request: Request, session_id: str = "default", limit: int = 50):
     try:
+        user = _current_user(request)
+        if not user:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Authentication required.", "status": "error"},
+                headers=_cors_headers(),
+            )
         normalized_session = _normalize_session_id(session_id)
+        if normalized_session != _resolve_session_id(request) and not is_admin_user(user):
+            return JSONResponse(
+                status_code=403,
+                content={"error": "History access denied.", "status": "error"},
+                headers=_cors_headers(),
+            )
         messages = get_history(normalized_session, limit=limit)
         return {
             "session_id": normalized_session,
@@ -2209,10 +2254,24 @@ async def api_history(session_id: str = "default", limit: int = 50):
 
 
 @app.delete("/api/history")
-async def api_history_delete(session_id: str = "default"):
+async def api_history_delete(request: Request, session_id: str = "default"):
     try:
+        user = _current_user(request)
+        if not user:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Authentication required.", "status": "error"},
+                headers=_cors_headers(),
+            )
         normalized_session = _normalize_session_id(session_id)
+        if normalized_session != _resolve_session_id(request) and not is_admin_user(user):
+            return JSONResponse(
+                status_code=403,
+                content={"error": "History access denied.", "status": "error"},
+                headers=_cors_headers(),
+            )
         deleted = clear_history(normalized_session)
+        clear_session_context(normalized_session)
         return {
             "session_id": normalized_session,
             "deleted": deleted,
@@ -2227,10 +2286,21 @@ async def api_history_delete(session_id: str = "default"):
 
 
 @app.get("/api/sessions")
-async def api_sessions():
+async def api_sessions(request: Request):
     try:
+        user = _current_user(request)
+        if not user:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Authentication required.", "status": "error"},
+                headers=_cors_headers(),
+            )
+        sessions = get_all_sessions()
+        if not is_admin_user(user):
+            current_session = _resolve_session_id(request)
+            sessions = [item for item in sessions if item.get("session_id") == current_session]
         return {
-            "sessions": get_all_sessions(),
+            "sessions": sessions,
             "status": "ok",
         }
     except Exception as error:
@@ -2307,6 +2377,9 @@ async def get_user_profile_settings(request: Request):
     user = _require_authenticated_user(request)
     profile = load_user_profile()
     profile["username"] = user.get("username", "")
+    profile["name"] = user.get("name", "")
+    profile["preferred_name"] = user.get("preferred_name", "") or user.get("name", "")
+    profile["title"] = user.get("title", profile.get("title", "sir"))
     return {"status": "ok", "profile": profile, "user": user}
 
 
@@ -2314,7 +2387,11 @@ async def get_user_profile_settings(request: Request):
 async def update_user_profile_settings(payload: UserProfileUpdateRequest, request: Request):
     _require_authenticated_user(request)
     profile = load_user_profile()
-    updates = payload.model_dump(exclude_none=True)
+    updates = {
+        key: value
+        for key, value in payload.model_dump(exclude_none=True).items()
+        if key not in {"username", "name", "email", "preferred_name", "title"}
+    }
     profile.update(updates)
     save_user_profile(profile)
     update_voice_preferences(
@@ -2924,7 +3001,7 @@ async def start_desktop_voice_endpoint(request: Request):
     session_id = _resolve_session_id(request)
     return start_desktop_voice(
         session_id=session_id,
-        user_profile=user or load_user_profile(),
+        user_profile=user or {},
     )
 
 

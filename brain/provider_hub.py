@@ -43,10 +43,17 @@ STATUS_RATE_LIMITED = "rate_limited"
 STATUS_UNAVAILABLE = "unavailable"
 
 HEALTHY_STATES = {STATUS_HEALTHY}
+COOLDOWN_STATES = {STATUS_AUTH_FAILED, STATUS_RATE_LIMITED, STATUS_UNAVAILABLE}
 NON_RETRYABLE_STATES = {STATUS_AUTH_FAILED, STATUS_RATE_LIMITED}
 SUPPORTED_PROVIDERS = ("gemini", "openai", "groq", "openrouter", "claude", "ollama")
 DEFAULT_TIMEOUT = 30
-HEALTH_TTL_SECONDS = 60
+HEALTH_TTL_SECONDS = 120
+PROVIDER_COOLDOWN_SECONDS = {
+    STATUS_AUTH_FAILED: 900,
+    STATUS_RATE_LIMITED: 180,
+    STATUS_UNAVAILABLE: 60,
+    STATUS_DEGRADED: 30,
+}
 
 
 @dataclass(slots=True)
@@ -66,6 +73,8 @@ class ProviderStatus:
     last_success_at: Optional[float] = None
     last_failure_at: Optional[float] = None
     last_used_at: Optional[float] = None
+    cooldown_until: Optional[float] = None
+    error_type: Optional[str] = None
     routing_order: int = 0
     source: str = "config"
 
@@ -181,15 +190,99 @@ def _extract_gemini_text(response: Any) -> str:
     )
 
 
-def _error_status(error: str) -> tuple[str, str]:
-    normalized = str(error or "").strip().lower()
-    if any(token in normalized for token in ("401", "unauthorized", "invalid api key", "invalid_api_key", "authentication", "api key not valid")):
-        return STATUS_AUTH_FAILED, "Authentication failed."
-    if any(token in normalized for token in ("429", "rate limit", "too many requests", "quota", "insufficient_quota", "resource_exhausted", "quota exceeded", "free_tier_requests")):
-        return STATUS_RATE_LIMITED, "Provider is rate limited."
-    if any(token in normalized for token in ("timed out", "timeout", "connection", "max retries exceeded", "refused", "service unavailable", "502", "503", "504", "404", "no endpoints found")):
-        return STATUS_UNAVAILABLE, "Provider is unavailable."
-    return STATUS_DEGRADED, "Provider call failed."
+def normalize_provider_error(error: Any) -> Dict[str, str]:
+    """Classify provider errors into stable runtime health states."""
+    error_name = type(error).__name__.strip().lower()
+    message = str(error or "").strip()
+    normalized = f"{error_name} {message}".lower()
+
+    if any(
+        token in normalized
+        for token in (
+            "401",
+            "403",
+            "unauthorized",
+            "permission denied",
+            "invalid api key",
+            "invalid_api_key",
+            "authentication",
+            "auth failed",
+            "api key not valid",
+        )
+    ):
+        return {
+            "status": STATUS_AUTH_FAILED,
+            "reason": "Authentication failed.",
+            "error_type": "authentication",
+        }
+    if any(
+        token in normalized
+        for token in (
+            "429",
+            "rate limit",
+            "too many requests",
+            "quota",
+            "insufficient_quota",
+            "resource_exhausted",
+            "quota exceeded",
+            "free_tier_requests",
+        )
+    ):
+        return {
+            "status": STATUS_RATE_LIMITED,
+            "reason": "Provider is rate limited.",
+            "error_type": "rate_limit",
+        }
+    if any(token in normalized for token in ("timed out", "timeout", "readtimeout", "connecttimeout")):
+        return {
+            "status": STATUS_UNAVAILABLE,
+            "reason": "Provider request timed out.",
+            "error_type": "timeout",
+        }
+    if any(
+        token in normalized
+        for token in (
+            "connection",
+            "connecterror",
+            "connectionerror",
+            "network",
+            "max retries exceeded",
+            "refused",
+            "service unavailable",
+            "502",
+            "503",
+            "504",
+            "404",
+            "no endpoints found",
+        )
+    ):
+        return {
+            "status": STATUS_UNAVAILABLE,
+            "reason": "Provider is unavailable.",
+            "error_type": "connection",
+        }
+    if any(token in normalized for token in ("empty content", "empty response", "no text content", "blank response")):
+        return {
+            "status": STATUS_DEGRADED,
+            "reason": "Provider returned empty content.",
+            "error_type": "empty_response",
+        }
+    if any(token in normalized for token in ("invalid response", "malformed", "no choices", "unexpected response")):
+        return {
+            "status": STATUS_DEGRADED,
+            "reason": "Provider returned an invalid response.",
+            "error_type": "invalid_response",
+        }
+    return {
+        "status": STATUS_DEGRADED,
+        "reason": "Provider call failed.",
+        "error_type": "provider_error",
+    }
+
+
+def _error_status(error: Any) -> tuple[str, str]:
+    classified = normalize_provider_error(error)
+    return classified["status"], classified["reason"]
 
 
 def _humanize_status(status: str) -> str:
@@ -206,6 +299,7 @@ class ProviderHub:
 
     def __init__(self) -> None:
         self._status_cache: dict[str, ProviderStatus] = {}
+        self._state_version = 0
 
     def _routing_order(self, preferred: Optional[str] = None) -> List[str]:
         desired = str(preferred or DEFAULT_REASONING_PROVIDER or "").strip().lower()
@@ -287,6 +381,19 @@ class ProviderHub:
             return False
         return (time.time() - float(status.last_checked_at)) < HEALTH_TTL_SECONDS
 
+    def _cooldown_active(self, status: ProviderStatus) -> bool:
+        if status.status not in COOLDOWN_STATES:
+            return False
+        if status.cooldown_until is None:
+            return True
+        return time.time() < float(status.cooldown_until)
+
+    def _touch_state(self) -> None:
+        self._state_version += 1
+
+    def state_version(self) -> int:
+        return int(self._state_version)
+
     def _get_cached(self, provider: str, *, include_stale: bool = False) -> Optional[ProviderStatus]:
         status = self._status_cache.get(provider)
         if not status:
@@ -294,6 +401,50 @@ class ProviderHub:
         if include_stale or self._cache_valid(status):
             return status
         return None
+
+    def _stale_or_retryable_status(self, provider: str, cached: ProviderStatus) -> ProviderStatus:
+        base = self._base_status(provider)
+        if base.status != STATUS_CONFIGURED_UNVERIFIED:
+            return base
+
+        if cached.status == STATUS_NOT_CONFIGURED:
+            return base
+
+        if cached.status == STATUS_HEALTHY and not self._cache_valid(cached):
+            base.reason = "Previous healthy check is stale; provider needs fresh verification."
+            base.source = "stale_runtime"
+            base.last_checked_at = cached.last_checked_at
+            base.last_success_at = cached.last_success_at
+            base.last_failure_at = cached.last_failure_at
+            base.last_used_at = cached.last_used_at
+            return base
+
+        if cached.status in COOLDOWN_STATES and not self._cooldown_active(cached):
+            base.reason = "Previous failure cooldown expired; provider can be retried."
+            base.source = "cooldown_expired"
+            base.last_checked_at = cached.last_checked_at
+            base.last_success_at = cached.last_success_at
+            base.last_failure_at = cached.last_failure_at
+            base.last_used_at = cached.last_used_at
+            return base
+
+        if cached.status == STATUS_DEGRADED and not self._cache_valid(cached):
+            base.reason = "Previous degraded result is stale; provider needs fresh verification."
+            base.source = "stale_runtime"
+            base.last_checked_at = cached.last_checked_at
+            base.last_success_at = cached.last_success_at
+            base.last_failure_at = cached.last_failure_at
+            base.last_used_at = cached.last_used_at
+            return base
+
+        return cached
+
+    def _effective_status(self, provider: str) -> ProviderStatus:
+        normalized = str(provider or "").strip().lower()
+        cached = self._status_cache.get(normalized)
+        if not cached:
+            return self._base_status(normalized)
+        return self._stale_or_retryable_status(normalized, cached)
 
     def _store_status(
         self,
@@ -309,6 +460,9 @@ class ProviderHub:
     ) -> ProviderStatus:
         previous = self._status_cache.get(provider)
         now = time.time()
+        cooldown_seconds = PROVIDER_COOLDOWN_SECONDS.get(status)
+        cooldown_until = now + cooldown_seconds if cooldown_seconds else None
+        error_type = normalize_provider_error(error).get("error_type") if error else None
         record = ProviderStatus(
             provider=provider,
             model=model or _provider_model(provider),
@@ -325,18 +479,74 @@ class ProviderHub:
             last_success_at=now if status == STATUS_HEALTHY else getattr(previous, "last_success_at", None),
             last_failure_at=now if status != STATUS_HEALTHY else getattr(previous, "last_failure_at", None),
             last_used_at=now if used else getattr(previous, "last_used_at", None),
+            cooldown_until=cooldown_until,
+            error_type=error_type,
             routing_order=self._routing_index(provider),
             source=source,
         )
         self._status_cache[provider] = record
+        self._touch_state()
         return record
 
     def _should_skip_for_runtime(self, status: ProviderStatus) -> bool:
         if not status.configured or not status.installed:
             return True
-        if status.status in NON_RETRYABLE_STATES and (status.last_checked_at is None or self._cache_valid(status)):
+        if status.status in COOLDOWN_STATES and self._cooldown_active(status):
             return True
         return False
+
+    def should_skip_provider(self, provider: str) -> bool:
+        return self._should_skip_for_runtime(self._effective_status(provider))
+
+    def record_provider_success(
+        self,
+        provider: str,
+        *,
+        model: Optional[str] = None,
+        latency_ms: Optional[float] = None,
+        used: bool = True,
+        reason: str = "Recent live inference succeeded.",
+    ) -> ProviderStatus:
+        normalized = str(provider or "").strip().lower()
+        return self._store_status(
+            normalized,
+            status=STATUS_HEALTHY,
+            reason=reason,
+            latency_ms=latency_ms,
+            source="runtime_inference",
+            model=model or _provider_model(normalized),
+            used=used,
+        )
+
+    def record_provider_failure(
+        self,
+        provider: str,
+        error: Any,
+        *,
+        status: Optional[str] = None,
+        reason: Optional[str] = None,
+        latency_ms: Optional[float] = None,
+        model: Optional[str] = None,
+        used: bool = True,
+    ) -> ProviderStatus:
+        normalized = str(provider or "").strip().lower()
+        classified = normalize_provider_error(error)
+        final_status = status or classified["status"]
+        final_reason = reason or classified["reason"]
+        return self._store_status(
+            normalized,
+            status=final_status,
+            reason=final_reason,
+            error=str(error or final_reason),
+            latency_ms=latency_ms,
+            source="runtime_inference",
+            model=model or _provider_model(normalized),
+            used=used,
+        )
+
+    def reset_runtime_state(self) -> None:
+        self._status_cache.clear()
+        self._touch_state()
 
     def _call_groq(self, messages: List[Dict[str, str]], *, max_tokens: int, temperature: float) -> str:
         if Groq is None or not GROQ_API_KEY:
@@ -483,14 +693,16 @@ class ProviderHub:
             return self._base_status("unknown").to_dict()
 
         if not fresh:
-            cached = self._get_cached(normalized)
-            if cached:
-                return cached.to_dict()
-            return self._base_status(normalized).to_dict()
+            return self._effective_status(normalized).to_dict()
+
+        cached = self._status_cache.get(normalized)
+        if cached and cached.status in COOLDOWN_STATES and self._cooldown_active(cached):
+            return cached.to_dict()
 
         base = self._base_status(normalized)
         if base.status != STATUS_CONFIGURED_UNVERIFIED:
             self._status_cache[normalized] = base
+            self._touch_state()
             return base.to_dict()
 
         probe_messages = [
@@ -522,7 +734,7 @@ class ProviderHub:
             )
             return status.to_dict()
         except Exception as error:
-            classified_status, reason = _error_status(str(error))
+            classified_status, reason = _error_status(error)
             status = self._store_status(
                 normalized,
                 status=classified_status,
@@ -581,14 +793,10 @@ class ProviderHub:
                     model=_provider_model(normalized),
                 )
             latency_ms = (time.perf_counter() - started) * 1000
-            self._store_status(
+            self.record_provider_success(
                 normalized,
-                status=STATUS_HEALTHY,
-                reason="Recent live inference succeeded.",
                 latency_ms=latency_ms,
-                source="runtime_inference",
                 model=_provider_model(normalized),
-                used=True,
             )
             return {
                 "success": True,
@@ -600,15 +808,13 @@ class ProviderHub:
             }
         except ProviderExecutionError as error:
             latency_ms = error.latency_ms or (time.perf_counter() - started) * 1000
-            self._store_status(
+            self.record_provider_failure(
                 normalized,
+                error.error,
                 status=error.status,
                 reason=_error_status(error.error)[1],
-                error=error.error,
                 latency_ms=latency_ms,
-                source="runtime_inference",
                 model=error.model or _provider_model(normalized),
-                used=True,
             )
             raise ProviderExecutionError(
                 normalized,
@@ -619,16 +825,14 @@ class ProviderHub:
             )
         except Exception as error:
             latency_ms = (time.perf_counter() - started) * 1000
-            classified_status, reason = _error_status(str(error))
-            self._store_status(
+            classified_status, reason = _error_status(error)
+            self.record_provider_failure(
                 normalized,
+                error,
                 status=classified_status,
                 reason=reason,
-                error=str(error),
                 latency_ms=latency_ms,
-                source="runtime_inference",
                 model=_provider_model(normalized),
-                used=True,
             )
             raise ProviderExecutionError(
                 normalized,
@@ -659,6 +863,9 @@ class ProviderHub:
                         "provider": provider,
                         "status": status.status,
                         "reason": status.reason,
+                        "skipped": True,
+                        "cooldown_until": status.cooldown_until,
+                        "error_type": status.error_type,
                     }
                 )
                 continue
@@ -782,10 +989,7 @@ def get_provider_status(provider: str, *, fresh: bool = False) -> ProviderStatus
             source=str(payload.get("source") or "health_check"),
         )
 
-    cached = provider_hub._get_cached(normalized, include_stale=True)
-    if cached:
-        return cached
-    return provider_hub._base_status(normalized)
+    return provider_hub._effective_status(normalized)
 
 
 def list_provider_statuses(*, fresh: bool = False) -> List[Dict[str, Any]]:
@@ -852,3 +1056,51 @@ def generate_with_best_provider(
         max_tokens=max_tokens,
         temperature=temperature,
     )
+
+
+def record_provider_success(
+    provider: str,
+    *,
+    model: Optional[str] = None,
+    latency_ms: Optional[float] = None,
+    used: bool = True,
+) -> ProviderStatus:
+    return provider_hub.record_provider_success(
+        provider,
+        model=model,
+        latency_ms=latency_ms,
+        used=used,
+    )
+
+
+def record_provider_failure(
+    provider: str,
+    error: Any,
+    *,
+    status: Optional[str] = None,
+    reason: Optional[str] = None,
+    latency_ms: Optional[float] = None,
+    model: Optional[str] = None,
+    used: bool = True,
+) -> ProviderStatus:
+    return provider_hub.record_provider_failure(
+        provider,
+        error,
+        status=status,
+        reason=reason,
+        latency_ms=latency_ms,
+        model=model,
+        used=used,
+    )
+
+
+def should_skip_provider(provider: str) -> bool:
+    return provider_hub.should_skip_provider(provider)
+
+
+def get_provider_state_version() -> int:
+    return provider_hub.state_version()
+
+
+def reset_provider_runtime_state() -> None:
+    provider_hub.reset_runtime_state()

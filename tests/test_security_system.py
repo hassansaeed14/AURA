@@ -115,7 +115,7 @@ class SecuritySystemTests(unittest.TestCase):
             side_effect=_fake_check_permission,
         ), patch.object(
             runtime_core,
-            "get_user_name",
+            "get_personal_display_name",
             side_effect=AssertionError("Memory read should not execute when permission is denied."),
         ):
             result = runtime_core.process_single_command_detailed("what is my name")

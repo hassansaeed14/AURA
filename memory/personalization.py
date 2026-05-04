@@ -4,8 +4,6 @@ import re
 from collections import Counter
 from typing import Any, Dict, Iterable, List, Optional
 
-from agents.memory import learning_agent
-from memory.knowledge_base import get_user_age, get_user_city, get_user_name
 from memory.semantic_memory import list_facts, recall_fact, remember_fact
 from memory.vector_memory import search_memory
 from memory.working_memory import WorkingMemoryState, load_working_memory
@@ -13,6 +11,37 @@ from memory.working_memory import WorkingMemoryState, load_working_memory
 
 MAX_CONTEXT_LINES = 9
 MAX_RELEVANT_MEMORIES = 3
+PUBLIC_SESSION_PERSONAL_FACTS: Dict[str, Dict[str, str]] = {}
+UNSCOPED_SESSION_IDS = {"", "default", "runtime"}
+RESERVED_IDENTITY_VALUES = {"guest", "public", "anonymous", "unknown", "none", "null"}
+
+
+def _normalize_memory_scope(value: Any) -> str:
+    text = _clean_text(value, limit=120).strip().lower()
+    if not text or text in RESERVED_IDENTITY_VALUES:
+        return ""
+    return re.sub(r"[^a-z0-9_.:-]+", "_", text).strip("_")
+
+
+def _profile_user_id(profile: Dict[str, Any]) -> str:
+    for key in ("id", "user_id", "username"):
+        scope = _normalize_memory_scope(profile.get(key))
+        if scope:
+            return scope
+    return ""
+
+
+def is_authenticated_user_profile(user_profile: Optional[Dict[str, Any]] = None) -> bool:
+    return bool(_profile_user_id(dict(user_profile or {})))
+
+
+def _is_safe_public_session(session_id: str) -> bool:
+    normalized = _normalize_memory_scope(session_id)
+    return bool(normalized and normalized not in UNSCOPED_SESSION_IDS)
+
+
+def _scoped_semantic_key(scope_id: str, key: str) -> str:
+    return f"user:{_normalize_memory_scope(scope_id)}:{str(key or '').strip().lower()}"
 
 
 def _clean_text(value: Any, *, limit: int = 220) -> str:
@@ -42,33 +71,50 @@ def _semantic_value(key: str) -> str:
     return _clean_text(fact.get("value"), limit=120)
 
 
+def _scoped_semantic_value(profile: Dict[str, Any], key: str) -> str:
+    scope_id = _profile_user_id(profile)
+    if not scope_id:
+        return ""
+    return _semantic_value(_scoped_semantic_key(scope_id, key))
+
+
+def _session_fact(session_id: str, key: str) -> str:
+    if not _is_safe_public_session(session_id):
+        return ""
+    bucket = PUBLIC_SESSION_PERSONAL_FACTS.get(_normalize_memory_scope(session_id), {})
+    return _clean_text(bucket.get(str(key or "").strip().lower()), limit=140)
+
+
 def get_personal_display_name(
     user_profile: Optional[Dict[str, Any]] = None,
     *,
     allow_memory_fallback: bool = True,
+    session_id: Optional[str] = None,
 ) -> str:
     profile = dict(user_profile or {})
-    profile_name = _profile_value(profile, "preferred_name", "name", "username")
+    profile_name = _profile_value(profile, "preferred_name", "name")
     if profile_name and profile_name.lower() not in {"guest", "public"}:
         return _display_name(profile_name)
 
-    if allow_memory_fallback:
-        semantic_name = _semantic_value("user_name")
-        if semantic_name:
-            return _display_name(semantic_name)
+    if not allow_memory_fallback:
+        return ""
 
-        stored_name = _clean_text(get_user_name(), limit=80)
-        return _display_name(stored_name)
+    if is_authenticated_user_profile(profile):
+        scoped_name = _scoped_semantic_value(profile, "user_name")
+        if scoped_name:
+            return _display_name(scoped_name)
+        username = _profile_value(profile, "username")
+        return _display_name(username) if username.lower() not in {"guest", "public"} else ""
+
+    return _display_name(_session_fact(str(session_id or ""), "user_name"))
 
     return ""
 
 
 def _load_learning_snapshot() -> Dict[str, Any]:
-    try:
-        data = learning_agent.load_data()
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
+    # The historical learning file is global and not user-scoped. Keep it out
+    # of live personalization until it can be migrated with owner metadata.
+    return {}
 
 
 def _extract_learning_preferences(data: Dict[str, Any]) -> List[str]:
@@ -90,11 +136,23 @@ def _extract_learning_preferences(data: Dict[str, Any]) -> List[str]:
     return _dedupe(lines)[:5]
 
 
-def _extract_semantic_preferences() -> List[str]:
+def _extract_semantic_preferences(
+    *,
+    session_id: str,
+    user_profile: Dict[str, Any],
+) -> List[str]:
     preferences: List[str] = []
+    scope_id = _profile_user_id(user_profile)
+    if not scope_id:
+        session_preference = _session_fact(session_id, "user_preference")
+        return [session_preference] if session_preference else []
+
+    scoped_prefix = _scoped_semantic_key(scope_id, "")
     for fact in list_facts():
         key = str(fact.get("key") or "")
         value = _clean_text(fact.get("value"), limit=140)
+        if not key.startswith(scoped_prefix):
+            continue
         if value and ("preference" in key or "prefer" in value.lower() or "usually" in value.lower()):
             preferences.append(value)
     return _dedupe(preferences)[:5]
@@ -107,15 +165,12 @@ def _query_matches_memory_scope(
     user_profile: Dict[str, Any],
 ) -> bool:
     metadata = memory.get("metadata") if isinstance(memory.get("metadata"), dict) else {}
-    memory_session = _clean_text(metadata.get("session_id"), limit=140)
-    memory_user = _clean_text(metadata.get("user_id") or metadata.get("username"), limit=140)
-    profile_user = _profile_value(user_profile, "id", "username")
+    memory_user = _normalize_memory_scope(metadata.get("user_id") or metadata.get("username"))
+    profile_user = _profile_user_id(user_profile)
 
-    if memory_session and memory_session == session_id:
-        return True
     if memory_user and profile_user and memory_user == profile_user:
         return True
-    return not memory_session and not memory_user
+    return False
 
 
 def _relevant_vector_memories(
@@ -124,6 +179,9 @@ def _relevant_vector_memories(
     session_id: str,
     user_profile: Dict[str, Any],
 ) -> List[str]:
+    if not is_authenticated_user_profile(user_profile):
+        return []
+
     try:
         raw_items = search_memory(user_input, n_results=MAX_RELEVANT_MEMORIES + 3)
     except Exception:
@@ -233,16 +291,20 @@ def build_personal_context(
     profile = dict(user_profile or {})
     normalized_session = str(session_id or "default").strip() or "default"
     learning_data = _load_learning_snapshot()
-    working_memory = load_working_memory(normalized_session)
+    authenticated = is_authenticated_user_profile(profile)
+    working_memory = load_working_memory(normalized_session) if authenticated else WorkingMemoryState()
 
-    display_name = get_personal_display_name(profile)
-    city = _profile_value(profile, "city") or _semantic_value("user_city") or _clean_text(get_user_city(), limit=100)
-    age = _profile_value(profile, "age") or _semantic_value("user_age") or _clean_text(get_user_age(), limit=40)
-    preferences = _dedupe(_extract_semantic_preferences() + _extract_learning_preferences(learning_data))[:5]
+    display_name = get_personal_display_name(profile, session_id=normalized_session)
+    city = _profile_value(profile, "city") or _scoped_semantic_value(profile, "user_city")
+    age = _profile_value(profile, "age") or _scoped_semantic_value(profile, "user_age")
+    preferences = _dedupe(
+        _extract_semantic_preferences(session_id=normalized_session, user_profile=profile)
+        + (_extract_learning_preferences(learning_data) if authenticated else [])
+    )[:5]
     relevant_memories = _relevant_vector_memories(user_input, session_id=normalized_session, user_profile=profile)
     history_line = _history_hint(history or [])
-    pattern = _behavior_pattern(learning_data)
-    top_topics = _topic_patterns(learning_data)
+    pattern = _behavior_pattern(learning_data) if authenticated else ""
+    top_topics = _topic_patterns(learning_data) if authenticated else []
 
     context: Dict[str, Any] = {
         "display_name": display_name,
@@ -314,18 +376,65 @@ def append_relevant_suggestion(response: str, context: Optional[Dict[str, Any]])
     return f"{text}\n\nNext, {suggestion_text}"
 
 
+def clear_session_personal_context(session_id: Optional[str] = None) -> None:
+    if session_id is None:
+        PUBLIC_SESSION_PERSONAL_FACTS.clear()
+        return
+    PUBLIC_SESSION_PERSONAL_FACTS.pop(_normalize_memory_scope(session_id), None)
+
+
 def remember_profile_identity(user_profile: Optional[Dict[str, Any]]) -> None:
     profile = dict(user_profile or {})
-    name = _profile_value(profile, "preferred_name", "name", "username")
+    scope_id = _profile_user_id(profile)
+    if not scope_id:
+        return
+    name = _profile_value(profile, "preferred_name", "name")
     if name and name.lower() not in {"guest", "public"}:
-        remember_fact("user_name", name, confidence=0.95, source="profile")
+        remember_fact(_scoped_semantic_key(scope_id, "user_name"), name, confidence=0.95, source="profile")
 
 
-def remember_explicit_personal_signals(user_input: str) -> None:
+def _extract_explicit_name(user_input: str) -> str:
+    text = str(user_input or "").strip()
+    name_match = re.search(
+        r"\b(?:my name is|call me)\s+([a-zA-Z][a-zA-Z .'-]{0,39})",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not name_match:
+        return ""
+    candidate = re.split(r"\b(?:and|but|then)\b|[,.!?]", name_match.group(1).strip(), maxsplit=1, flags=re.IGNORECASE)[0]
+    return _display_name(candidate.strip())
+
+
+def _remember_session_fact(session_id: str, key: str, value: str) -> None:
+    if not _is_safe_public_session(session_id):
+        return
+    scope = _normalize_memory_scope(session_id)
+    bucket = PUBLIC_SESSION_PERSONAL_FACTS.setdefault(scope, {})
+    bucket[str(key or "").strip().lower()] = _clean_text(value, limit=180)
+
+
+def remember_explicit_personal_signals(
+    user_input: str,
+    *,
+    session_id: str = "default",
+    user_profile: Optional[Dict[str, Any]] = None,
+) -> None:
     text = str(user_input or "").strip()
     lowered = text.lower()
-    name_match = re.search(r"\b(?:my name is|call me)\s+([a-zA-Z][a-zA-Z ]{0,39})\b", text, flags=re.IGNORECASE)
-    if name_match:
-        remember_fact("user_name", name_match.group(1).strip().title(), confidence=1.0, source="explicit_user_signal")
-    if re.search(r"\b(?:i prefer|i usually|my preference is|default to)\b", lowered):
-        remember_fact("user_preference", text, confidence=0.86, source="explicit_user_signal")
+    profile = dict(user_profile or {})
+    scope_id = _profile_user_id(profile)
+    name = _extract_explicit_name(text)
+    preference_signal = bool(re.search(r"\b(?:i prefer|i usually|my preference is|default to)\b", lowered))
+
+    if scope_id:
+        if name:
+            remember_fact(_scoped_semantic_key(scope_id, "user_name"), name, confidence=1.0, source="explicit_user_signal")
+        if preference_signal:
+            remember_fact(_scoped_semantic_key(scope_id, "user_preference"), text, confidence=0.86, source="explicit_user_signal")
+        return
+
+    if name:
+        _remember_session_fact(session_id, "user_name", name)
+    if preference_signal:
+        _remember_session_fact(session_id, "user_preference", text)

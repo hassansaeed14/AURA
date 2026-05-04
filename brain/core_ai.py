@@ -15,11 +15,12 @@ from brain import runtime_core as runtime_core_module
 from brain.response_engine import FALLBACK_USER_MESSAGE, build_degraded_reply, clean_response, generate_response, generate_response_payload
 from config.settings import GROQ_API_KEY, MODEL_NAME
 from memory.chat_history import get_history
-from memory.knowledge_base import get_user_age, get_user_city, get_user_name
 from memory.personalization import (
     append_relevant_suggestion,
     build_personal_context,
     build_personalized_system_prompt,
+    clear_session_personal_context,
+    get_personal_display_name,
     remember_explicit_personal_signals,
     remember_profile_identity,
 )
@@ -78,7 +79,10 @@ def build_messages_with_history(
     user_profile: Optional[dict[str, Any]] = None,
     personal_context: Optional[dict[str, Any]] = None,
 ) -> list[dict[str, str]]:
-    persisted_history = _load_persisted_history(session_id)
+    # Persisted chat rows are session-only today, not user-owned. Keep the live
+    # response context to in-process session history until durable history has
+    # explicit owner metadata.
+    persisted_history: list[dict[str, str]] = []
     in_memory_history = list(_get_session_history(session_id))
     merged: list[dict[str, str]] = []
 
@@ -128,6 +132,16 @@ def _record_exchange(session_id: str, user_message: str, assistant_message: str)
     max_messages = MAX_SESSION_EXCHANGES * 2
     if len(history) > max_messages:
         del history[:-max_messages]
+
+
+def clear_session_context(session_id: Optional[str] = None) -> None:
+    if session_id is None:
+        SESSION_CONTEXT_HISTORY.clear()
+        clear_session_personal_context()
+        return
+    normalized_session = _normalize_session_id(session_id)
+    SESSION_CONTEXT_HISTORY.pop(normalized_session, None)
+    clear_session_personal_context(normalized_session)
 
 
 def _build_user_reference(user_profile: Optional[dict[str, Any]]) -> str:
@@ -399,28 +413,32 @@ def _knowledge_base_result(
             "mode": current_mode,
         }
 
+    personal_context = build_personal_context(
+        "",
+        session_id=session_id,
+        user_profile=profile,
+        history=list(_get_session_history(session_id)),
+    )
     user_reference = _build_user_reference(profile)
     field = str(lookup.get("field") or "").strip().lower()
     if field == "name":
-        value = get_user_name()
+        value = get_personal_display_name(profile, session_id=session_id)
         if value:
-            reply = f"{user_reference}, your name is {value}." if user_reference else f"Your name is {value}."
+            reply = f"Your name is {value}."
         else:
-            reply = None
+            reply = "I don't know your name yet."
     elif field == "age":
-        value = get_user_age()
+        value = str(personal_context.get("age") or "").strip()
         if value:
             reply = f"{user_reference}, your age is {value}." if user_reference else f"Your age is {value}."
         else:
-            reply = None
+            reply = "I don't know your age yet."
     else:
-        value = get_user_city()
+        value = str(personal_context.get("city") or "").strip()
         if value:
             reply = f"{user_reference}, you're in {value}." if user_reference else f"You're in {value}."
         else:
-            reply = None
-    if not reply:
-        return None
+            reply = "I don't know your city yet."
     context = _build_context(session_id, user_profile=profile, current_mode=current_mode)
     context.activate("memory")
     reasoning_trace = {
@@ -530,7 +548,7 @@ def process_single_command_detailed(
     )
     runtime_security_context = _security_context_with_personal_context(security_context, personal_context)
     remember_profile_identity(profile)
-    remember_explicit_personal_signals(command)
+    remember_explicit_personal_signals(command, session_id=normalized_session, user_profile=profile)
 
     _sync_context_into_response_engine(normalized_session, user_profile=profile, personal_context=personal_context)
     started = time.perf_counter()
@@ -588,7 +606,7 @@ def process_command_detailed(
     )
     runtime_security_context = _security_context_with_personal_context(security_context, personal_context)
     remember_profile_identity(profile)
-    remember_explicit_personal_signals(command)
+    remember_explicit_personal_signals(command, session_id=normalized_session, user_profile=profile)
 
     _sync_context_into_response_engine(normalized_session, user_profile=profile, personal_context=personal_context)
     started = time.perf_counter()

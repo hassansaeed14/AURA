@@ -28,9 +28,11 @@ def extract_memory_candidates(user_input: str, response: str, intent: str, confi
     entities = parse_entities(user_input)
     candidates: List[MemoryCandidate] = []
 
-    name_match = re.search(r"\b(?:my name is|call me)\s+([a-zA-Z ]{1,40})", lowered)
+    name_match = re.search(r"\b(?:my name is|call me)\s+([a-zA-Z][a-zA-Z .'-]{0,39})", user_input, flags=re.IGNORECASE)
     if name_match and confidence >= STABLE_MEMORY_CONFIDENCE:
-        candidates.append(MemoryCandidate("semantic", "user_name", name_match.group(1).strip().title(), confidence, "explicit_name"))
+        name = re.split(r"\b(?:and|but|then)\b|[,.!?]", name_match.group(1).strip(), maxsplit=1, flags=re.IGNORECASE)[0]
+        if name.strip():
+            candidates.append(MemoryCandidate("semantic", "user_name", name.strip().title(), confidence, "explicit_name"))
 
     city_match = re.search(r"\b(?:i live in|my city is)\s+([a-zA-Z ]{2,40})", lowered)
     if city_match and confidence >= STABLE_MEMORY_CONFIDENCE:

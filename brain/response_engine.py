@@ -1369,12 +1369,19 @@ def _canonical_assignment_section_kind(title: str) -> Optional[str]:
 def _strip_assignment_meta_writing(text: str) -> str:
     weak_patterns = (
         r"\bthis section\s+(?:should|will|explains|explores|discusses|covers)\b",
+        r"\bthis section is designed to\b",
+        r"\bthis paragraph\s+(?:should|will|explains|explores|discusses|covers)\b",
         r"\bin this section\b",
+        r"\bin the following paragraphs\b",
         r"\bthe following section\b",
+        r"\bthe assignment\s+should\b",
         r"\byou should discuss\b",
         r"\bthe student should\b",
+        r"\bstudents should\b",
         r"\bthe reader should\b",
+        r"\breaders should\b",
         r"\ba strong assignment must\b",
+        r"\b(?:a|the)\s+strong\s+(?:conclusion|section|paragraph|assignment)\s+should\b",
         r"\bthis assignment\s+(?:will|aims to|has examined|examines)\b",
         r"\bin this assignment\b",
         r"\bthis essay\s+(?:will|aims to|has examined|examines)\b",
@@ -1409,9 +1416,12 @@ def _dedupe_assignment_paragraphs(text: str) -> str:
     deduped: list[str] = []
     for block in blocks:
         normalized = re.sub(r"[^a-z0-9]+", " ", block.lower()).strip()
-        if not normalized or normalized in seen:
+        words = normalized.split()
+        near_key = " ".join(words[:18])
+        key = near_key or normalized
+        if not normalized or key in seen:
             continue
-        seen.add(normalized)
+        seen.add(key)
         deduped.append(block.strip())
     return "\n\n".join(deduped).strip()
 
@@ -1574,16 +1584,24 @@ def _build_quality_assignment_section_body(
         paragraphs.append(bank[index])
         index += 1
     context = _assignment_quality_context(topic)
-    extension_bank = [
-        f"Academic discussion of {topic} becomes stronger when it connects {context['terms'][0]} with evidence, examples, and consequences. This connection keeps the writing specific and prevents the section from becoming a list of broad claims.",
-        f"Another important point is the relationship between {context['terms'][1]} and practical outcomes in areas such as {context['examples'][0]} and {context['examples'][1]}. This relationship gives the topic clearer academic depth because it links concepts to observable conditions.",
-        f"The quality of analysis also depends on recognizing context. {context['terms'][2].title()} may appear differently across institutions, communities, industries, or policy environments, so careful interpretation is necessary before drawing broad conclusions.",
-        f"For that reason, {topic} is most useful when studied through both theory and application. The theoretical side explains meaning, while the applied side shows how the subject affects real decisions, constraints, and outcomes.",
-        f"Evidence also needs to be interpreted with attention to stakeholders and consequences. In {topic}, the same idea can produce different results depending on resources, governance, expertise, and the assumptions built into the surrounding environment.",
-        f"Concrete examples such as {context['examples'][2]} and {context['examples'][3]} make the analysis more credible because they show how the topic operates beyond abstract definition. They also reveal where strengths and limitations become visible in practice.",
-        f"A mature academic treatment of {topic} therefore keeps explanation, evaluation, and context connected. That approach gives the reader a fuller view of both the subject's promise and the conditions required for responsible use.",
-        f"The discussion remains strongest when it avoids overgeneralization. Careful attention to {context['limits'][0]} and {context['limits'][1]} helps preserve balance while still recognizing the practical value of the subject.",
-    ]
+    title_topic = _assignment_display_topic(topic)
+    if section_kind == "conclusion":
+        extension_bank = [
+            f"Taken together, these points show that {topic} cannot be judged only by its benefits or only by its weaknesses. Its academic value comes from understanding how context, evidence, and responsible application shape its real importance.",
+            f"The final judgement is therefore balanced: {topic} remains valuable when its concepts are applied carefully, its limitations are acknowledged, and its effects on people, institutions, or systems are evaluated with evidence.",
+            f"Ultimately, {title_topic} should be understood as a subject that links knowledge with responsibility. Its future relevance depends on continued critical study, practical refinement, and thoughtful use in real conditions.",
+        ]
+    else:
+        extension_bank = [
+            f"Academic discussion of {topic} becomes stronger when it connects {context['terms'][0]} with evidence, examples, and consequences. This connection keeps the writing specific and prevents the section from becoming a list of broad claims.",
+            f"Another important point is the relationship between {context['terms'][1]} and practical outcomes in areas such as {context['examples'][0]} and {context['examples'][1]}. This relationship gives the topic clearer academic depth because it links concepts to observable conditions.",
+            f"The quality of analysis also depends on recognizing context. {context['terms'][2].title()} may appear differently across institutions, communities, industries, or policy environments, so careful interpretation is necessary before drawing broad conclusions.",
+            f"For that reason, {topic} is most useful when studied through both theory and application. The theoretical side explains meaning, while the applied side shows how the subject affects real decisions, constraints, and outcomes.",
+            f"Evidence also needs to be interpreted with attention to stakeholders and consequences. In {topic}, the same idea can produce different results depending on resources, governance, expertise, and the assumptions built into the surrounding environment.",
+            f"Concrete examples such as {context['examples'][2]} and {context['examples'][3]} make the analysis more credible because they show how the topic operates beyond abstract definition. They also reveal where strengths and limitations become visible in practice.",
+            f"A mature academic treatment of {topic} therefore keeps explanation, evaluation, and context connected. That approach gives the reader a fuller view of both the subject's promise and the conditions required for responsible use.",
+            f"The discussion remains strongest when it avoids overgeneralization. Careful attention to {context['limits'][0]} and {context['limits'][1]} helps preserve balance while still recognizing the practical value of the subject.",
+        ]
     extension_index = 0
     while _assignment_word_count("\n\n".join(paragraphs)) < target_words and extension_index < len(extension_bank):
         paragraphs.append(extension_bank[extension_index])
@@ -1646,12 +1664,25 @@ def stabilize_assignment_content(
             existing_text=extracted.get(kind, ""),
         )
 
+    def cleanup_bodies() -> None:
+        for cleanup_kind, _cleanup_title in REQUIRED_ASSIGNMENT_SECTIONS:
+            cleaned_body = _dedupe_assignment_paragraphs(
+                _strip_assignment_meta_writing(bodies.get(cleanup_kind, ""))
+            )
+            if not cleaned_body.strip():
+                cleaned_body = _build_quality_assignment_section_body(
+                    normalized_topic,
+                    cleanup_kind,
+                    allocations[cleanup_kind],
+                )
+            bodies[cleanup_kind] = cleaned_body.strip()
+
     def compose() -> str:
+        cleanup_bodies()
         return clean_response(
             "\n\n".join(
-                f"{title}\n{bodies[kind].strip()}"
+                f"{title}\n{bodies.get(kind, '').strip()}"
                 for kind, title in REQUIRED_ASSIGNMENT_SECTIONS
-                if bodies.get(kind, "").strip()
             )
         )
 
@@ -1659,7 +1690,7 @@ def stabilize_assignment_content(
     expansion_order = ("core_concepts", "applications", "background_history", "limitations", "advantages")
     expansion_step = 100
     guard = 0
-    while _assignment_word_count(stabilized) < minimum_words and guard < len(expansion_order) * 4:
+    while _assignment_word_count(stabilized) < minimum_words and guard < len(expansion_order) * 8:
         kind = expansion_order[guard % len(expansion_order)]
         bodies[kind] = _build_quality_assignment_section_body(
             normalized_topic,
@@ -1678,8 +1709,27 @@ def stabilize_assignment_content(
             bodies[kind] = _trim_assignment_text_to_words(bodies[kind], section_limit)
         stabilized = compose()
 
-    stabilized = _strip_assignment_meta_writing(stabilized)
-    stabilized = _dedupe_assignment_paragraphs(stabilized)
+    stabilized = compose()
+    guard = 0
+    while _assignment_word_count(stabilized) < minimum_words and guard < len(expansion_order) * 5:
+        kind = expansion_order[guard % len(expansion_order)]
+        current_words = _assignment_word_count(bodies[kind])
+        bodies[kind] = _build_quality_assignment_section_body(
+            normalized_topic,
+            kind,
+            current_words + 80,
+            existing_text=bodies[kind],
+        )
+        guard += 1
+        stabilized = compose()
+
+    if maximum_words and _assignment_word_count(stabilized) > maximum_words:
+        overflow_scale = maximum_words / max(1, _assignment_word_count(stabilized))
+        for kind in bodies:
+            section_limit = max(34, int(_assignment_word_count(bodies[kind]) * overflow_scale))
+            bodies[kind] = _trim_assignment_text_to_words(bodies[kind], section_limit)
+        stabilized = compose()
+
     if include_references:
         stabilized = _append_references_section(stabilized, normalized_topic, citation_style)
     return clean_response(stabilized)
@@ -2366,6 +2416,67 @@ def build_degraded_reply(user_input: str, providers_tried: Optional[List[Any]] =
         }
         return display_map.get(normalized, normalized.title() or name)
 
+    def _attempt_summary(attempts: List[Any]) -> str:
+        summaries: List[str] = []
+        for item in attempts:
+            if isinstance(item, dict):
+                provider_name = _display_provider(str(item.get("provider", "")).strip())
+                status = str(item.get("status", "")).strip().replace("_", " ")
+                if provider_name and status:
+                    label = f"{provider_name} {status}"
+                else:
+                    label = provider_name or status
+            else:
+                provider_name = _display_provider(str(item).split(":", 1)[0].strip())
+                label = provider_name
+            if label and label not in summaries:
+                summaries.append(label)
+        return ", ".join(summaries[:3])
+
+    def _local_fallback_answer(prompt: str) -> str:
+        normalized = str(prompt or "").strip().lower()
+        if _looks_like_casual_conversation(prompt):
+            return "I'm still here and responsive; the live model path is just degraded."
+
+        compare_match = re.search(
+            r"(?:compare|difference between)\s+(.+?)\s+(?:vs|versus|and)\s+(.+)",
+            normalized,
+        )
+        if not compare_match and re.search(r"\bvs\b|\bversus\b", normalized):
+            parts = re.split(r"\bvs\b|\bversus\b", normalized, maxsplit=1)
+            if len(parts) == 2:
+                left = re.sub(r"^(compare|difference between)\s+", "", parts[0]).strip()
+                right = parts[1].strip()
+                if left and right:
+                    return (
+                        f"For {left} versus {right}, compare purpose, learning curve, performance, "
+                        "ecosystem, safety, and long-term maintainability. The better choice depends on the job, not a universal winner."
+                    )
+        if compare_match:
+            left = compare_match.group(1).strip()
+            right = compare_match.group(2).strip()
+            return (
+                f"For {left} versus {right}, compare purpose, learning curve, performance, "
+                "ecosystem, safety, and long-term maintainability. The better choice depends on the job, not a universal winner."
+            )
+
+        topic_match = re.search(r"\b(?:what is|explain|tell me about)\s+(.+?)(?:\?|$)", normalized)
+        if topic_match:
+            topic = topic_match.group(1).strip(" .?")
+            if topic:
+                return (
+                    f"A solid answer on {topic} should start with the definition, then explain the key parts, "
+                    "how it works, practical uses, and limitations. I won't invent fine details while the live model is unavailable."
+                )
+
+        if any(token in normalized for token in ("write", "make", "create", "notes", "assignment", "document", "summary", "summarize")):
+            return (
+                "I can still outline the work safely: define the topic, organize the key sections, "
+                "add supporting examples, and finish with a clear conclusion. A full polished draft needs the live model path back online."
+            )
+
+        return "I can see the request, but I do not want to invent details without a clean live model response."
+
     attempts = providers_tried or []
     provider_names: List[str] = []
     for item in attempts:
@@ -2378,18 +2489,13 @@ def build_degraded_reply(user_input: str, providers_tried: Optional[List[Any]] =
         if display_name and display_name not in provider_names:
             provider_names.append(display_name)
 
-    attempted = ", ".join(provider_names[:3]) if provider_names else ""
-    normalized_input = str(user_input or "").strip().lower()
-
-    if _looks_like_casual_conversation(user_input):
-        lead = "I'm here, but the live reply path is unstable right now."
-    elif any(token in normalized_input for token in ("write", "make", "create", "notes", "assignment", "document", "summary", "summarize")):
-        lead = "I couldn't finish that cleanly just yet."
-    else:
-        lead = "I don't have a clean live answer for that right now."
-
-    detail = f" The model path stalled on {attempted}." if attempted else ""
-    return f"{lead}{detail} Try again in a moment."
+    attempted = _attempt_summary(attempts) or (", ".join(provider_names[:3]) if provider_names else "")
+    fallback = _local_fallback_answer(user_input)
+    detail = f" Provider path: {attempted}." if attempted else ""
+    return (
+        "I don't have a clean live answer from the model path right now, "
+        f"but here is the safest short fallback: {fallback}{detail}"
+    )
 
 
 def _merge_provider_attempts(*attempt_groups: Optional[List[Any]]) -> List[Any]:

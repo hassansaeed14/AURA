@@ -15,6 +15,7 @@ class ApiProviderStatusTests(unittest.TestCase):
                 "items": [],
                 "providers": {},
                 "assistant_runtime": {},
+                "provider_state_version": -1,
             }
         )
         self.client = TestClient(api_server.app)
@@ -172,6 +173,40 @@ class ApiProviderStatusTests(unittest.TestCase):
         payload = response.json()
         self.assertIn("truth_note", payload)
         self.assertIn("rate-limit", payload["truth_note"])
+
+    def test_provider_health_snapshot_refreshes_when_runtime_state_changes(self):
+        api_server.PROVIDER_HEALTH_CACHE.update(
+            {
+                "checked_at_ts": 9999999999.0,
+                "checked_at": "old",
+                "items": [{"provider": "groq", "status": "healthy"}],
+                "providers": {"groq": "healthy"},
+                "assistant_runtime": {},
+                "provider_state_version": 1,
+            }
+        )
+        summary = {
+            "items": [{"provider": "groq", "status": "rate_limited", "configured": True}],
+            "providers": {"groq": "rate_limited"},
+            "routing_order": ["groq"],
+            "healthy": [],
+            "configured": ["groq"],
+        }
+
+        with patch.object(api_server, "get_provider_state_version", return_value=2), patch.object(
+            api_server,
+            "summarize_provider_statuses",
+            return_value=summary,
+        ) as summary_mock, patch.object(
+            api_server,
+            "get_runtime_provider_summary",
+            return_value={"status": "degraded", "preferred_provider": "groq"},
+        ):
+            snapshot = api_server._provider_health_snapshot(force=False)
+
+        self.assertEqual(snapshot["providers"]["groq"], "rate_limited")
+        self.assertEqual(snapshot["provider_state_version"], 2)
+        summary_mock.assert_called_once()
 
     def test_forge_report_endpoint_requires_admin_and_returns_real_report(self):
         forge_report = {"status": "ok", "audit": {"findings": []}, "repair_plan": []}

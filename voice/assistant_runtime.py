@@ -14,7 +14,7 @@ def get_desktop_voice_runtime_status() -> Dict[str, Any]:
     return {
         **status,
         "label": "Desktop voice",
-        "states": ["off", "listening", "awake", "processing", "speaking"],
+        "states": ["idle", "listening", "awake", "processing", "speaking", "error"],
         "truth_note": (
             "Desktop wake listening starts only after the user explicitly enables it. "
             "Browser push-to-talk remains separate."

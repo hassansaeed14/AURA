@@ -51,6 +51,7 @@ class DesktopVoiceRuntimeTests(unittest.TestCase):
         self.assertEqual(active_status["state"], "listening")
         self.assertTrue(stopped["success"])
         self.assertFalse(stopped["active"])
+        self.assertEqual(stopped["state"], "idle")
 
     def test_interrupt_resets_processing_and_speaking_state(self):
         with patch.object(runtime, "_dependency_snapshot", return_value=AVAILABLE_DEPS):
@@ -62,6 +63,65 @@ class DesktopVoiceRuntimeTests(unittest.TestCase):
         self.assertTrue(interrupted["listening"])
         self.assertFalse(interrupted["processing"])
         self.assertFalse(interrupted["speaking"])
+
+    def test_wake_loop_captures_command_once_and_logs_state_path(self):
+        captured_commands = []
+
+        def _fake_process(command_text, **kwargs):
+            captured_commands.append((command_text, kwargs))
+            runtime._STOP_EVENT.set()
+            return {"success": True, "status": "processed"}
+
+        with patch.object(runtime, "_dependency_snapshot", return_value=AVAILABLE_DEPS), patch.object(
+            runtime,
+            "_listen_once",
+            side_effect=[
+                {"success": True, "status": "transcribed", "text": "hey aura"},
+                {"success": True, "status": "transcribed", "text": "what time is it"},
+            ],
+        ), patch.object(
+            runtime,
+            "process_desktop_voice_command",
+            side_effect=_fake_process,
+        ), patch("builtins.print") as print_mock:
+            runtime.start_desktop_voice(session_id="voice-session", start_loop=False)
+            runtime._desktop_voice_loop(session_id="voice-session", user_profile={"username": "tester"})
+
+        self.assertEqual(len(captured_commands), 1)
+        self.assertEqual(captured_commands[0][0], "what time is it")
+        self.assertEqual(captured_commands[0][1]["session_id"], "voice-session")
+        log_text = "\n".join(str(call.args[0]) for call in print_mock.call_args_list if call.args)
+        self.assertIn("[VOICE] listening", log_text)
+        self.assertIn("[VOICE] wake detected", log_text)
+        self.assertIn("[VOICE] command captured", log_text)
+        self.assertIn("[VOICE] stopped", log_text)
+
+    def test_listen_timeout_resets_to_listening_without_error(self):
+        with patch.object(runtime, "_dependency_snapshot", return_value=AVAILABLE_DEPS):
+            runtime.start_desktop_voice(start_loop=False)
+            outcome = runtime._handle_listen_failure(
+                {"success": False, "status": "timeout", "message": "Listening timed out waiting for speech."}
+            )
+            status = runtime.get_desktop_voice_status()
+
+        self.assertEqual(outcome, "timeout")
+        self.assertTrue(status["listening"])
+        self.assertEqual(status["state"], "listening")
+        self.assertEqual(status["last_error"], "")
+
+    def test_microphone_failure_enters_error_without_fake_listening(self):
+        with patch.object(runtime, "_dependency_snapshot", return_value=AVAILABLE_DEPS):
+            runtime.start_desktop_voice(start_loop=False)
+            outcome = runtime._handle_listen_failure(
+                {"success": False, "status": "microphone_error", "message": "Microphone permission denied."}
+            )
+            status = runtime.get_desktop_voice_status()
+
+        self.assertEqual(outcome, "error")
+        self.assertFalse(status["active"])
+        self.assertFalse(status["listening"])
+        self.assertEqual(status["state"], "error")
+        self.assertIn("Microphone permission denied", status["message"])
 
     def test_command_routing_uses_normal_runtime_path(self):
         with patch("brain.core_ai.process_command_detailed", return_value={"response": "Done.", "permission": {"permission": {"trust_level": "safe"}}}) as command_mock:
@@ -99,6 +159,35 @@ class DesktopVoiceRuntimeTests(unittest.TestCase):
 
         self.assertEqual(result["spoken_text"], "This needs your approval in AURA before I can continue.")
         speak_mock.assert_called_once_with("This needs your approval in AURA before I can continue.")
+
+    def test_duplicate_command_is_ignored_inside_cooldown(self):
+        with patch.object(runtime, "_dependency_snapshot", return_value=AVAILABLE_DEPS):
+            runtime.start_desktop_voice(start_loop=False)
+        with patch.object(
+            runtime,
+            "_run_runtime_command",
+            return_value={"response": "Done.", "permission": {"permission": {"trust_level": "safe"}}},
+        ) as command_mock:
+            first = runtime.process_desktop_voice_command("hello", speak=False)
+            second = runtime.process_desktop_voice_command("hello", speak=False)
+
+        self.assertTrue(first["success"])
+        self.assertFalse(second["success"])
+        self.assertEqual(second["status"], "duplicate_ignored")
+        command_mock.assert_called_once()
+
+    def test_speech_interrupt_skips_tts_start(self):
+        with patch.object(runtime, "_dependency_snapshot", return_value=AVAILABLE_DEPS):
+            runtime.start_desktop_voice(start_loop=False)
+        runtime._INTERRUPT_EVENT.set()
+        fake_pyttsx3 = Mock()
+
+        with patch.object(runtime, "pyttsx3", fake_pyttsx3):
+            result = runtime.speak_desktop_text("hello")
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["status"], "interrupted")
+        fake_pyttsx3.init.assert_not_called()
 
 
 class DesktopVoiceApiTests(unittest.TestCase):

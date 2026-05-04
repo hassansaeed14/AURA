@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+"""Supported AURA desktop/web launcher.
+
+This is the runtime source of truth for the current AURA build:
+``run_aura.py`` serves ``api.api_server:app`` through Waitress. Legacy entry
+points such as ``main.py`` are not used for the web_v2/FastAPI runtime.
+"""
+
 import json
-import os
 import socket
+import sys
 import threading
 import time
 import webbrowser
@@ -12,20 +19,18 @@ from typing import Any
 from a2wsgi import ASGIMiddleware
 from waitress import serve
 
-from api.api_server import app as fastapi_app
 
-
-# ───────────────────────────────────────────────────
+# --------------------------------------------------
 # PATHS
-# ───────────────────────────────────────────────────
+# --------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parent
 CONFIG_DIR = PROJECT_ROOT / "config"
 SERVER_CONFIG_PATH = CONFIG_DIR / "server.json"
 
 
-# ───────────────────────────────────────────────────
+# --------------------------------------------------
 # DEFAULT CONFIG
-# ───────────────────────────────────────────────────
+# --------------------------------------------------
 DEFAULT_SERVER_CONFIG: dict[str, Any] = {
     "host": "0.0.0.0",
     "port": 5000,
@@ -35,9 +40,64 @@ DEFAULT_SERVER_CONFIG: dict[str, Any] = {
 }
 
 
-# ───────────────────────────────────────────────────
+# --------------------------------------------------
+# OUTPUT SAFETY
+# --------------------------------------------------
+def configure_console_encoding() -> None:
+    """Prefer UTF-8 output, but never make boot depend on it."""
+
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+
+def safe_print(message: Any = "") -> None:
+    """Print without allowing console encoding failures to crash startup."""
+
+    text = str(message)
+    try:
+        print(text, flush=True)
+    except UnicodeEncodeError:
+        fallback = text.encode("ascii", "replace").decode("ascii")
+        print(fallback, flush=True)
+
+
+# --------------------------------------------------
 # CONFIG LOADER
-# ───────────────────────────────────────────────────
+# --------------------------------------------------
+def normalize_server_config(config: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(DEFAULT_SERVER_CONFIG)
+    normalized.update(config)
+
+    try:
+        normalized["port"] = int(normalized.get("port", DEFAULT_SERVER_CONFIG["port"]))
+    except (TypeError, ValueError):
+        safe_print("[Config] Invalid port in server.json. Falling back to 5000.")
+        normalized["port"] = DEFAULT_SERVER_CONFIG["port"]
+    if not 1 <= int(normalized["port"]) <= 65535:
+        safe_print("[Config] Port out of range in server.json. Falling back to 5000.")
+        normalized["port"] = DEFAULT_SERVER_CONFIG["port"]
+
+    try:
+        workers = int(normalized.get("workers", DEFAULT_SERVER_CONFIG["workers"]))
+    except (TypeError, ValueError):
+        safe_print("[Config] Invalid worker count in server.json. Falling back to 4.")
+        workers = DEFAULT_SERVER_CONFIG["workers"]
+    normalized["workers"] = max(1, min(workers, 32))
+
+    host = str(normalized.get("host") or DEFAULT_SERVER_CONFIG["host"]).strip()
+    normalized["host"] = host or DEFAULT_SERVER_CONFIG["host"]
+    normalized["auto_open_browser"] = bool(
+        normalized.get("auto_open_browser", DEFAULT_SERVER_CONFIG["auto_open_browser"])
+    )
+    return normalized
+
+
 def load_server_config() -> dict[str, Any]:
     if not SERVER_CONFIG_PATH.exists():
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -50,27 +110,31 @@ def load_server_config() -> dict[str, Any]:
     try:
         data = json.loads(SERVER_CONFIG_PATH.read_text(encoding="utf-8"))
         if isinstance(data, dict):
-            config = dict(DEFAULT_SERVER_CONFIG)
-            config.update(data)
-            return config
-    except Exception:
-        pass
+            return normalize_server_config(data)
+        safe_print(f"[Config] {SERVER_CONFIG_PATH} is not a JSON object. Using defaults.")
+    except Exception as error:
+        safe_print(f"[Config] Could not read {SERVER_CONFIG_PATH}: {error}")
+        safe_print("[Config] Using safe defaults.")
 
     return dict(DEFAULT_SERVER_CONFIG)
 
 
-# ───────────────────────────────────────────────────
+# --------------------------------------------------
 # UTILITIES
-# ───────────────────────────────────────────────────
+# --------------------------------------------------
 def build_url(host: str, port: int) -> str:
     if host in {"0.0.0.0", "::"}:
         host = "localhost"
     return f"http://{host}:{port}"
 
 
+def _probe_host(host: str) -> str:
+    return "127.0.0.1" if host in {"0.0.0.0", "::"} else host
+
+
 def wait_for_server(host: str, port: int, timeout: float = 12.0) -> bool:
     deadline = time.time() + timeout
-    probe_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
+    probe_host = _probe_host(host)
 
     while time.time() < deadline:
         try:
@@ -82,52 +146,80 @@ def wait_for_server(host: str, port: int, timeout: float = 12.0) -> bool:
     return False
 
 
+def is_port_available(host: str, port: int) -> bool:
+    bind_host = "" if host in {"0.0.0.0", "::"} else host
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        try:
+            probe.bind((bind_host, int(port)))
+        except OSError:
+            return False
+    return True
+
+
 def open_browser(url: str, host: str, port: int) -> None:
     if wait_for_server(host, port):
         try:
             webbrowser.open(url)
-        except Exception:
-            pass
+        except Exception as error:
+            safe_print(f"[Browser] Could not open browser automatically: {error}")
 
 
-# ───────────────────────────────────────────────────
+# --------------------------------------------------
 # BOOT UI
-# ───────────────────────────────────────────────────
+# --------------------------------------------------
 def print_boot_banner(url: str, config: dict[str, Any]) -> None:
-    print("\n" + "═" * 55)
-    print(" AURA — Autonomous Universal Responsive Assistant")
-    print("═" * 55)
+    safe_print()
+    safe_print("=" * 55)
+    safe_print(" AURA - Autonomous Universal Responsive Assistant")
+    safe_print("=" * 55)
 
-    print("\n[System Status]")
-    print("• Runtime       : FastAPI + Waitress")
-    print("• Mode          : Local Private Runtime")
-    print(f"• Workers       : {config.get('workers')}")
-    print(f"• URL           : {url}")
+    safe_print()
+    safe_print("[System Status]")
+    safe_print("Runtime       : FastAPI + Waitress")
+    safe_print("Entry point   : run_aura.py")
+    safe_print("API source    : api.api_server:app")
+    safe_print("Mode          : Local Private Runtime")
+    safe_print(f"Workers       : {config.get('workers')}")
+    safe_print(f"URL           : {url}")
 
-    print("\n[Status]")
-    print("• Boot          : OK")
-    print("• API           : READY")
-    print("• Interface     : AVAILABLE")
+    safe_print()
+    safe_print("[Status]")
+    safe_print("Boot          : OK")
+    safe_print("API           : STARTING")
+    safe_print("Interface     : WAITING FOR SERVER")
+    safe_print()
+    safe_print("AURA is starting.")
+    safe_print()
 
-    print("\nAURA is online.\n")
+
+def print_port_in_use_message(host: str, port: int) -> None:
+    safe_print()
+    safe_print("[Startup blocked]")
+    safe_print(f"Port {port} is already in use on {host}.")
+    safe_print("AURA did not start a second server.")
+    safe_print("Stop the existing AURA process or change config/server.json to use another port.")
 
 
-# ───────────────────────────────────────────────────
+# --------------------------------------------------
 # MAIN
-# ───────────────────────────────────────────────────
+# --------------------------------------------------
 def main() -> None:
+    configure_console_encoding()
     config = load_server_config()
 
     host = str(config.get("host"))
     port = int(config.get("port"))
     threads = int(config.get("workers"))
     auto_open = bool(config.get("auto_open_browser"))
-
     url = build_url(host, port)
+
+    if not is_port_available(host, port):
+        print_port_in_use_message(host, port)
+        raise SystemExit(2)
 
     print_boot_banner(url, config)
 
-    # Start browser thread
+    # Browser opening is deliberately delayed until the server socket answers.
     if auto_open:
         threading.Thread(
             target=open_browser,
@@ -135,19 +227,23 @@ def main() -> None:
             daemon=True,
         ).start()
 
-    # Run server
     try:
+        from api.api_server import app as fastapi_app
+
         aura_app = ASGIMiddleware(fastapi_app)
+        safe_print(f"[Startup] Serving AURA on {url}")
         serve(aura_app, host=host, port=port, threads=threads)
 
     except KeyboardInterrupt:
-        print("\n[Shutdown] AURA stopped manually.")
+        safe_print()
+        safe_print("[Shutdown] AURA stopped manually.")
 
-    except Exception as e:
-        print("\n[CRITICAL ERROR]")
-        print(f"{e}")
+    except Exception as error:
+        safe_print()
+        safe_print("[CRITICAL ERROR]")
+        safe_print(error)
+        raise SystemExit(1) from error
 
 
-# ───────────────────────────────────────────────────
 if __name__ == "__main__":
     main()

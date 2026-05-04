@@ -1,3 +1,10 @@
+"""Legacy CLI/Flask prototype entry point.
+
+The supported AURA web_v2 runtime starts from ``run_aura.py`` and serves
+``api.api_server:app``. This file remains only for historical CLI/Flask
+experiments and is not part of the current startup path.
+"""
+
 import brain.core_ai
 from config.settings import APP_NAME, VERSION
 from voice.text_to_speech import speak, stop_speaking
