@@ -646,9 +646,46 @@ body[data-panel-open="true"] .workspace__body {
 
 .conversation-thread {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   align-content: start;
   min-height: min-content;
+}
+
+.welcome-card {
+  max-width: min(760px, 100%);
+  margin: clamp(24px, 8vh, 86px) auto 0;
+  padding: 26px;
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(126, 214, 255, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(126, 214, 255, 0.14), transparent 36%),
+    rgba(255, 255, 255, 0.025);
+  display: grid;
+  gap: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.welcome-card h3 {
+  font-size: clamp(1.42rem, 2vw, 2rem);
+  letter-spacing: -0.04em;
+}
+
+.welcome-card__hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.welcome-card__hints span {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(126, 214, 255, 0.16);
+  background: rgba(126, 214, 255, 0.055);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
 }
 
 .message-row {
@@ -666,7 +703,7 @@ body[data-panel-open="true"] .workspace__body {
 
 .message-card {
   max-width: min(860px, 90%);
-  padding: 17px 19px;
+  padding: 18px 20px;
   border: 1px solid rgba(126, 214, 255, 0.14);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.02)),
@@ -689,6 +726,14 @@ body[data-panel-open="true"] .workspace__body {
   align-items: center;
   font-size: 0.84rem;
   color: var(--text-muted);
+}
+
+.message-card__meta-right {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .message-card__label {
@@ -730,10 +775,23 @@ body[data-panel-open="true"] .workspace__body {
 }
 
 .message-action-button:hover,
-.message-action-button.is-active {
+.message-action-button.is-active,
+.message-action-button.is-success {
   color: var(--cyan-bright);
   border-color: rgba(126, 214, 255, 0.32);
   background: rgba(126, 214, 255, 0.08);
+}
+
+.message-action-button.is-success {
+  color: var(--green);
+  border-color: rgba(121, 224, 170, 0.32);
+  background: rgba(121, 224, 170, 0.08);
+}
+
+.message-action-button.is-speaking {
+  color: var(--gold);
+  border-color: rgba(255, 213, 111, 0.34);
+  background: rgba(255, 213, 111, 0.08);
 }
 
 @keyframes cardRise {
@@ -824,6 +882,8 @@ body[data-panel-open="true"] .workspace__body {
   font-family: "IBM Plex Mono", monospace;
   font-size: 0.84rem;
   line-height: 1.6;
+  tab-size: 2;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 .document-card {
@@ -919,11 +979,21 @@ body[data-panel-open="true"] .workspace__body {
 .action-plan-card {
   display: grid;
   gap: 14px;
-  padding: 16px;
+  padding: 17px;
+  border-radius: var(--radius-lg);
   border: 1px solid rgba(126, 214, 255, 0.18);
   background:
     radial-gradient(circle at top left, rgba(126, 214, 255, 0.12), transparent 34%),
     rgba(255, 255, 255, 0.025);
+}
+
+.action-plan-card--blocked,
+.action-plan-card--failed {
+  border-color: rgba(255, 123, 143, 0.24);
+}
+
+.action-plan-card--interrupted {
+  border-color: rgba(255, 213, 111, 0.25);
 }
 
 .action-plan-card__head {
@@ -968,9 +1038,21 @@ body[data-panel-open="true"] .workspace__body {
   color: var(--green);
 }
 
-.action-plan-status--failed {
+.action-plan-status--approved,
+.action-plan-status--executing {
+  border-color: rgba(255, 213, 111, 0.32);
+  color: var(--gold);
+}
+
+.action-plan-status--failed,
+.action-plan-status--blocked {
   border-color: rgba(255, 93, 107, 0.32);
   color: var(--red);
+}
+
+.action-plan-status--interrupted {
+  border-color: rgba(255, 213, 111, 0.32);
+  color: var(--gold);
 }
 
 .action-steps {
@@ -1009,9 +1091,25 @@ body[data-panel-open="true"] .workspace__body {
   color: var(--green);
 }
 
-.action-step--failed .action-step__marker {
+.action-step--approved .action-step__marker,
+.action-step--executing .action-step__marker {
+  border-color: rgba(255, 213, 111, 0.34);
+  color: var(--gold);
+}
+
+.action-step--executing .action-step__marker {
+  animation: actionStepPulse 1.2s ease-in-out infinite;
+}
+
+.action-step--failed .action-step__marker,
+.action-step--blocked .action-step__marker {
   border-color: rgba(255, 93, 107, 0.36);
   color: var(--red);
+}
+
+.action-step--interrupted .action-step__marker {
+  border-color: rgba(255, 213, 111, 0.36);
+  color: var(--gold);
 }
 
 .action-step__details {
@@ -1019,8 +1117,48 @@ body[data-panel-open="true"] .workspace__body {
   gap: 4px;
 }
 
+.action-step__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .action-step__details strong {
   color: var(--text-primary);
+}
+
+.action-step__status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(126, 214, 255, 0.14);
+  color: var(--text-secondary);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.action-step__status--success {
+  color: var(--green);
+  border-color: rgba(121, 224, 170, 0.24);
+}
+
+.action-step__status--approved,
+.action-step__status--executing,
+.action-step__status--interrupted {
+  color: var(--gold);
+  border-color: rgba(255, 213, 111, 0.24);
+}
+
+.action-step__status--failed,
+.action-step__status--blocked {
+  color: var(--red);
+  border-color: rgba(255, 123, 143, 0.24);
 }
 
 .action-step__details span,
@@ -1030,6 +1168,24 @@ body[data-panel-open="true"] .workspace__body {
   color: var(--text-muted);
   line-height: 1.55;
   font-size: 0.84rem;
+}
+
+.action-step__reason {
+  color: var(--text-secondary) !important;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 123, 143, 0.16);
+  background: rgba(255, 123, 143, 0.055);
+}
+
+@keyframes actionStepPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(255, 213, 111, 0);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(255, 213, 111, 0.18);
+  }
 }
 
 .action-suggestions {
@@ -1053,6 +1209,11 @@ body[data-panel-open="true"] .workspace__body {
 .automation-warning--pending {
   border-color: rgba(242, 196, 107, 0.34);
   background: rgba(242, 196, 107, 0.07);
+}
+
+.automation-warning--blocked {
+  border-color: rgba(255, 123, 143, 0.28);
+  background: rgba(255, 123, 143, 0.07);
 }
 
 .automation-warning p {
@@ -1397,11 +1558,11 @@ body[data-panel-open="true"] .workspace__body {
   cursor: pointer;
   will-change: top, left, width, height, transform, filter, opacity;
   transition:
-    top 0.68s var(--orb-ease) 0.14s,
-    left 0.68s var(--orb-ease) 0.14s,
-    transform 0.68s var(--orb-ease) 0.14s,
-    width 0.62s var(--orb-soft-ease) 0.1s,
-    height 0.62s var(--orb-soft-ease) 0.1s,
+    top 0.72s var(--orb-ease) 0.12s,
+    left 0.72s var(--orb-ease) 0.12s,
+    transform 0.72s var(--orb-ease) 0.12s,
+    width 0.64s var(--orb-soft-ease) 0.1s,
+    height 0.64s var(--orb-soft-ease) 0.1s,
     opacity 0.3s ease,
     filter 0.3s ease;
 }
@@ -1754,10 +1915,25 @@ body[data-orb-layout="floating"] .assistant-orb {
   width: 84px;
   height: 84px;
   transform: translate(0, 0);
+  filter: drop-shadow(0 18px 34px rgba(0, 0, 0, 0.34));
+}
+
+body[data-orb-layout="floating"] .assistant-orb__meta {
+  transform: translateY(-2px);
+  opacity: 0.86;
+}
+
+body[data-orb-layout="left"] .assistant-orb__meta,
+body[data-orb-layout="center"] .assistant-orb__meta {
+  opacity: 0.95;
 }
 
 body[data-assistant-state="idle"] {
   --orb-color: var(--cyan);
+}
+
+body[data-assistant-state="idle"] .assistant-orb__shell::before {
+  animation-duration: 7.2s;
 }
 
 body[data-assistant-state="listening"] {
@@ -1808,6 +1984,10 @@ body[data-assistant-state="analyzing"] .assistant-orb__core {
   animation: orbAnalyze 1.8s ease-in-out infinite;
 }
 
+body[data-assistant-state="analyzing"] .assistant-orb__halo--outer {
+  animation-duration: 2s;
+}
+
 body[data-assistant-state="thinking"] .assistant-orb__shell::after {
   animation-duration: 3.1s;
   opacity: 0.76;
@@ -1815,6 +1995,10 @@ body[data-assistant-state="thinking"] .assistant-orb__shell::after {
 
 body[data-assistant-state="thinking"] .assistant-orb__core {
   animation: orbThink 2.6s ease-in-out infinite;
+}
+
+body[data-assistant-state="thinking"] .assistant-orb__halo--mid {
+  animation-duration: 2.4s;
 }
 
 body[data-assistant-state="responding"] .assistant-orb__shell::before {

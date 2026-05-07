@@ -45,6 +45,7 @@ class OSAutomationTests(unittest.TestCase):
                 "sensitive_detected": False,
                 "candidate_element": {"kind": "input_field", "label": "active editor"},
                 "ui_elements": [],
+                "validation_reason": "Screen context observed.",
             },
         )
         self.screen_mock = self.screen_patch.start()
@@ -100,8 +101,15 @@ class OSAutomationTests(unittest.TestCase):
 
         self.assertTrue(result["success"])
         self.assertEqual(result["status"], "typed")
-        fake.write.assert_called_once_with("hello", interval=0)
-        self.screen_mock.assert_called_with("notepad", "type_text")
+        fake.write.assert_called_once_with("hello", interval=os_automation.TYPE_CHARACTER_INTERVAL_SECONDS)
+        self.screen_mock.assert_called_with("notepad", "type_text", active_window="Untitled - Notepad")
+        self.assertIn("screen_context", result)
+        self.assertTrue(result["screen_validation"]["allowed"])
+        self.assertEqual(result["control_flow"]["state"], "success")
+        self.assertEqual(
+            [transition["state"] for transition in result["control_flow"]["transitions"]],
+            ["pending", "approved", "executing", "success"],
+        )
 
     def test_sensitive_screen_blocks_before_typing(self):
         self.screen_mock.return_value = {
@@ -116,6 +124,58 @@ class OSAutomationTests(unittest.TestCase):
 
         self.assertFalse(result["success"])
         self.assertEqual(result["status"], "sensitive_screen_blocked")
+        self.assertIn("screen_context", result)
+        self.assertFalse(result["screen_validation"]["allowed"])
+        fake.write.assert_not_called()
+
+    def test_login_screen_blocks_before_typing(self):
+        self.screen_mock.return_value = {
+            "success": True,
+            "status": "observed",
+            "sensitive_detected": True,
+            "visible_text": "Login password OTP",
+            "ui_elements": [{"kind": "input_field", "label": "Password"}],
+        }
+        fake = OSAutoFakePyAutoGUI("Google - Chrome")
+        with patch.object(os_automation, "_pyautogui", return_value=fake):
+            result = os_automation.type_text("hello", "chrome")
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["status"], "sensitive_screen_blocked")
+        fake.write.assert_not_called()
+
+    def test_screen_observation_failure_blocks_control(self):
+        self.screen_mock.return_value = {
+            "success": False,
+            "status": "ocr_unavailable",
+            "message": "OCR unavailable.",
+            "validation_reason": "Screen observation failed.",
+        }
+        fake = OSAutoFakePyAutoGUI("Untitled - Notepad")
+        with patch.object(os_automation, "_pyautogui", return_value=fake):
+            result = os_automation.type_text("hello", "notepad")
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["status"], "screen_context_unavailable")
+        self.assertFalse(result["screen_validation"]["allowed"])
+        fake.write.assert_not_called()
+
+    def test_missing_editable_ui_blocks_typing(self):
+        self.screen_mock.return_value = {
+            "success": True,
+            "status": "observed",
+            "sensitive_detected": False,
+            "candidate_element": None,
+            "ui_elements": [{"kind": "button", "label": "Save"}],
+            "validation_reason": "Screen context observed.",
+        }
+        fake = OSAutoFakePyAutoGUI("Google - Chrome")
+        with patch.object(os_automation, "_pyautogui", return_value=fake):
+            result = os_automation.type_text("hello", "chrome")
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["status"], "expected_ui_not_found")
+        self.assertFalse(result["screen_validation"]["allowed"])
         fake.write.assert_not_called()
 
     def test_stop_flag_blocks_control(self):
@@ -125,7 +185,8 @@ class OSAutomationTests(unittest.TestCase):
             result = os_automation.type_text("hello", "notepad")
 
         self.assertFalse(result["success"])
-        self.assertEqual(result["status"], "stopped")
+        self.assertEqual(result["status"], "interrupted")
+        self.assertEqual(result["control_flow"]["state"], "interrupted")
         fake.write.assert_not_called()
 
     def test_stop_interrupts_typing_between_chunks(self):
@@ -140,18 +201,19 @@ class OSAutomationTests(unittest.TestCase):
             result = os_automation.type_text(long_text, "notepad")
 
         self.assertFalse(result["success"])
-        self.assertEqual(result["status"], "stopped")
+        self.assertEqual(result["status"], "interrupted")
+        self.assertEqual(result["control_flow"]["state"], "interrupted")
         self.assertEqual(fake.write.call_count, 1)
 
     def test_stop_interrupts_key_hotkey_and_scroll(self):
         fake = OSAutoFakePyAutoGUI("Untitled - Notepad")
         with patch.object(os_automation, "_pyautogui", return_value=fake):
             os_automation.request_stop()
-            self.assertEqual(os_automation.press_key("enter", "notepad")["status"], "stopped")
+            self.assertEqual(os_automation.press_key("enter", "notepad")["status"], "interrupted")
             os_automation.request_stop()
-            self.assertEqual(os_automation.hotkey(["ctrl", "a"], "notepad")["status"], "stopped")
+            self.assertEqual(os_automation.hotkey(["ctrl", "a"], "notepad")["status"], "interrupted")
             os_automation.request_stop()
-            self.assertEqual(os_automation.scroll(3, "notepad")["status"], "stopped")
+            self.assertEqual(os_automation.scroll(3, "notepad")["status"], "interrupted")
 
         fake.press.assert_not_called()
         fake.hotkey.assert_not_called()
@@ -168,7 +230,58 @@ class OSAutomationTests(unittest.TestCase):
         lines = [" ".join(str(part) for part in call.args) for call in print_mock.call_args_list]
         self.assertTrue(any("[OS ACTION] type_text" in line and "success" in line for line in lines))
         self.assertTrue(any("[OS BLOCKED] sensitive content" in line for line in lines))
-        self.assertTrue(any("[OS STOPPED] user interrupt" in line for line in lines))
+        self.assertTrue(any("[OS INTERRUPTED] user interrupt" in line for line in lines))
+
+    def test_duplicate_control_action_is_blocked_while_active(self):
+        fake = OSAutoFakePyAutoGUI("Untitled - Notepad")
+        nested_results = []
+
+        def nested_type_attempt(*_args, **_kwargs):
+            nested_results.append(os_automation.type_text("nested", "notepad"))
+
+        fake.write.side_effect = nested_type_attempt
+        with patch.object(os_automation, "_pyautogui", return_value=fake):
+            result = os_automation.type_text("hello", "notepad")
+
+        self.assertTrue(result["success"])
+        self.assertEqual(fake.write.call_count, 1)
+        self.assertEqual(nested_results[0]["status"], "automation_busy")
+        self.assertEqual(nested_results[0]["control_flow"]["state"], "blocked")
+
+    def test_focus_change_during_typing_interrupts_action(self):
+        fake = OSAutoFakePyAutoGUI("Untitled - Notepad")
+        titles = [
+            "Untitled - Notepad",
+            "Untitled - Notepad",
+            "Calculator",
+        ]
+
+        def active_window_sequence():
+            title = titles.pop(0) if titles else "Calculator"
+            fake.active = OSAutoFakeWindow(title)
+            return fake.active
+
+        fake.getActiveWindow = Mock(side_effect=active_window_sequence)
+        with patch.object(os_automation, "_pyautogui", return_value=fake):
+            result = os_automation.type_text("hello", "notepad")
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["status"], "focus_changed")
+        self.assertEqual(result["control_flow"]["state"], "interrupted")
+        self.assertEqual(fake.write.call_count, 1)
+
+    def test_failed_execution_does_not_retry_or_repeat_typing(self):
+        fake = OSAutoFakePyAutoGUI("Untitled - Notepad")
+        fake.write.side_effect = RuntimeError("keyboard backend failed")
+
+        with patch.object(os_automation, "_pyautogui", return_value=fake):
+            result = os_automation.type_text("hello", "notepad")
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["status"], "type_failed")
+        self.assertEqual(result["control_flow"]["state"], "failed")
+        self.assertTrue(result["single_execution"])
+        self.assertEqual(fake.write.call_count, 1)
 
     def test_pyautogui_not_directly_exposed_and_no_shell(self):
         self.assertNotIn("pyautogui", os_automation.__all__)

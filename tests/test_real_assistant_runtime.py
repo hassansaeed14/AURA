@@ -47,6 +47,28 @@ class RealAssistantRuntimeTests(unittest.TestCase):
         self.assertIn("function speakMessage", script)
         self.assertIn("window.speechSynthesis.speak", script)
 
+    def test_web_v2_polish_labels_and_action_cards_stay_truthful(self):
+        html = (WEB_V2 / "aura.html").read_text(encoding="utf-8")
+        script = (WEB_V2 / "app.js").read_text(encoding="utf-8")
+        styles = (WEB_V2 / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn("Limited response", script)
+        self.assertIn("function actionStatusLabel", script)
+        self.assertIn("function actionStatusMarker", script)
+        self.assertIn("Approval required. AURA will not type, press keys, or scroll", script)
+        self.assertIn("function buildWelcomeCard", script)
+        self.assertIn("messageTextForControls", script)
+        self.assertIn(".welcome-card", styles)
+        self.assertIn(".automation-warning--blocked", styles)
+        self.assertIn(".message-action-button.is-success", styles)
+
+        combined = "\n".join([html, script])
+        self.assertNotIn("Fallback result", combined)
+        self.assertNotIn("fallback path", combined)
+        self.assertNotIn("degraded_assistant", combined)
+        self.assertNotIn("Invitation required", combined)
+        self.assertNotIn("click, or scroll", combined)
+
     def test_tts_toggle_persists_without_forcing_text_chat_speech(self):
         script = (WEB_V2 / "app.js").read_text(encoding="utf-8")
 

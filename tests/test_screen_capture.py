@@ -39,6 +39,29 @@ class ScreenCaptureTests(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertEqual(result["visible_text"], "Search AI")
         self.assertEqual(result["ocr_items"][0]["bbox"]["x"], 10)
+        self.assertGreaterEqual(result["average_confidence"], 80)
+        self.assertEqual(result["min_confidence"], screen_capture.MIN_OCR_CONFIDENCE)
+
+    def test_extract_ocr_ignores_low_confidence_noise(self):
+        fake_tesseract = types.SimpleNamespace(
+            Output=types.SimpleNamespace(DICT="dict"),
+            image_to_data=Mock(
+                return_value={
+                    "text": ["|||", "Search", "password", "."],
+                    "conf": ["93", "21", "32", "99"],
+                    "left": [1, 10, 80, 0],
+                    "top": [1, 20, 20, 0],
+                    "width": [5, 60, 70, 0],
+                    "height": [5, 18, 18, 0],
+                }
+            ),
+        )
+        with patch.dict(sys.modules, {"pytesseract": fake_tesseract}):
+            result = screen_capture.extract_ocr(Image.new("RGB", (100, 50), "white"))
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["visible_text"], "")
+        self.assertEqual(result["ocr_items"], [])
 
     def test_detect_ui_elements_finds_buttons_inputs_and_search(self):
         items = [
@@ -53,6 +76,20 @@ class ScreenCaptureTests(unittest.TestCase):
         self.assertIn("search_bar", kinds)
         self.assertIn("button", kinds)
         self.assertIn("input_field", kinds)
+
+    def test_detect_ui_elements_groups_search_phrase(self):
+        items = [
+            {"text": "Search", "bbox": {"x": 10, "y": 10, "width": 60, "height": 20}, "confidence": 91},
+            {"text": "or", "bbox": {"x": 76, "y": 10, "width": 16, "height": 20}, "confidence": 89},
+            {"text": "type", "bbox": {"x": 98, "y": 10, "width": 35, "height": 20}, "confidence": 92},
+            {"text": "URL", "bbox": {"x": 140, "y": 10, "width": 36, "height": 20}, "confidence": 94},
+        ]
+
+        elements = screen_capture.detect_ui_elements(items, (600, 300))
+
+        self.assertTrue(
+            any(item["kind"] == "search_bar" and "Search or type URL" in item["label"] for item in elements)
+        )
 
     def test_sensitive_screen_text_detection(self):
         self.assertTrue(screen_capture.detect_sensitive_screen_text("Checkout payment password"))
@@ -75,8 +112,28 @@ class ScreenCaptureTests(unittest.TestCase):
             result = screen_capture.screen_context_for_automation("notepad", "type_text")
 
         self.assertTrue(result["success"])
-        self.assertEqual(result["candidate_element"]["kind"], "input_field")
+        self.assertEqual(result["candidate_element"]["kind"], "editor_area")
         self.assertTrue(result["confirmation_required"])
+
+    def test_screen_context_does_not_guess_generic_input_for_chrome(self):
+        with patch.object(
+            screen_capture,
+            "observe_screen",
+            return_value={
+                "success": True,
+                "status": "observed",
+                "size": {"width": 1000, "height": 600},
+                "visible_text": "",
+                "ui_elements": [],
+                "sensitive_detected": False,
+                "candidate_element": None,
+            },
+        ):
+            result = screen_capture.screen_context_for_automation("chrome", "type_text", active_window="Chrome")
+
+        self.assertTrue(result["success"])
+        self.assertIsNone(result["candidate_element"])
+        self.assertTrue(result["candidate_required"])
 
 
 if __name__ == "__main__":

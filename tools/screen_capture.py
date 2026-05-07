@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 
-MIN_OCR_CONFIDENCE = 35.0
+MIN_OCR_CONFIDENCE = 55.0
+MIN_UI_CONFIDENCE = 50.0
 BUTTON_KEYWORDS = {
     "ok",
     "cancel",
@@ -36,13 +38,25 @@ SENSITIVE_SCREEN_KEYWORDS = {
     "banking",
     "payment",
     "checkout",
+    "paypal",
+    "stripe",
     "password",
+    "passcode",
     "otp",
+    "one time password",
     "login",
+    "log in",
     "sign in",
     "credit card",
+    "debit card",
+    "card number",
+    "cvv",
+    "pin",
     "credentials",
+    "secret key",
+    "api key",
 }
+EDITOR_APP_NAMES = {"notepad", "vs code"}
 
 
 @dataclass
@@ -156,6 +170,29 @@ def _parse_confidence(value: Any) -> float:
         return -1.0
 
 
+def _clean_ocr_text(value: Any) -> str:
+    text = str(value or "").replace("\u00a0", " ").replace("\u2022", " ")
+    text = re.sub(r"[\x00-\x1f\x7f]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    text = text.strip("|_~`^•·")
+    return text
+
+
+def _is_noise_text(text: str) -> bool:
+    cleaned = _clean_ocr_text(text)
+    if not cleaned:
+        return True
+    if len(cleaned) == 1 and not cleaned.isalnum():
+        return True
+    if not re.search(r"[A-Za-z0-9]", cleaned):
+        return True
+    if len(cleaned) <= 2 and not cleaned.isalnum():
+        return True
+    if re.fullmatch(r"[\W_]+", cleaned):
+        return True
+    return False
+
+
 def extract_ocr(image: Any) -> Dict[str, Any]:
     try:
         import pytesseract  # type: ignore
@@ -167,9 +204,9 @@ def extract_ocr(image: Any) -> Dict[str, Any]:
         items: List[OCRItem] = []
         count = len(data.get("text", []))
         for index in range(count):
-            text = str(data.get("text", [""])[index] or "").strip()
+            text = _clean_ocr_text(data.get("text", [""])[index])
             confidence = _parse_confidence(data.get("conf", ["-1"])[index])
-            if not text or confidence < MIN_OCR_CONFIDENCE:
+            if _is_noise_text(text) or confidence < MIN_OCR_CONFIDENCE:
                 continue
             item = OCRItem(
                 text=text,
@@ -183,12 +220,15 @@ def extract_ocr(image: Any) -> Dict[str, Any]:
             )
             items.append(item)
         visible_text = " ".join(item.text for item in items).strip()
+        average_confidence = round(sum(item.confidence for item in items) / len(items), 2) if items else 0.0
         return {
             "success": True,
             "status": "ocr_complete",
             "message": "OCR completed.",
             "visible_text": visible_text,
             "ocr_items": [item.to_dict() for item in items],
+            "average_confidence": average_confidence,
+            "min_confidence": MIN_OCR_CONFIDENCE,
         }
     except Exception as error:
         return _safe_error("OCR failed for the captured screen.", error).to_dict()
@@ -205,7 +245,7 @@ def _bbox_from_item(item: Dict[str, Any]) -> Tuple[int, int, int, int]:
 
 
 def _item_text(item: Dict[str, Any]) -> str:
-    return str(item.get("text") or "").strip()
+    return _clean_ocr_text(item.get("text"))
 
 
 def _item_confidence(item: Dict[str, Any]) -> float:
@@ -213,22 +253,71 @@ def _item_confidence(item: Dict[str, Any]) -> float:
 
 
 def _label_matches(label: str, keywords: Iterable[str]) -> bool:
-    lowered = label.lower()
-    return any(keyword in lowered for keyword in keywords)
+    lowered = re.sub(r"\s+", " ", str(label or "").lower()).strip()
+    return any(re.search(rf"(?<![a-z0-9]){re.escape(keyword)}(?![a-z0-9])", lowered) for keyword in keywords)
 
 
 def detect_sensitive_screen_text(visible_text: str | None) -> bool:
     return _label_matches(str(visible_text or ""), SENSITIVE_SCREEN_KEYWORDS)
 
 
+def _group_ocr_lines(ocr_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    items = [
+        item
+        for item in ocr_items
+        if _item_text(item)
+        and not _is_noise_text(_item_text(item))
+        and _item_confidence(item) >= MIN_UI_CONFIDENCE
+    ]
+    items.sort(key=lambda item: (_bbox_from_item(item)[1], _bbox_from_item(item)[0]))
+    lines: List[List[Dict[str, Any]]] = []
+    for item in items:
+        x, y, _width, height = _bbox_from_item(item)
+        midpoint = y + (height / 2)
+        placed = False
+        for line in lines:
+            _, line_y, _, line_height = _bbox_from_item(line[0])
+            line_midpoint = line_y + (line_height / 2)
+            if abs(midpoint - line_midpoint) <= max(10, int(max(height, line_height) * 0.75)):
+                line.append(item)
+                placed = True
+                break
+        if not placed:
+            lines.append([item])
+
+    grouped: List[Dict[str, Any]] = []
+    for line in lines:
+        line.sort(key=lambda item: _bbox_from_item(item)[0])
+        text = " ".join(_item_text(item) for item in line if _item_text(item)).strip()
+        if not text:
+            continue
+        x_values = [_bbox_from_item(item)[0] for item in line]
+        y_values = [_bbox_from_item(item)[1] for item in line]
+        right_values = [_bbox_from_item(item)[0] + _bbox_from_item(item)[2] for item in line]
+        bottom_values = [_bbox_from_item(item)[1] + _bbox_from_item(item)[3] for item in line]
+        grouped.append(
+            {
+                "text": text,
+                "bbox": {
+                    "x": min(x_values),
+                    "y": min(y_values),
+                    "width": max(right_values) - min(x_values),
+                    "height": max(bottom_values) - min(y_values),
+                },
+                "confidence": round(sum(_item_confidence(item) for item in line) / len(line), 2),
+            }
+        )
+    return grouped
+
+
 def detect_ui_elements(ocr_items: List[Dict[str, Any]], image_size: Tuple[int, int] | None = None) -> List[Dict[str, Any]]:
     elements: List[UIElement] = []
-    for item in ocr_items:
+    for item in [*ocr_items, *_group_ocr_lines(ocr_items)]:
         label = _item_text(item)
-        if not label:
+        confidence = _item_confidence(item)
+        if not label or _is_noise_text(label) or confidence < MIN_UI_CONFIDENCE:
             continue
         bbox = _bbox_from_item(item)
-        confidence = _item_confidence(item)
         lowered = label.lower()
         width = bbox[2]
         height = bbox[3]
@@ -240,21 +329,12 @@ def detect_ui_elements(ocr_items: List[Dict[str, Any]], image_size: Tuple[int, i
             kind = "search_bar" if "search" in lowered or "find" in lowered else "input_field"
             elements.append(UIElement(kind, label, bbox, confidence, "input/search label"))
 
-        if width > 180 and height <= 48 and len(label) >= 8:
-            elements.append(UIElement("input_field", label, bbox, max(confidence, 45.0), "wide text-heavy area"))
+        if re.search(r"\b(search|search or type|address|url|find)\b", lowered):
+            elements.append(UIElement("search_bar", label, bbox, confidence, "search/address text"))
 
-    if image_size and not elements:
-        width, height = image_size
-        if width and height:
-            elements.append(
-                UIElement(
-                    "input_field",
-                    "active app editing area",
-                    (int(width * 0.08), int(height * 0.18), int(width * 0.84), int(height * 0.7)),
-                    35.0,
-                    "fallback editable region estimate",
-                )
-            )
+        if width > 180 and height <= 56 and len(label) >= 8:
+            kind = "search_bar" if any(token in lowered for token in ("search", "url", "address")) else "input_field"
+            elements.append(UIElement(kind, label, bbox, max(confidence, MIN_UI_CONFIDENCE), "wide text-heavy area"))
 
     deduped: List[UIElement] = []
     seen = set()
@@ -333,32 +413,50 @@ def observe_screen() -> Dict[str, Any]:
     return observation.to_dict()
 
 
-def screen_context_for_automation(target_app: str | None, action_type: str) -> Dict[str, Any]:
+def screen_context_for_automation(
+    target_app: str | None,
+    action_type: str,
+    *,
+    active_window: str | None = None,
+) -> Dict[str, Any]:
     observation = observe_screen()
     if not observation.get("success"):
         observation["target_app"] = target_app
         observation["action_type"] = action_type
+        observation["active_window"] = active_window
         observation["candidate_required"] = False
+        observation["validation_reason"] = "Screen observation failed, so automation must not continue blindly."
         return observation
 
     candidate = observation.get("candidate_element")
-    if not candidate and str(target_app or "").lower() in {"notepad", "vs code"} and action_type == "type_text":
+    normalized_app = str(target_app or "").lower().strip()
+    active_title = str(active_window or "").lower()
+    editor_active = normalized_app in EDITOR_APP_NAMES and (
+        not active_title
+        or normalized_app in active_title
+        or (normalized_app == "vs code" and ("visual studio code" in active_title or active_title.endswith("code")))
+    )
+    if not candidate and editor_active and action_type == "type_text":
         width = int((observation.get("size") or {}).get("width") or 0)
         height = int((observation.get("size") or {}).get("height") or 0)
         candidate = {
-            "kind": "input_field",
+            "kind": "editor_area",
             "label": "active editor area",
             "bbox": {"x": int(width * 0.05), "y": int(height * 0.12), "width": int(width * 0.9), "height": int(height * 0.78)},
-            "confidence": 40.0,
-            "reason": "supported editor app active",
+            "confidence": MIN_UI_CONFIDENCE,
+            "reason": "supported editor app active after active-window validation",
         }
         observation["candidate_element"] = candidate
         observation.setdefault("ui_elements", []).append(candidate)
 
     observation["target_app"] = target_app
     observation["action_type"] = action_type
+    observation["active_window"] = active_window
     observation["candidate_required"] = action_type == "type_text"
     observation["confirmation_required"] = True
+    observation["validation_reason"] = (
+        "Sensitive text detected." if observation.get("sensitive_detected") else "Screen context observed."
+    )
     return observation
 
 

@@ -101,6 +101,8 @@
     speechEnabled: readSpeechEnabled(),
     speechSynthesisSupported: Boolean(window.speechSynthesis && window.SpeechSynthesisUtterance),
     speakingMessageId: "",
+    speechCancelUntil: 0,
+    copiedMessageId: "",
     desktopVoicePollId: 0,
     wakeModeEnabled: false,
     presenceHideTimer: 0,
@@ -758,31 +760,31 @@
       setComposerStatus(delivery
         ? "Done. I've prepared it."
         : payload.degraded
-          ? "I couldn't complete that cleanly, but I still got you the best available result."
+          ? "Limited response, but I still got you the best available result."
           : "Done. I've handled that inside AURA.");
       updateWorkspaceSummary(delivery
         ? `${capitalize(delivery.documentType)} ready with a preview and direct downloads.`
         : actionPlan
           ? "AURA ran the controlled browser action plan and exposed each step clearly."
           : payload.degraded
-          ? "AURA stayed inside the workspace and finished with a fallback path."
+          ? "AURA stayed inside the workspace and used the safest limited path."
           : "AURA handled the work inside the workspace.");
       showPresence({
         mode: actionPlan ? "floating" : "docked",
-        eyebrow: actionPlan ? "Controlled browser action" : delivery ? "Work completed" : payload.degraded ? "Fallback result" : "Work completed",
+        eyebrow: actionPlan ? "Controlled browser action" : delivery ? "Work completed" : payload.degraded ? "Limited response" : "Work completed",
         title: delivery
           ? "Done. I've prepared it."
           : actionPlan
             ? "Action plan complete."
           : payload.degraded
-            ? "I couldn't complete that cleanly."
+            ? "Limited response."
             : "Done. I've handled that inside AURA.",
         text: delivery
           ? `Your ${delivery.documentType} is ready below with direct downloads and a preview.`
           : actionPlan
             ? "The browser action plan is shown below with exact step statuses."
             : payload.degraded
-            ? "I used the best available path and kept the work inside AURA."
+            ? "I used the safest available path and kept the work inside AURA."
             : "The result is ready here in the workspace.",
         duration: 2200,
       });
@@ -895,7 +897,8 @@
         const actionPlan = normalizeActionPlanPayload(payload);
         const actionSuggestions = normalizeActionSuggestions(payload);
         replyText = cleanAssistantReply(payload.reply || payload.content) || "I can't open that yet.";
-        state.currentTask.launchStatus = payload.action_status || payload.desktop_launch_status || (payload.execution_mode === "external_desktop" ? "opened" : "unknown");
+        const rawLaunchStatus = payload.action_status || payload.desktop_launch_status || (payload.execution_mode === "external_desktop" ? "opened" : "unknown");
+        state.currentTask.launchStatus = actionPlan?.status === "blocked" ? "blocked" : rawLaunchStatus;
         state.currentTask.launchMessage = replyText;
         state.currentTask.actionPlan = actionPlan;
         state.currentTask.actionSuggestions = actionSuggestions;
@@ -906,6 +909,8 @@
         const needsConfirmation = Boolean(payload.automation_confirmation_required)
           || Boolean(actionPlan?.confirmationRequired)
           || state.currentTask.launchStatus === "needs_confirmation";
+        const blockedForSafety = actionPlan?.status === "blocked"
+          || ["blocked", "critical_blocked"].includes(String(rawLaunchStatus || "").trim().toLowerCase());
 
         if (launched) {
           setAssistantState("responding", "external:desktop_launch_succeeded");
@@ -920,13 +925,24 @@
           });
         } else if (needsConfirmation) {
           setAssistantState("responding", "automation:confirmation_required");
-          setComposerStatus("Control approval is needed before AURA types or clicks.");
+          setComposerStatus("Control approval is needed before AURA types, presses keys, or scrolls.");
           updateWorkspaceSummary("AURA is waiting for your one-time approval before keyboard or mouse control.");
           showPresence({
             mode: "floating",
             eyebrow: externalModeLabel,
             title: "Approval needed before control.",
-            text: "AURA will not type, press keys, click, or scroll until you approve this action.",
+            text: "AURA will not type, press keys, or scroll until you approve this action.",
+            duration: 2600,
+          });
+        } else if (blockedForSafety) {
+          setAssistantState("responding", "external:safety_blocked");
+          setComposerStatus(replyText);
+          updateWorkspaceSummary("AURA blocked this action for safety.");
+          showPresence({
+            mode: "floating",
+            eyebrow: externalModeLabel,
+            title: "Blocked for safety.",
+            text: replyText,
             duration: 2600,
           });
         } else {
@@ -1105,9 +1121,39 @@
     }
 
     el.conversationThread.innerHTML = "";
+    if (!state.messages.length) {
+      el.conversationThread.appendChild(buildWelcomeCard());
+      return;
+    }
     state.messages.forEach((message) => {
       el.conversationThread.appendChild(buildMessageRow(message));
     });
+  }
+
+  function buildWelcomeCard() {
+    const card = document.createElement("section");
+    card.className = "welcome-card";
+
+    const eyebrow = document.createElement("p");
+    eyebrow.className = "eyebrow";
+    eyebrow.textContent = "AURA ready";
+
+    const title = document.createElement("h3");
+    title.textContent = "What should we handle first?";
+
+    const body = document.createElement("p");
+    body.textContent = "Ask a question, generate a document, or route a safe desktop/browser action. Voice is optional beta, not required.";
+
+    const hints = document.createElement("div");
+    hints.className = "welcome-card__hints";
+    ["Explain quantum computing", "Write assignment on AI", "Open Chrome and search AI trends"].forEach((value) => {
+      const chip = document.createElement("span");
+      chip.textContent = value;
+      hints.appendChild(chip);
+    });
+
+    card.append(eyebrow, title, body, hints);
+    return card;
   }
 
   function buildMessageRow(message) {
@@ -1128,9 +1174,7 @@
     label.textContent = message.role === "user" ? "You" : "AURA";
 
     const metaRight = document.createElement("div");
-    metaRight.style.display = "inline-flex";
-    metaRight.style.gap = "8px";
-    metaRight.style.alignItems = "center";
+    metaRight.className = "message-card__meta-right";
 
     if (message.badge) {
       const badge = document.createElement("span");
@@ -1172,8 +1216,9 @@
 
     const copy = document.createElement("button");
     copy.type = "button";
-    copy.className = "message-action-button";
-    copy.textContent = "Copy";
+    const isCopied = state.copiedMessageId === message.id;
+    copy.className = `message-action-button${isCopied ? " is-success" : ""}`;
+    copy.textContent = isCopied ? "Copied" : "Copy";
     copy.setAttribute("aria-label", "Copy AURA response");
     copy.addEventListener("click", () => {
       void copyMessageText(message, copy);
@@ -1184,7 +1229,7 @@
       const isSpeakingThis = state.speakingMessageId === message.id;
       const speak = document.createElement("button");
       speak.type = "button";
-      speak.className = `message-action-button${isSpeakingThis ? " is-active" : ""}`;
+      speak.className = `message-action-button${isSpeakingThis ? " is-active is-speaking" : ""}`;
       speak.textContent = isSpeakingThis ? "Stop" : "Speak";
       speak.setAttribute("aria-label", isSpeakingThis ? "Stop speaking this response" : "Speak this response");
       speak.addEventListener("click", () => {
@@ -1201,7 +1246,7 @@
   }
 
   async function copyMessageText(message, trigger) {
-    const text = String(message?.text || "").trim();
+    const text = messageTextForControls(message);
     if (!text) {
       return;
     }
@@ -1212,16 +1257,34 @@
         fallbackCopyText(text);
       }
       if (trigger) {
+        state.copiedMessageId = message.id || "";
         trigger.textContent = "Copied";
+        trigger.classList.add("is-success");
         window.setTimeout(() => {
-          trigger.textContent = "Copy";
-        }, 1200);
+          if (state.copiedMessageId === message.id) {
+            state.copiedMessageId = "";
+            renderConversation();
+          }
+        }, 1400);
       }
       setComposerStatus("Copied AURA's response.");
     } catch (_error) {
       fallbackCopyText(text);
       setComposerStatus("Copied AURA's response.");
     }
+  }
+
+  function messageTextForControls(message) {
+    const parts = [String(message?.text || "").trim()];
+    const delivery = message?.delivery;
+    if (delivery?.files?.length) {
+      parts.push(
+        delivery.files
+          .map((file) => `${String(file.format || "").toUpperCase()}: ${file.downloadUrl}`)
+          .join("\n")
+      );
+    }
+    return parts.filter(Boolean).join("\n\n").trim();
   }
 
   function fallbackCopyText(text) {
@@ -1266,11 +1329,22 @@
       }
     };
     utterance.onerror = (event) => {
+      const errorName = String(event?.error || "unknown error");
+      const intentionalStop = /interrupted|canceled|cancelled/i.test(errorName)
+        && Date.now() <= state.speechCancelUntil;
       state.speakingMessageId = "";
       syncAssistantModeChrome();
       renderConversation();
+      if (intentionalStop) {
+        setComposerStatus("Speech stopped.");
+        if (!state.requestInFlight && !state.recognitionActive) {
+          setAssistantState("idle", "tts:speech_stopped");
+          settleToIdleLayout();
+        }
+        return;
+      }
       setAssistantState("error", "tts:speech_error");
-      setComposerStatus(`Speech failed: ${event?.error || "unknown error"}`);
+      setComposerStatus(`Speech failed: ${errorName}`);
       resetToCalmIdle(1200);
     };
     window.speechSynthesis.speak(utterance);
@@ -1278,6 +1352,9 @@
 
   function stopSpeaking(eventName = "tts:stop") {
     if (window.speechSynthesis) {
+      if (state.speakingMessageId || window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+        state.speechCancelUntil = Date.now() + 900;
+      }
       window.speechSynthesis.cancel();
     }
     if (state.speakingMessageId) {
@@ -1575,7 +1652,7 @@
       delivery.topic ? `Topic: ${delivery.topic}` : "",
       delivery.files.length > 1 ? `${delivery.files.length} files ready` : "Single file ready",
     ].filter(Boolean);
-    meta.textContent = metaParts.join(" • ");
+    meta.textContent = metaParts.join(" | ");
 
     const chips = document.createElement("div");
     chips.className = "document-card__chips";
@@ -1584,7 +1661,7 @@
       delivery.files.length > 1 ? `${delivery.files.length} formats` : "",
       delivery.pageTarget ? `~${delivery.pageTarget} pages` : "",
       delivery.style ? `${capitalize(delivery.style)} style` : "",
-      delivery.includeReferences ? `References${delivery.citationStyle ? ` • ${String(delivery.citationStyle).toUpperCase()}` : ""}` : "",
+      delivery.includeReferences ? `References${delivery.citationStyle ? ` | ${String(delivery.citationStyle).toUpperCase()}` : ""}` : "",
     ].filter(Boolean).forEach((value) => {
       const chip = document.createElement("span");
       chip.className = "document-chip";
@@ -1644,20 +1721,47 @@
     }
     const confirmationRequired = Boolean(payload.automation_confirmation_required)
       || Boolean(rawPlan?.automation_confirmation_required);
-    const steps = rawSteps.map((step, index) => ({
-      id: String(step?.step_id || `step-${index + 1}`),
-      actionType: String(step?.action_type || "action").trim(),
-      label: String(step?.label || step?.message || `Step ${index + 1}`).trim(),
-      target: String(step?.target || "").trim(),
-      status: normalizeStepStatus(step?.status),
-      message: normalizeActionStepMessage(step?.message || step?.result?.message || "", confirmationRequired),
-      resultStatus: String(step?.result?.status || "").trim(),
-      recovered: Boolean(step?.result?.recovered),
-    }));
+    const steps = rawSteps.map((step, index) => {
+      const result = step?.result && typeof step.result === "object" ? step.result : {};
+      const screenValidation = result?.screen_validation && typeof result.screen_validation === "object"
+        ? result.screen_validation
+        : {};
+      const controlFlow = result?.control_flow && typeof result.control_flow === "object"
+        ? result.control_flow
+        : {};
+      const actionType = String(step?.action_type || "action").trim();
+      const rawStatus = step?.status || controlFlow.state || result.status || "pending";
+      const normalizedStatus = normalizeStepStatus(rawStatus);
+      const blockedReason = String(
+        result.error
+        || screenValidation.reason
+        || controlFlow.reason
+        || ""
+      ).trim();
+      return {
+        id: String(step?.step_id || `step-${index + 1}`),
+        actionType,
+        label: String(step?.label || step?.message || `Step ${index + 1}`).trim(),
+        target: String(step?.target || "").trim(),
+        status: actionType === "automation_critical_blocked" ? "blocked" : normalizedStatus,
+        message: normalizeActionStepMessage(step?.message || result.message || blockedReason, confirmationRequired),
+        resultStatus: actionType === "automation_critical_blocked"
+          ? "blocked"
+          : normalizeStepStatus(result.status || controlFlow.state || normalizedStatus),
+        blockedReason,
+        recovered: Boolean(result.recovered),
+        controlFlow,
+      };
+    });
+    const normalizedPlanStatus = normalizeStepStatus(payload.action_status || rawPlan?.status || "pending");
+    const hasBlockedStep = steps.some((step) => step.status === "blocked");
+    const planStatus = hasBlockedStep && normalizedPlanStatus === "failed"
+      ? "blocked"
+      : normalizedPlanStatus;
     return {
       planId: String(rawPlan?.plan_id || "").trim(),
       originalCommand: String(rawPlan?.original_command || "").trim(),
-      status: normalizeStepStatus(payload.action_status || rawPlan?.status || "pending"),
+      status: planStatus,
       success: Boolean(payload.action_success),
       confirmationRequired,
       automationControl: Boolean(payload.automation_control)
@@ -1689,19 +1793,69 @@
 
   function normalizeStepStatus(value) {
     const status = String(value || "pending").trim().toLowerCase();
-    if (["success", "completed", "opened", "searched"].includes(status)) {
+    if (["success", "completed", "opened", "searched", "typed", "key_pressed", "hotkey_pressed", "scrolled", "focused"].includes(status)) {
       return "success";
     }
-    if (["failed", "error", "unavailable", "launch_failed", "invalid_url", "invalid_query", "critical_blocked"].includes(status)) {
+    if (["approved", "confirmed"].includes(status)) {
+      return "approved";
+    }
+    if (["running", "executing"].includes(status)) {
+      return "executing";
+    }
+    if (["interrupted", "stopped", "focus_changed"].includes(status)) {
+      return "interrupted";
+    }
+    if ([
+      "blocked",
+      "critical_blocked",
+      "sensitive_screen_blocked",
+      "sensitive_window_blocked",
+      "wrong_active_window",
+      "expected_ui_not_found",
+      "screen_context_unavailable",
+      "automation_busy",
+      "unsupported",
+      "unsupported_key",
+      "unsupported_hotkey",
+    ].includes(status)) {
+      return "blocked";
+    }
+    if (["failed", "error", "unavailable", "launch_failed", "invalid_url", "invalid_query", "type_failed", "key_failed", "hotkey_failed", "scroll_failed"].includes(status)) {
       return "failed";
     }
-    if (["skipped"].includes(status)) {
-      return "skipped";
+    if (["needs_confirmation", "skipped", "pending"].includes(status)) {
+      return "pending";
     }
     return "pending";
   }
 
-  function buildActionPlanCard(actionPlan, suggestions = []) {
+  function actionStatusLabel(value) {
+    const labels = {
+      pending: "Pending",
+      approved: "Approved",
+      executing: "Executing",
+      success: "Success",
+      failed: "Failed",
+      interrupted: "Interrupted",
+      blocked: "Blocked",
+    };
+    return labels[normalizeStepStatus(value)] || "Pending";
+  }
+
+  function actionStatusMarker(value, index) {
+    const markers = {
+      pending: `${index + 1}`,
+      approved: "OK",
+      executing: "...",
+      success: "OK",
+      failed: "!",
+      interrupted: "II",
+      blocked: "NO",
+    };
+    return markers[normalizeStepStatus(value)] || `${index + 1}`;
+  }
+
+  function buildActionPlanCardLegacy(actionPlan, suggestions = []) {
     const card = document.createElement("section");
     card.className = "action-plan-card";
 
@@ -1730,7 +1884,7 @@
 
       const marker = document.createElement("span");
       marker.className = "action-step__marker";
-      marker.textContent = step.status === "success" ? "OK" : step.status === "failed" ? "!" : "…";
+      marker.textContent = step.status === "success" ? "OK" : step.status === "failed" ? "!" : "...";
 
       const details = document.createElement("div");
       details.className = "action-step__details";
@@ -1741,7 +1895,7 @@
         humanizeBadge(step.actionType),
         step.resultStatus ? humanizeBadge(step.resultStatus) : "",
         step.recovered ? "Recovered safely" : "",
-      ].filter(Boolean).join(" • ");
+      ].filter(Boolean).join(" | ");
       details.append(stepTitle, stepMeta);
       if (step.message) {
         const message = document.createElement("p");
@@ -1760,7 +1914,7 @@
 
       const warningText = document.createElement("p");
       warningText.textContent = actionPlan.confirmationRequired
-        ? "Keyboard/mouse control is pending. AURA will not type, press keys, click, or scroll until you approve this one action."
+        ? "Keyboard/mouse control is pending. AURA will not type, press keys, or scroll until you approve this one action."
         : "Controlled OS automation is visible and limited to whitelisted app windows.";
       warning.appendChild(warningText);
 
@@ -1787,6 +1941,136 @@
       actions.appendChild(stop);
       warning.appendChild(actions);
       card.appendChild(warning);
+    }
+    return card;
+  }
+
+  function buildActionPlanCard(actionPlan, suggestions = []) {
+    const card = document.createElement("section");
+    card.className = `action-plan-card action-plan-card--${actionPlan.status}`;
+
+    const head = document.createElement("div");
+    head.className = "action-plan-card__head";
+
+    const copy = document.createElement("div");
+    const eyebrow = document.createElement("p");
+    eyebrow.className = "action-plan-card__eyebrow";
+    eyebrow.textContent = actionPlan.automationControl ? "Controlled action plan" : "Action plan";
+    const title = document.createElement("p");
+    title.className = "action-plan-card__title";
+    title.textContent = actionPlan.originalCommand || "Planned action";
+    copy.append(eyebrow, title);
+
+    const status = document.createElement("span");
+    status.className = `action-plan-status action-plan-status--${actionPlan.status}`;
+    status.textContent = actionStatusLabel(actionPlan.status);
+    head.append(copy, status);
+
+    const list = document.createElement("ol");
+    list.className = "action-steps";
+    actionPlan.steps.forEach((step, index) => {
+      const item = document.createElement("li");
+      item.className = `action-step action-step--${step.status}`;
+
+      const marker = document.createElement("span");
+      marker.className = "action-step__marker";
+      marker.textContent = actionStatusMarker(step.status, index);
+
+      const details = document.createElement("div");
+      details.className = "action-step__details";
+      const stepHead = document.createElement("div");
+      stepHead.className = "action-step__head";
+      const stepTitle = document.createElement("strong");
+      stepTitle.textContent = step.label;
+      const stepStatus = document.createElement("span");
+      stepStatus.className = `action-step__status action-step__status--${step.status}`;
+      stepStatus.textContent = actionStatusLabel(step.status);
+      stepHead.append(stepTitle, stepStatus);
+
+      const stepMeta = document.createElement("span");
+      stepMeta.textContent = [
+        humanizeBadge(step.actionType),
+        step.resultStatus && step.resultStatus !== step.status ? actionStatusLabel(step.resultStatus) : "",
+        step.recovered ? "Recovered safely" : "",
+      ].filter(Boolean).join(" | ");
+      details.append(stepHead, stepMeta);
+
+      if (step.message) {
+        const message = document.createElement("p");
+        message.textContent = step.message;
+        details.appendChild(message);
+      }
+      if (step.blockedReason && step.blockedReason !== step.message) {
+        const reason = document.createElement("p");
+        reason.className = "action-step__reason";
+        reason.textContent = step.blockedReason;
+        details.appendChild(reason);
+      }
+
+      item.append(marker, details);
+      list.appendChild(item);
+    });
+
+    card.append(head, list);
+
+    const criticalBlocked = actionPlan.steps.some((step) => step.actionType === "automation_critical_blocked");
+    const visiblyBlocked = criticalBlocked
+      || ["blocked", "failed", "interrupted"].includes(actionPlan.status)
+      || actionPlan.steps.some((step) => ["blocked", "failed", "interrupted"].includes(step.status));
+
+    if (actionPlan.automationControl || criticalBlocked || visiblyBlocked) {
+      const warning = document.createElement("div");
+      warning.className = [
+        "automation-warning",
+        actionPlan.confirmationRequired ? "automation-warning--pending" : "",
+        visiblyBlocked ? "automation-warning--blocked" : "",
+      ].filter(Boolean).join(" ");
+
+      const warningText = document.createElement("p");
+      warningText.textContent = criticalBlocked
+        ? "Blocked for safety. AURA will not run password, payment, banking, deletion, or credential actions."
+        : actionPlan.confirmationRequired
+      ? "Approval required. AURA will not type, press keys, or scroll until you allow this one action."
+          : actionPlan.status === "interrupted"
+            ? "Control was interrupted. No further keyboard or mouse action will run."
+            : visiblyBlocked
+              ? "Control did not run because safety validation blocked or failed this path."
+              : "Controlled OS automation is limited to whitelisted app windows and visible step results.";
+      warning.appendChild(warningText);
+
+      const actions = document.createElement("div");
+      actions.className = "automation-warning__actions";
+      if (actionPlan.confirmationRequired && !criticalBlocked && !visiblyBlocked) {
+        const approve = document.createElement("button");
+        approve.type = "button";
+        approve.className = "link-button automation-confirm-button";
+        approve.textContent = "Allow control once";
+        approve.addEventListener("click", () => {
+          void approveAutomationControl(actionPlan);
+        });
+        actions.appendChild(approve);
+      }
+
+      if (actionPlan.automationControl && !actionPlan.confirmationRequired && ["pending", "approved", "executing"].includes(actionPlan.status)) {
+        const stop = document.createElement("button");
+        stop.type = "button";
+        stop.className = "link-button automation-stop-button";
+        stop.textContent = "Stop control";
+        stop.addEventListener("click", () => {
+          void stopAutomationControl();
+        });
+        actions.appendChild(stop);
+      }
+
+      if (actions.childElementCount) {
+        warning.appendChild(actions);
+      }
+      card.appendChild(warning);
+    }
+
+    const suggestionsBox = buildActionSuggestions(suggestions);
+    if (suggestionsBox) {
+      card.appendChild(suggestionsBox);
     }
     return card;
   }
@@ -3040,8 +3324,53 @@
   function humanizeBadge(value) {
     const text = String(value || "").replace(/[_-]+/g, " ").trim();
     const normalized = text.toLowerCase();
+    const direct = {
+      pending: "Pending",
+      approved: "Approved",
+      confirmed: "Approved",
+      executing: "Executing",
+      running: "Executing",
+      success: "Success",
+      completed: "Success",
+      failed: "Failed",
+      error: "Attention",
+      interrupted: "Interrupted",
+      stopped: "Interrupted",
+      blocked: "Blocked",
+      "critical blocked": "Blocked",
+      "needs confirmation": "Approval required",
+      "degraded assistant": "Limited response",
+      fallback: "Limited response",
+      "fallback llm": "Limited response",
+      "provider error": "Limited response",
+      "rate limited": "Limited response",
+      "action plan": "Action",
+      "external action": "Action",
+      "external desktop": "Action",
+      "os automation": "Control",
+      "automation control": "Control",
+      "automation confirm": "Approval",
+      "automation type": "Control",
+      "automation press key": "Control",
+      "automation hotkey": "Control",
+      "automation scroll": "Control",
+      "automation critical blocked": "Blocked",
+      "desktop open": "Open app",
+      "browser search": "Search",
+      "browser open url": "Open website",
+      "browser navigate url": "Open website",
+      "browser open result": "Open result",
+      "browser new tab": "New tab",
+      "browser rerun search": "Search",
+    };
+    if (direct[normalized]) {
+      return direct[normalized];
+    }
     if (["assistant llm", "fallback llm", "conversation llm", "casual local", "general", "chat"].includes(normalized)) {
       return "Assistant";
+    }
+    if (normalized.includes("degraded") || normalized.includes("fallback") || normalized.includes("provider")) {
+      return "Limited response";
     }
     if (normalized.includes("document")) {
       return "Document";

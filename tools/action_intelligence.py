@@ -646,8 +646,14 @@ def execute_action_plan(
                 time.sleep(ACTION_STEP_COOLDOWN_SECONDS)
             continue
 
+        failure_status = str(result.get("status") or "")
         failure_message = str(result.get("message") or "That step failed.").strip()
-        step.status = "pending" if str(result.get("status") or "") == "needs_confirmation" else "failed"
+        if failure_status == "needs_confirmation":
+            step.status = "pending"
+        elif failure_status in {"interrupted", "stopped", "focus_changed"}:
+            step.status = "interrupted"
+        else:
+            step.status = "failed"
         step.message = failure_message
         if failure_message and failure_message != running_message:
             feedback.append(failure_message)
@@ -659,7 +665,12 @@ def execute_action_plan(
             step.status = "skipped"
             step.message = "Skipped because an earlier step failed."
         failed_status = str((failed_step.get("result") or {}).get("status") or "")
-        plan.status = "needs_confirmation" if failed_status == "needs_confirmation" else "failed"
+        if failed_status == "needs_confirmation":
+            plan.status = "needs_confirmation"
+        elif failed_status in {"interrupted", "stopped", "focus_changed"}:
+            plan.status = "interrupted"
+        else:
+            plan.status = "failed"
     else:
         plan.status = "completed"
 
