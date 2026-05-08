@@ -7,6 +7,12 @@
 
   const WAKE_FALLBACK = "hey aura";
   const DEBUG_LOGS = localStorage.getItem("aura.debug") === "true";
+  const ICONS = {
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>',
+    copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"></path></svg>',
+    speaker: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h4l5 4V6L8 10H4z"></path><path d="M16 9a4 4 0 0 1 0 6"></path><path d="M18.5 6.5a8 8 0 0 1 0 11"></path></svg>',
+    stop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1.5"></rect></svg>',
+  };
   const STATE_COPY = {
     idle: {
       label: "Idle",
@@ -1281,8 +1287,7 @@
     copy.type = "button";
     const isCopied = state.copiedMessageId === message.id;
     copy.className = `message-action-button${isCopied ? " is-success" : ""}`;
-    copy.textContent = isCopied ? "Copied" : "Copy";
-    copy.setAttribute("aria-label", "Copy AURA response");
+    setIconButtonContent(copy, isCopied ? "check" : "copy", isCopied ? "Copied AURA response" : "Copy AURA response");
     copy.addEventListener("click", () => {
       void copyMessageText(message, copy);
     });
@@ -1293,8 +1298,11 @@
       const speak = document.createElement("button");
       speak.type = "button";
       speak.className = `message-action-button${isSpeakingThis ? " is-active is-speaking" : ""}`;
-      speak.textContent = isSpeakingThis ? "Stop" : "Speak";
-      speak.setAttribute("aria-label", isSpeakingThis ? "Stop speaking this response" : "Speak this response");
+      setIconButtonContent(
+        speak,
+        isSpeakingThis ? "stop" : "speaker",
+        isSpeakingThis ? "Stop speaking this response" : "Speak this response",
+      );
       speak.addEventListener("click", () => {
         if (state.speakingMessageId === message.id) {
           stopSpeaking("message:stop_clicked");
@@ -1306,6 +1314,23 @@
     }
 
     return actions;
+  }
+
+  function setIconButtonContent(button, iconName, label, visibleText = "") {
+    button.textContent = "";
+    button.setAttribute("aria-label", label);
+    button.setAttribute("title", label);
+
+    const glyph = document.createElement("span");
+    glyph.className = "icon-button__glyph";
+    glyph.setAttribute("aria-hidden", "true");
+    glyph.innerHTML = ICONS[iconName] || "";
+
+    const text = document.createElement("span");
+    text.className = visibleText ? "icon-button__text" : "sr-only";
+    text.textContent = visibleText || label;
+
+    button.append(glyph, text);
   }
 
   async function copyMessageText(message, trigger) {
@@ -1321,7 +1346,7 @@
       }
       if (trigger) {
         state.copiedMessageId = message.id || "";
-        trigger.textContent = "Copied";
+        setIconButtonContent(trigger, "check", "Copied AURA response");
         trigger.classList.add("is-success");
         window.setTimeout(() => {
           if (state.copiedMessageId === message.id) {

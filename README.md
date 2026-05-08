@@ -1,232 +1,188 @@
 # AURA
 
-## Autonomous Universal Responsive Assistant
+Autonomous Universal Responsive Assistant
 
-**A private JARVIS-style AI assistant system (NOT a chatbot).**
+AURA is a local-first, JARVIS-style assistant prototype that combines chat, document generation, controlled desktop actions, voice scaffolding, memory, and a safety-first execution model.
 
-AURA is being built as a real assistant system — one that can understand, decide, act, and improve through structured execution pipelines.
+AURA is currently a **Level 3 / early Level 4 JARVIS-style assistant prototype**. It is useful for controlled local demos and continued development, but it is **not** a finished production assistant and it is **not** real JARVIS-level autonomy.
 
----
+## What AURA Is
 
-# 🧠 What AURA Is
+- A FastAPI-based assistant runtime with a modern `web_v2` interface.
+- A controlled assistant system that can answer, plan, generate documents, launch safe apps, run limited browser actions, and perform permission-gated OS automation.
+- A truth-first project: unsupported, unsafe, or dependency-based capabilities should be labeled clearly instead of pretending to work.
 
-AURA is an **AI system**, not a prompt interface.
+## What AURA Is Not
 
-It is designed to:
+- Not a production-ready personal AI operating system.
+- Not a fully autonomous desktop controller.
+- Not a Level 5 real JARVIS system.
+- Not safe for unrestricted passwords, banking, payments, destructive file operations, or arbitrary shell execution.
+- Not guaranteed to run every voice, OCR, provider, or automation feature on every machine without local dependencies.
 
-* process real user intent
-* route tasks through system layers
-* generate structured outputs (documents, actions)
-* maintain memory and context
-* operate under a controlled trust model
+## Current Status
 
-Core pipeline:
+Status: active local development and controlled demo readiness.
 
-**Perceive → Understand → Decide → Act → Reflect → Improve**
+The stable path is:
 
----
+`run_aura.py` -> FastAPI app in `api/api_server.py` -> runtime/brain/tools/security modules -> `interface/web_v2`
 
-# ⚡ Current Status
+The project currently has a broad automated test suite. At the latest stable milestone, the local unittest suite covered more than 250 tests, with the recent full run reporting 293 passing tests.
 
-* **Version:** `v1.0-dev`
-* **State:** Active development (private system build)
+## Key Features
 
-AURA is functional but still evolving toward a full assistant experience.
+- Chat-first AURA interface with orb state presence.
+- Authenticated and public session handling.
+- Scoped memory and personalization safeguards.
+- Provider-backed response generation with degraded fallback behavior.
+- Document generation for notes, assignments, PDF, DOCX, TXT, and PPTX outputs.
+- Direct document download delivery and preview cards.
+- Controlled desktop app launching for allowlisted apps.
+- Controlled browser actions such as safe URL/search flows.
+- Permission-gated OS automation wrappers for limited actions.
+- Basic screen capture and OCR-based safety checks.
+- Browser push-to-talk and desktop voice runtime scaffolding.
+- Trust model for safe, private, sensitive, and critical actions.
 
----
+## Architecture Overview
 
-# ✅ Working Systems
-
-### Core System
-
-* end-to-end chat pipeline
-* intent detection and routing
-* multi-provider LLM support
-
-### Document Engine (Advanced)
-
-* generate:
-
-  * PDF
-  * DOCX
-  * TXT
-  * PPTX
-* multi-output delivery
-* preview system
-* follow-up format conversion
-
-### API Layer
-
-* FastAPI backend
-* session handling
-* structured response contracts
-
-### Memory & Persistence
-
-* chat history (SQLite)
-* structured memory layers
-
-### Security Foundation
-
-* authentication
-* session management
-* trust-based action gating
-
----
-
-# ⚠️ In Progress / Improving
-
-* voice system stabilization
-* provider reliability and fallback handling
-* vector memory consistency
-* response quality and tone
-* UI experience (JARVIS-style interaction)
-
----
-
-# 🎯 What AURA Is NOT
-
-* ❌ Not a chatbot
-* ❌ Not a prompt wrapper
-* ❌ Not fake “AI automation”
-
-AURA avoids pretending features exist when they don’t.
-
----
-
-# 🧬 System Architecture
-
-```
-AURA.bat → run_aura.py → FastAPI → brain → agents / memory / security / tools → web UI
+```text
+User input
+  -> API layer
+  -> identity/session context
+  -> intent routing
+  -> permissions/trust check
+  -> provider, document, action, automation, or fallback path
+  -> response shaping
+  -> memory update where safe
+  -> web_v2 delivery
 ```
 
----
+Important paths:
 
-# 🧩 Project Structure
+- `run_aura.py` - supported local launcher.
+- `api/api_server.py` - live FastAPI API.
+- `brain/` - runtime orchestration, response quality, providers, traces.
+- `security/` - sessions, permissions, trust enforcement.
+- `memory/` - scoped memory and personalization data.
+- `tools/` - documents, desktop control, browser actions, OS automation, screen capture.
+- `voice/` - browser-independent desktop voice runtime scaffolding.
+- `interface/web_v2/` - current browser interface.
+- `tests/` - regression and system behavior tests.
 
-```
-/brain        → reasoning + routing
-/agents       → task handlers
-/memory       → memory system (local)
-/security     → trust + authentication
-/tools        → document + system tools
-/interface    → web UI
-/voice        → speech pipeline (in progress)
-/generated    → runtime outputs (not tracked)
-```
+## Safety and Trust Model
 
----
+AURA uses trust levels to prevent unsafe behavior:
 
-# 🔐 Trust Model
+- `safe` - normal chat, document generation, safe app open/search.
+- `private` - user/account information and memory-related actions.
+- `sensitive` - keyboard/mouse control, typing into apps, screen-aware automation.
+- `critical` - passwords, payments, banking, destructive actions, account/security changes.
 
-AURA uses controlled execution levels:
+Critical actions must remain blocked or require a stronger verification flow. AURA must not silently control the system.
 
-* **safe** → auto allow
-* **private** → confirmation
-* **sensitive** → session approval
-* **critical** → PIN + confirmation
+## Setup
 
----
+Prerequisites:
 
-# 🧠 Assistant Behavior
+- Windows is the primary development target.
+- Python 3.10+ recommended.
+- Node.js for JavaScript syntax checks.
+- Optional local dependencies for voice, OCR, DOCX/PDF/PPTX export, and automation.
 
-AURA is tuned to be:
+Create and activate a virtual environment:
 
-* direct
-* calm
-* natural
-* non-robotic
-
-It avoids:
-
-* filler responses
-* over-explaining
-* fake intelligence patterns
-
----
-
-# ⚙️ Installation
-
-### Requirements
-
-* Python 3.10+
-* Windows 10/11
-
-### Setup
-
-```bash
-git clone <repo>
-cd AURA
+```powershell
+python -m venv venv
+.\venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Create `.env` file:
+Create a local `.env` file only for your own machine. Do not commit secrets.
 
-```env
-GROQ_API_KEY=your_key_here
+## Run
+
+```powershell
+python run_aura.py
 ```
 
-Run:
+Then open:
 
-```bash
-AURA.bat
+```text
+http://127.0.0.1:5000/
 ```
 
-Open:
+Useful health check:
 
+```powershell
+python tools/health_check.py
 ```
-http://localhost:5000
+
+## Test
+
+```powershell
+python -m py_compile run_aura.py api\api_server.py
+node --check interface\web_v2\app.js
+node --check interface\web_v2\auth.js
+python -m unittest discover -s tests -p "test_*.py"
 ```
 
----
+## Demo Commands
 
-# 📦 Example Capabilities
+Safe demo commands:
 
-* “make notes on transformers as pdf”
-* “write assignment on AI and also slides”
-* “convert this text into notes”
-* “summarize this document”
+- `hello`
+- `explain artificial intelligence simply`
+- `write a 3 page assignment on climate change`
+- `make notes on transformers`
+- `open chrome and search AI trends`
+- `open notepad and type hello` then approve control if the environment supports it
+- `type my password` to show critical blocking
 
-AURA responds with **real downloadable outputs**, not just text.
+Avoid demoing:
 
----
+- Banking, payment, password, or destructive workflows.
+- Full always-on voice claims unless the desktop voice runtime is explicitly enabled and verified.
+- Broad screen understanding beyond OCR-level context.
+- Unsupported apps or arbitrary shell commands.
 
-# 🧪 Development Status
+## Screenshots
 
-AURA is currently:
+Screenshots are not committed in this cleanup pass. Add verified screenshots later under `docs/screenshots/` and reference them here.
 
-🟡 **Partially real system**
+Suggested screenshots:
 
-* Core pipeline → real
-* Document system → strong
-* Intelligence layer → evolving
+- AURA web_v2 chat shell.
+- Document delivery card.
+- Action plan approval card.
+- Desktop voice status panel.
+- Blocked critical action example.
 
----
+## Limitations
 
-# 🛠️ Roadmap
+- Voice reliability depends on local microphone, STT, TTS, and optional runtime dependencies.
+- Provider reliability currently depends heavily on configured provider keys, especially Groq in local development.
+- OCR screen awareness is useful for safety checks but not deep visual understanding.
+- OS automation is intentionally narrow and permission-gated.
+- Long-form document quality is improving but still needs stronger research and references.
+- Memory is scoped and safer than earlier builds, but long-term personalization still needs more hardening.
 
-1. Document / Content System (current)
-2. Security System
-3. Interface Upgrade (JARVIS experience)
-4. Brain / Intelligence System
+## Roadmap
 
----
+Near-term focus:
 
-# ⚠️ Important Principle
+- Runtime reliability and Windows startup polish.
+- Memory and identity isolation.
+- Desktop voice reliability.
+- Provider health truth and fallback quality.
+- Document intelligence polish.
+- Screen awareness and automation robustness.
+- UI/orb polish and demo packaging.
 
-AURA follows one rule:
+See `ROADMAP.md` for the full plan.
 
-> **No fake capability claims**
+## License / Status
 
-If something is not fully implemented, it is not presented as complete.
+No license file is currently present. Until a license is added, this repository should be treated as private/all-rights-reserved by default.
 
----
-
-# 👨‍💻 Author
-
-**Hassan Saeed & His Team**
-BS Artificial Intelligence
-
-Building a real assistant system — not a demo.
-
----

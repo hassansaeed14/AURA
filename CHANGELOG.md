@@ -1,228 +1,50 @@
-# CHANGELOG
+# Changelog
+
+All notable AURA changes are summarized here. This changelog favors verified capability over hype.
+
+## Current Stable Milestone - 2026-05-08
+
+### Added / Stabilized
+
+- `run_aura.py` confirmed as the supported launcher.
+- FastAPI backend and `web_v2` interface stabilized for local demo flows.
+- Auth flows wired for register, login, forgot password, session state, and logout.
+- Public/authenticated state made more truthful in the UI.
+- Scoped memory and identity rules added to reduce stale-name and cross-user leakage.
+- Provider health states improved beyond config-only status.
+- Response fallback behavior improved to avoid empty or weak replies.
+- Document system expanded and polished for assignments, notes, PDF, DOCX, TXT, and PPTX.
+- Direct document delivery cards and preview metadata added.
+- Desktop control layer added with whitelist-only app launching.
+- Controlled browser actions added for safe search/URL flows.
+- OS automation wrappers added behind confirmation and app/window safety checks.
+- Screen capture and OCR safety layer added for pre-action validation.
+- Browser push-to-talk and desktop voice runtime status endpoints added.
+- Orb state binding, copy/speak controls, action plan cards, and profile/status UI improved.
+- System trace object added for request observability.
+- Production hardening reduced noisy logs and avoided unsafe desktop voice autostart.
+
+### Tests
+
+- Recent full local unittest run reported 293 passing tests.
+- Syntax checks cover Python runtime/API files and `web_v2` JavaScript.
+
+### Known Limitations
+
+- AURA is not production-ready.
+- AURA is not Level 5 real JARVIS.
+- Desktop voice requires local dependencies and explicit opt-in.
+- Screen awareness remains OCR-level.
+- Automation is intentionally narrow and can be fragile around focus/window state.
+- Provider reliability depends on configured external services.
+- Long-form document depth and references still need polish.
+
+## Earlier Milestones
+
+- Initial terminal assistant evolved into AURA.
+- Web interface introduced and later replaced by `web_v2`.
+- Document generation introduced.
+- Trust model and security foundations introduced.
+- Memory and provider systems introduced.
+- Action planning, desktop control, automation, and screen awareness were added gradually under safety constraints.
 
-All notable changes to **AURA — Autonomous Universal Responsive Assistant** are documented here.
-
-This project follows a **reality-first development model**:
-only working or verified changes are recorded.
-
----
-
-# [v1.0-dev] — 2026-04-10
-
-## 🚀 Added
-
-### Core System
-
-* Private local runtime using **FastAPI + Waitress**
-* Stable `/api/chat` execution path with structured response contract
-* Multi-provider routing foundation (Groq, Gemini, OpenAI fallback-ready)
-
-### Document Engine (Phase 1)
-
-* Notes and assignment generation system
-* Multi-format export:
-
-  * `.txt`
-  * `.pdf`
-  * `.docx`
-* File delivery system with direct download endpoints (`/downloads/...`)
-* Preview text support for generated documents
-* Chat-integrated document routing (natural prompts → file generation)
-
-### Memory & Persistence
-
-* SQLite-backed chat history with session tracking
-* Structured local memory system
-* Initial vector memory integration (experimental)
-
-### Security Foundation
-
-* Authentication system
-* Session handling
-* Trust-based action model (safe / private / sensitive / critical)
-
-### Interface
-
-* Web-based assistant interface
-* Real-time chat flow integration
-* Document preview and download UI support
-
-### Testing
-
-* Unit tests for:
-
-  * runtime core
-  * response engine
-  * document generation
-
----
-
-## ⚠️ Known Limitations
-
-* Provider reliability not yet stable (quota / fallback issues)
-* Vector memory requires repair and validation
-* Voice system partially implemented (browser-first)
-* Some agents are wrapper-based, not deep integrations
-* UI still lacks full “assistant OS” feel
-* Runtime drift exists across legacy layers
-
----
-
-# [v0.19]
-
-## Added
-
-* Improved structured memory recording
-* Better context persistence handling
-
----
-
-# [v0.18]
-
-## Added
-
-* Private runtime with:
-
-  * authentication
-  * voice infrastructure
-  * agent bus system
-
----
-
-# [v0.17]
-
-## Improved
-
-* Agent routing behavior
-* UI interaction flow
-
----
-
-# [v0.16]
-
-## Stabilized
-
-* Security system
-* Session handling reliability
-
----
-
-# [v0.15]
-
-## Added
-
-* Self-improvement agent (early AURA Forge concept)
-
----
-
-# [v0.14]
-
-## Added
-
-* Major system integration pass
-* Core modules connected into unified runtime
-
----
-
-# [v0.13]
-
-## Improved
-
-* Integration layer between agents and backend
-
----
-
-# [v0.12]
-
-## Updated
-
-* Core agent system improvements
-* Better capability structuring
-
----
-
-# [v0.10]
-
-## Added
-
-* Conversation memory
-* UI themes
-* Voice control basics
-
----
-
-# [v0.9]
-
-## Added
-
-* Vector memory (initial version)
-* Improved response generation
-
----
-
-# [v0.8]
-
-## Added
-
-* Voice selection support
-
----
-
-# [v0.7]
-
-## Added
-
-* Urdu language support
-
----
-
-# [v0.6]
-
-## Improved
-
-* UI experience
-* Chat history handling
-
----
-
-# [v0.5]
-
-## Added
-
-* First web interface
-
----
-
-# [v0.4]
-
-## Added
-
-* Study agent
-* Coding agent
-
----
-
-# [v0.3]
-
-## Changed
-
-* Project renamed to **AURA**
-* Introduced voice input/output
-
----
-
-# [v0.2]
-
-## Added
-
-* Voice output
-* Basic memory system
-
----
-
-# [v0.1]
-
-## Initial Release
-
-* Terminal-based assistant (Hey Goku)
-* Basic command handling

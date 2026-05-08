@@ -1,154 +1,97 @@
-# SECURITY POLICY
+# Security Policy
 
-## AURA — Autonomous Universal Responsive Assistant
+AURA is a local-first assistant prototype with real execution capabilities. Security is part of the runtime, not a UI label.
 
-AURA is a **private-first AI assistant system**.
+## Reporting Vulnerabilities
 
-Security is a core system layer, not an optional feature.
+Do not publish sensitive vulnerability details in public issues. Report privately with:
 
----
+- affected component;
+- steps to reproduce;
+- impact;
+- logs or screenshots if safe;
+- suggested mitigation if known.
 
-# 🚨 Reporting a Vulnerability
+## Trust Levels
 
-Do **NOT** open public issues for security vulnerabilities.
+AURA classifies actions before execution.
 
-Report privately with:
+### Safe
 
-* affected component
-* steps to reproduce
-* potential impact
-* suggested fix (if available)
+Examples:
 
-All reports are treated seriously and reviewed before disclosure.
+- normal chat;
+- document generation;
+- opening allowlisted apps;
+- safe browser URL/search actions.
 
----
+Safe actions can proceed automatically.
 
-# 🔐 Security Principles
+### Private
 
-AURA follows strict security rules:
+Examples:
 
-* **Security must be real, not cosmetic**
-* **Execution must be guarded, not assumed safe**
-* **Access must be verified, not trusted by default**
-* **Sensitive actions must require explicit approval**
+- profile/account state;
+- user memory;
+- personal preferences.
 
----
+Private actions must respect user/session scope.
 
-# 🧠 Trust Model
+### Sensitive
 
-All actions in AURA are categorized:
+Examples:
 
-* **safe** → auto allow
-* **private** → user confirmation required
-* **sensitive** → session-level approval required
-* **critical** → verification code + PIN required
+- keyboard or mouse control;
+- typing user text into apps;
+- screen-aware automation;
+- file access where user data may be exposed.
 
-These rules must be enforced at execution level.
+Sensitive actions require clear user confirmation.
 
----
+### Critical
 
-# 📱 Critical Action Protection (Planned / In Progress)
+Examples:
 
-For critical operations, AURA will require:
+- passwords;
+- payments;
+- banking;
+- purchases;
+- destructive file actions;
+- account or security changes;
+- credentials and OTP handling.
 
-* phone number verification
-* one-time password (OTP)
-* optional PIN confirmation
-* expiration window (e.g., 120 seconds)
+Critical actions must be blocked or require a stronger verification flow. They must never run silently.
 
-Examples of critical actions:
+## Automation Permission Policy
 
-* password changes
-* purchases or payments
-* external account modifications
-* sensitive data exposure
+- No arbitrary shell execution.
+- No user-provided executable paths.
+- No `shell=True` process launching for user commands.
+- No unrestricted pyautogui access.
+- No blind clicking.
+- No automation on sensitive screens.
+- Emergency stop or interrupt must be available for control flows.
 
-If verification fails or expires:
-→ action is **automatically cancelled**
+## Voice Privacy Note
 
----
+Browser push-to-talk starts only when the user clicks Talk and browser support/permission allows it.
 
-# 🔍 Sensitive System Areas
+Desktop voice runtime is disabled by default for production safety unless explicitly enabled in the local environment. AURA must not claim always-on listening unless the runtime is actually active.
 
-Special attention is required for:
+## Screen Capture Privacy Note
 
-* authentication system
-* session management
-* permission enforcement
-* trust-level routing
-* memory access and storage
-* document generation outputs
-* external API integrations
-* execution pipelines
+Screen capture and OCR are used for safety/context checks. They can expose visible private information, so screen-aware actions must remain permission-gated and transparent.
 
----
+## Secrets and Environment Variables
 
-# ⚠️ Security Requirements for Contributors
+Never commit:
 
-All contributions must:
+- `.env`;
+- provider API keys;
+- passwords;
+- local memory databases;
+- security logs;
+- generated private documents.
 
-* respect the trust model
-* never bypass verification layers
-* never expose private data
-* never simulate security checks
-* avoid storing secrets in code
+The `.gitignore` is expected to protect common local artifacts, but contributors must still review staged files before committing.
 
----
-
-# 🚫 Forbidden Practices
-
-Do NOT:
-
-* hardcode credentials or tokens
-* bypass authentication or session checks
-* skip permission validation
-* expose internal system data
-* fake secure behavior in UI
-
----
-
-# 🧠 Data Privacy
-
-AURA is designed as:
-
-* local-first
-* private by default
-* minimal external exposure
-
-User data must:
-
-* remain protected
-* not be shared without explicit permission
-* not be logged unnecessarily
-
----
-
-# 🛡️ Execution Safety
-
-No action is considered safe unless:
-
-* it passes the trust model
-* it is verified at runtime
-* it is explicitly allowed
-
----
-
-# 📊 Security Philosophy
-
-AURA does not assume safety.
-
-AURA enforces safety through:
-
-* verification
-* controlled execution
-* explicit user approval
-
----
-
-# 🛑 Final Rule
-
-If a feature appears secure but is not actually enforced:
-
-❌ It must not be shipped.
-
-Security in AURA is defined by **real protection**, not appearance.

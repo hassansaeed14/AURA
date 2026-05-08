@@ -27,6 +27,12 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
+      - name: Syntax checks
+        run: |
+          python -m py_compile run_aura.py api/api_server.py
+          node --check interface/web_v2/app.js
+          node --check interface/web_v2/auth.js
+
       - name: Run tests
         run: |
-          pytest -q
+          python -m unittest discover -s tests -p "test_*.py"

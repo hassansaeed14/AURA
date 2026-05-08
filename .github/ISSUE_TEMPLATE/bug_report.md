@@ -9,14 +9,21 @@ labels: bug
 What is broken?
 
 ## Area
+- api
 - brain
-- provider
+- providers
+- auth
+- documents
 - memory
 - security
 - voice
-- UI
-- agent
-- forge
+- web_v2
+- agents
+- desktop/browser control
+- OS automation
+- screen awareness
+- tests
+- docs
 - other
 
 ## Steps to reproduce

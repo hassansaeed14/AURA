@@ -1,156 +1,73 @@
 # Contributing to AURA
 
-## Autonomous Universal Responsive Assistant
+Thank you for helping improve AURA. This project values truthful, tested progress over flashy claims.
 
-Thank you for contributing to AURA.
+## Setup
 
-This is **not a typical open-source project**.
-AURA is a system-level AI assistant with strict design and behavior rules.
-
-Contributions must respect the system’s **reality-first doctrine**.
-
----
-
-# 🧠 Core Principles (Mandatory)
-
-All contributions must follow:
-
-* **Reality over hype**
-* **No fake capability claims**
-* **Working over advertised**
-* **Verified over assumed**
-* **Security is never optional**
-* **UI must reflect backend truth**
-* **Execution must be real, not implied**
-
-If a feature is incomplete, it must be clearly labeled.
-
----
-
-# ⚙️ Development Setup
-
-1. Clone the repository
-2. Create a Python virtual environment
-3. Install dependencies:
-
-```bash
+```powershell
+python -m venv venv
+.\venv\Scripts\activate
 pip install -r requirements.txt
+python run_aura.py
 ```
 
-4. Configure `.env`
-5. Run AURA locally
-6. Verify the system is working before making changes
+Open:
 
----
-
-# 🌿 Branch Naming Convention
-
-Use structured naming:
-
-* `fix/...` → bug fixes
-* `feat/...` → new features
-* `refactor/...` → internal improvements
-* `docs/...` → documentation changes
-* `test/...` → test-related changes
-
-Example:
-
-```bash
-feat/document-generation-pdf
+```text
+http://127.0.0.1:5000/
 ```
 
----
+## Testing
 
-# 🔄 Pull Request Rules
+Before submitting changes, run:
 
-Every PR must:
+```powershell
+python -m py_compile run_aura.py api\api_server.py
+node --check interface\web_v2\app.js
+node --check interface\web_v2\auth.js
+python -m unittest discover -s tests -p "test_*.py"
+```
 
-* Be **focused and minimal**
-* Clearly explain:
+Run targeted tests for the area you changed.
 
-  * what changed
-  * why it changed
-* List all affected files
-* Mention:
+## Coding Standards
 
-  * risks
-  * limitations
-* Update documentation if behavior changes
-* Include tests when logic is modified
+- Keep changes narrow and purposeful.
+- Do not modify unrelated systems.
+- Preserve safety checks.
+- Prefer clear, deterministic routing over hidden magic.
+- Keep UI text truthful.
+- Add tests when behavior changes.
+- Do not commit generated documents, logs, secrets, memory state, or local artifacts.
 
----
+## No Fake Features Rule
 
-# 🧪 Quality Gate (Required)
+If a feature is not implemented, do not show it as working.
 
-Before submitting a PR, ALL of the following must pass:
+Use one of:
 
-* Code runs without errors
-* Tests pass
-* No broken endpoints
-* No fake or placeholder behavior introduced
-* No UI overclaiming
-* Documentation matches real system behavior
+- disabled control;
+- beta label;
+- clear unavailable message;
+- placeholder classification outside normal routing.
 
----
+## No Unsafe Automation Rule
 
-# 🚫 What is NOT allowed
+Do not add:
 
-Do NOT:
+- arbitrary shell execution;
+- unrestricted keyboard/mouse control;
+- blind clicking;
+- automation of passwords, payments, banking, purchases, deletion, or account/security changes.
 
-* Add fake “AI” features
-* Simulate execution without real backend logic
-* Hardcode outputs pretending to be intelligent
-* Bypass the trust model
-* Add UI features without backend support
-* Introduce silent failures or hidden fallbacks
+Sensitive automation must require confirmation and must be interruptible.
 
----
+## Pull Request Checklist
 
-# 🔐 Security Rules
+- The change is scoped.
+- Tests pass.
+- UI labels match backend reality.
+- No secrets or generated artifacts are staged.
+- New capabilities are classified as real, hybrid, placeholder, or experimental.
+- Safety behavior is documented when relevant.
 
-* Never bypass authentication or session checks
-* Never skip trust-level enforcement
-* Critical actions must always require verification
-* Do not expose sensitive data
-
----
-
-# 🧠 System Awareness
-
-Before contributing, understand:
-
-* AURA is a **JARVIS-style system**, not a chatbot
-* The **brain → agents → tools → execution** pipeline must remain intact
-* Document generation, routing, and delivery systems must not break
-* All outputs must remain **real and verifiable**
-
----
-
-# 🧩 Contribution Scope
-
-Good contributions include:
-
-* improving stability
-* fixing broken behavior
-* enhancing response quality
-* strengthening system integrity
-* improving document generation
-* improving routing or execution
-
----
-
-# 🛑 Final Rule
-
-If a change makes AURA *look* more capable without actually making it more capable:
-
-❌ Do not implement it.
-
-AURA grows through **real capability**, not illusion.
-
----
-
-# 👨‍💻 Maintainer
-
-Hassan Saeed
-
-Building a real assistant system — not a demo.
