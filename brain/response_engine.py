@@ -26,10 +26,8 @@ except Exception:  # pragma: no cover
 
 load_dotenv()
 _groq_key = (GROQ_API_KEY or os.getenv("GROQ_API_KEY", "")).strip()
-if _groq_key:
-    print(f"[BRAIN] Groq key loaded: {_groq_key[:10]}...")
-else:
-    print("[CRITICAL] GROQ_API_KEY not found in .env")
+if not _groq_key:
+    print("[PROVIDER] Groq is not configured; live Groq responses will be unavailable.")
 
 
 conversation_history: List[Dict[str, str]] = []

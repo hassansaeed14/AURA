@@ -98,7 +98,6 @@
     const submitButton = document.getElementById("submitButton");
 
     form?.addEventListener("submit", async (event) => {
-      console.log("BUTTON CLICKED: Create account");
       event.preventDefault();
       hideAlerts();
 
@@ -170,7 +169,6 @@
     const confirmStep = document.getElementById("confirmStep");
 
     requestButton?.addEventListener("click", async () => {
-      console.log("BUTTON CLICKED: Forgot password — Request");
       hideAlerts();
       const identifier = String(document.getElementById("identifier")?.value || "").trim();
       if (!identifier) {
@@ -219,7 +217,6 @@
     });
 
     verifyButton?.addEventListener("click", async () => {
-      console.log("BUTTON CLICKED: Forgot password — Verify");
       hideAlerts();
       const code = String(document.getElementById("resetCode")?.value || "").trim();
       if (!state.resetToken || !code) {
@@ -260,7 +257,6 @@
     });
 
     confirmButton?.addEventListener("click", async () => {
-      console.log("BUTTON CLICKED: Forgot password — Confirm");
       hideAlerts();
       const newPassword = String(document.getElementById("newPassword")?.value || "").trim();
       const confirmPassword = String(document.getElementById("confirmPassword")?.value || "").trim();

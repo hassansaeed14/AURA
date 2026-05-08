@@ -14,6 +14,7 @@ ENDPOINTS = (
     "/api/auth/session",
     "/api/assistant/runtime",
     "/api/desktop/apps",
+    "/api/system/health",
 )
 
 

@@ -22,6 +22,7 @@ class RealAssistantRuntimeTests(unittest.TestCase):
             {
                 "Desktop voice runtime is not active.",
                 "Desktop voice runtime is not available on this system.",
+                "Desktop voice runtime is installed but disabled for production safety. Set AURA_ENABLE_DESKTOP_VOICE_LOOP=true to test local wake listening.",
             },
         )
         self.assertFalse(status["safety"]["always_on_browser_wake"])
@@ -57,6 +58,8 @@ class RealAssistantRuntimeTests(unittest.TestCase):
         self.assertIn("function actionStatusMarker", script)
         self.assertIn("Approval required. AURA will not type, press keys, or scroll", script)
         self.assertIn("function buildWelcomeCard", script)
+        self.assertIn("function normalizeActionTrace", script)
+        self.assertIn("function syncRuntimeStateFromPayload", script)
         self.assertIn("messageTextForControls", script)
         self.assertIn(".welcome-card", styles)
         self.assertIn(".automation-warning--blocked", styles)

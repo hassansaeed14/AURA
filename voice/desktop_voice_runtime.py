@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import threading
 import time
 from typing import Any, Dict, Optional
@@ -18,6 +19,10 @@ except Exception:  # pragma: no cover
 WAKE_PHRASE = "hey aura"
 UNAVAILABLE_MESSAGE = "Desktop voice runtime is not available on this system."
 INACTIVE_MESSAGE = "Desktop voice runtime is not active."
+DISABLED_MESSAGE = (
+    "Desktop voice runtime is installed but disabled for production safety. "
+    "Set AURA_ENABLE_DESKTOP_VOICE_LOOP=true to test local wake listening."
+)
 VOICE_STATES = ("idle", "listening", "awake", "processing", "speaking", "error")
 TRANSIENT_LISTEN_STATUSES = {"timeout", "no_speech", "empty_transcript"}
 FATAL_LISTEN_STATUSES = {"unavailable", "microphone_error", "stt_service_error"}
@@ -53,18 +58,32 @@ _STATE: Dict[str, Any] = {
 }
 
 
+def _desktop_voice_loop_enabled() -> bool:
+    return os.getenv("AURA_ENABLE_DESKTOP_VOICE_LOOP", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _dependency_snapshot() -> Dict[str, Any]:
     stt = get_stt_status()
     microphone = get_microphone_status()
     desktop_tts_available = pyttsx3 is not None
-    available = bool(stt.get("available") and stt.get("supports_microphone") and microphone.get("available"))
+    loop_enabled = _desktop_voice_loop_enabled()
+    available = bool(
+        loop_enabled
+        and stt.get("available")
+        and stt.get("supports_microphone")
+        and microphone.get("available")
+    )
     missing = []
+    if not loop_enabled:
+        missing.append("desktop_voice_loop_disabled")
     if not stt.get("available") or not stt.get("supports_microphone"):
         missing.append("speech_recognition")
     if not microphone.get("available"):
         missing.append("microphone")
     return {
         "available": available,
+        "loop_enabled": loop_enabled,
+        "message": "" if loop_enabled else DISABLED_MESSAGE,
         "stt": stt,
         "microphone": microphone,
         "tts": {
@@ -141,7 +160,7 @@ def _status_payload() -> Dict[str, Any]:
             payload["speaking"] = False
             payload["last_error"] = payload.get("last_error") or UNAVAILABLE_MESSAGE
         payload["dependencies"] = dependencies
-        payload["message"] = _message_for_state(payload)
+        payload["message"] = str(dependencies.get("message") or "").strip() or _message_for_state(payload)
         payload["state"] = _derive_state(payload)
         payload["status"] = payload["state"]
         payload["wake_phrase"] = WAKE_PHRASE
@@ -161,6 +180,7 @@ def start_desktop_voice(
 ) -> Dict[str, Any]:
     dependencies = _dependency_snapshot()
     if not dependencies.get("available"):
+        error_message = str(dependencies.get("message") or UNAVAILABLE_MESSAGE).strip()
         status = _set_state(
             available=False,
             active=False,
@@ -168,11 +188,12 @@ def start_desktop_voice(
             awake=False,
             processing=False,
             speaking=False,
-            last_error=UNAVAILABLE_MESSAGE,
+            last_error=error_message,
         )
-        _log_voice(UNAVAILABLE_MESSAGE, error=True)
+        _log_voice(error_message, error=True)
         status["success"] = False
         status["dependencies"] = dependencies
+        status["message"] = error_message
         return status
 
     global _THREAD

@@ -784,6 +784,9 @@ class ApiDocumentEndpointTests(unittest.TestCase):
         self.assertEqual(payload["document_preview"], "Introduction: Artificial intelligence connects intelligent behaviour with practical applications.")
         self.assertEqual(payload["requested_formats"], ["txt", "pptx"])
         self.assertNotIn("Approval is required", payload["reply"])
+        self.assertEqual(payload["action_trace"]["response_mode"], "document")
+        self.assertEqual(payload["action_trace"]["permission_state"]["action_name"], "document_generation")
+        self.assertEqual(payload["action_trace"]["final_status"], "ok")
 
 
 class CoreAiDocumentDeliveryTests(unittest.TestCase):

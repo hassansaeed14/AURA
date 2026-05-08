@@ -61,6 +61,10 @@ class PublicAccessTests(unittest.TestCase):
         self.assertEqual(body["content"], "Hey. What can I help you with?")
         self.assertEqual(body["provider"], "local")
         self.assertIsNone(body["error"])
+        self.assertIn("request_id", body)
+        self.assertEqual(body["action_trace"]["response_mode"], "conversation")
+        self.assertEqual(body["action_trace"]["final_status"], "ok")
+        self.assertEqual(body["runtime_state"]["task_scope"], "internal")
 
     def test_api_chat_blank_message_returns_meaningful_error_payload(self):
         with patch.object(api_server, "requires_first_run_setup", return_value=False), patch.object(
@@ -76,6 +80,9 @@ class PublicAccessTests(unittest.TestCase):
         self.assertEqual(body["content"], "Please send a message so I can help.")
         self.assertEqual(body["intent"], "validation")
         self.assertEqual(body["agent_used"], "api_chat")
+        self.assertEqual(body["action_trace"]["final_status"], "error")
+        self.assertEqual(body["action_trace"]["response_mode"], "error")
+        self.assertEqual(body["runtime_state"]["assistant_state"], "error")
 
     def test_api_chat_replaces_failed_agent_reply_with_structured_degraded_response(self):
         context = {
@@ -143,6 +150,8 @@ class PublicAccessTests(unittest.TestCase):
         self.assertNotEqual(body["reply"].strip(), "")
         self.assertNotIn("agent failed:", body["reply"].lower())
         self.assertIn("provider", body["routing_trace"])
+        self.assertEqual(body["action_trace"]["response_mode"], "limited_response")
+        self.assertEqual(body["action_trace"]["final_status"], "degraded")
         self.assertTrue(
             any("[CHAT TRACE]" in str(call.args[0]) for call in print_mock.call_args_list if call.args)
         )

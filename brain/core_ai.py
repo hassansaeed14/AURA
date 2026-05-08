@@ -28,10 +28,8 @@ from memory.working_memory import load_working_memory
 from security.enforcement import enforce_action
 
 load_dotenv()
-if GROQ_API_KEY:
-    print(f"[BRAIN] Groq key loaded: {GROQ_API_KEY[:10]}...")
-else:
-    print("[CRITICAL] GROQ_API_KEY not found in .env")
+if not GROQ_API_KEY:
+    print("[PROVIDER] Groq is not configured; live Groq responses will be unavailable.")
 
 
 AGENT_ROUTER = runtime_core_module.AGENT_ROUTER

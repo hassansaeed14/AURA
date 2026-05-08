@@ -6,6 +6,7 @@
   };
 
   const WAKE_FALLBACK = "hey aura";
+  const DEBUG_LOGS = localStorage.getItem("aura.debug") === "true";
   const STATE_COPY = {
     idle: {
       label: "Idle",
@@ -88,6 +89,7 @@
     panelMode: "",
     currentTask: null,
     currentExternal: null,
+    lastActionTrace: null,
     requestInFlight: false,
     screenShareActive: false,
     screenShareLabel: "Off",
@@ -109,6 +111,9 @@
   };
 
   function logVoiceDebug(message, details) {
+    if (!DEBUG_LOGS) {
+      return;
+    }
     if (typeof details === "undefined") {
       console.info(`[AURA voice] ${message}`);
       return;
@@ -174,8 +179,12 @@
       loadAssistantRuntime(),
       loadVoiceStatus(),
       refreshDesktopApps(),
-      loadSessions(),
     ]);
+    if (state.auth?.authenticated) {
+      await loadSessions();
+    } else {
+      state.sessions = [];
+    }
     syncVoiceControls();
     syncAssistantModeChrome();
     logVoiceDebug("Voice support check", {
@@ -255,10 +264,13 @@
       renderSidebarSessions();
     });
     el.profileButton?.addEventListener("click", async () => {
-      await refreshDesktopApps();
       state.panelVisible = true;
       state.panelMode = "profile";
       renderRightPanel();
+      await refreshDesktopApps();
+      if (state.panelMode === "profile") {
+        renderRightPanel();
+      }
     });
     el.panelCloseButton?.addEventListener("click", () => {
       state.panelVisible = false;
@@ -308,7 +320,6 @@
       logVoiceError("Interrupt button missing from DOM");
     }
     el.interruptButton?.addEventListener("click", () => {
-      console.log("BUTTON CLICKED: Interrupt");
       handleInterrupt();
     });
   }
@@ -348,6 +359,46 @@
     if (el.body) {
       el.body.dataset.taskScope = nextScope;
     }
+  }
+
+  function normalizeActionTrace(payload) {
+    const trace = payload && typeof payload.action_trace === "object" ? payload.action_trace : null;
+    if (!trace) {
+      return null;
+    }
+    return {
+      requestId: String(trace.request_id || "").trim(),
+      intent: String(trace.intent || "general").trim(),
+      responseMode: String(trace.response_mode || "assistant").trim(),
+      finalStatus: String(trace.final_status || "ok").trim(),
+      permissionState: trace.permission_state || {},
+      automationState: trace.automation_state || {},
+    };
+  }
+
+  function syncRuntimeStateFromPayload(payload, fallbackEvent = "runtime:trace_sync") {
+    const trace = normalizeActionTrace(payload);
+    if (trace) {
+      state.lastActionTrace = trace;
+    }
+    const runtimeState = payload && typeof payload.runtime_state === "object" ? payload.runtime_state : null;
+    if (!runtimeState || state.recognitionActive) {
+      return trace;
+    }
+
+    const nextScope = String(runtimeState.task_scope || "").trim();
+    const nextLayout = String(runtimeState.orb_layout || "").trim();
+    const nextState = String(runtimeState.assistant_state || "").trim();
+    if (nextScope) {
+      setTaskScope(nextScope);
+    }
+    if (nextLayout) {
+      setOrbLayout(nextLayout);
+    }
+    if (nextState && nextState !== state.assistantState) {
+      setAssistantState(nextState, fallbackEvent);
+    }
+    return trace;
   }
 
   function resetToCalmIdle(delayMs = 1100) {
@@ -579,6 +630,10 @@
   }
 
   async function loadSessions() {
+    if (!state.auth?.authenticated) {
+      state.sessions = [];
+      return;
+    }
     try {
       const payload = await apiJson("/api/sessions", { method: "GET" });
       state.sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
@@ -588,6 +643,10 @@
   }
 
   async function loadConversation(sessionId) {
+    if (!state.auth?.authenticated) {
+      state.messages = [];
+      return;
+    }
     try {
       const payload = await apiJson(`/api/history?session_id=${encodeURIComponent(sessionId)}&limit=80`, { method: "GET" });
       state.messages = (Array.isArray(payload.messages) ? payload.messages : []).map(normalizeHistoryMessage);
@@ -602,7 +661,6 @@
   }
 
   async function handleComposerSubmit(event) {
-    console.log("BUTTON CLICKED: Send", { requestInFlight: state.requestInFlight });
     event.preventDefault();
     if (state.requestInFlight) {
       return;
@@ -720,6 +778,7 @@
       const delivery = normalizeDocumentDeliveryPayload(payload);
       const actionPlan = normalizeActionPlanPayload(payload);
       const actionSuggestions = normalizeActionSuggestions(payload);
+      const actionTrace = syncRuntimeStateFromPayload(payload, "api:trace_received");
       const replyText = cleanAssistantReply(payload.reply || payload.content) || "Done.";
       if (actionPlan) {
         state.currentTask = {
@@ -746,6 +805,7 @@
         delivery,
         actionPlan,
         actionSuggestions,
+        actionTrace,
       }, {
         stateName: "responding",
         event: "api:response_ready",
@@ -842,6 +902,7 @@
     updateWorkspaceSummary("AURA is routing this outside the workspace while staying present.");
 
     let replyText = "";
+    let actionTrace = null;
     if (classification.type === "web" && classification.url) {
       const popup = window.open(classification.url, "_blank");
       if (popup) {
@@ -896,6 +957,7 @@
         });
         const actionPlan = normalizeActionPlanPayload(payload);
         const actionSuggestions = normalizeActionSuggestions(payload);
+        actionTrace = syncRuntimeStateFromPayload(payload, "external:trace_received");
         replyText = cleanAssistantReply(payload.reply || payload.content) || "I can't open that yet.";
         const rawLaunchStatus = payload.action_status || payload.desktop_launch_status || (payload.execution_mode === "external_desktop" ? "opened" : "unknown");
         state.currentTask.launchStatus = actionPlan?.status === "blocked" ? "blocked" : rawLaunchStatus;
@@ -991,6 +1053,7 @@
       timestamp: new Date().toISOString(),
       actionPlan: state.currentTask?.actionPlan || null,
       actionSuggestions: state.currentTask?.actionSuggestions || [],
+      actionTrace,
     }, {
       delayMs: 240,
       stateName: state.assistantState === "error" ? "error" : "responding",

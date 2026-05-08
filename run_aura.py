@@ -8,6 +8,7 @@ points such as ``main.py`` are not used for the web_v2/FastAPI runtime.
 """
 
 import json
+import logging
 import socket
 import sys
 import threading
@@ -54,6 +55,12 @@ def configure_console_encoding() -> None:
                 reconfigure(encoding="utf-8", errors="replace")
             except Exception:
                 pass
+
+
+def configure_runtime_logging() -> None:
+    """Keep demo logs readable without hiding AURA's own categorized logs."""
+
+    logging.getLogger("waitress.queue").setLevel(logging.ERROR)
 
 
 def safe_print(message: Any = "") -> None:
@@ -205,6 +212,7 @@ def print_port_in_use_message(host: str, port: int) -> None:
 # --------------------------------------------------
 def main() -> None:
     configure_console_encoding()
+    configure_runtime_logging()
     config = load_server_config()
 
     host = str(config.get("host"))

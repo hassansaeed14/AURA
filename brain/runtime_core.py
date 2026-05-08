@@ -32,6 +32,7 @@ from brain.response_engine import (
     generate_web_search_response_payload,
     is_meaningful_text,
 )
+from brain.system_trace import build_action_trace, new_request_id
 from brain.telemetry_engine import ProcessingTelemetry, set_last_telemetry
 from brain.intent_engine import detect_intent_with_confidence, is_conversational_input
 from brain.understanding_engine import clean_user_input
@@ -1487,7 +1488,7 @@ def build_result(
         execution_mode=effective_execution_mode,
     )
 
-    return _with_telemetry({
+    payload = {
         "intent": final_intent,
         "detected_intent": detected_intent,
         "confidence": confidence,
@@ -1506,7 +1507,21 @@ def build_result(
         "model": effective_provider_model,
         "providers_tried": effective_providers_tried,
         "degraded": effective_execution_mode == "degraded_assistant",
-    }, telemetry, publish=publish_telemetry)
+    }
+    payload["action_trace"] = build_action_trace(
+        request_id=new_request_id("runtime"),
+        raw_input=raw_command,
+        intent=str(final_intent or detected_intent or "general"),
+        provider=effective_provider_name,
+        permission=permission,
+        execution_mode=effective_execution_mode,
+        used_agents=used_agents,
+        degraded=effective_execution_mode == "degraded_assistant",
+        success=effective_execution_mode not in {"degraded_assistant", "permission_blocked"},
+        status=effective_execution_mode,
+        source=payload,
+    )
+    return _with_telemetry(payload, telemetry, publish=publish_telemetry)
 
 
 def _runtime_identity(security_context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -2521,6 +2536,20 @@ def _process_action_plan_command(
     result["action_memory"] = execution.get("action_memory", {})
     result["automation_confirmation_required"] = bool(execution.get("automation_confirmation_required"))
     result["automation_control"] = bool(execution.get("automation_control"))
+    result["action_trace"] = build_action_trace(
+        request_id=new_request_id("runtime"),
+        raw_input=raw_command,
+        intent="action_plan",
+        provider=result.get("provider"),
+        permission=permission,
+        action_plan=result.get("action_plan"),
+        execution_mode=result.get("execution_mode"),
+        used_agents=used_agents,
+        degraded=bool(result.get("degraded")),
+        success=bool(result.get("action_success")),
+        status=result.get("action_status"),
+        source=result,
+    )
     return result
 
 

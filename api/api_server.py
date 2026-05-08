@@ -42,6 +42,7 @@ from brain.response_engine import (
     clean_response,
     generate_response_payload,
 )
+from brain.system_trace import build_action_trace, new_request_id
 from brain.provider_hub import (
     SUPPORTED_PROVIDERS,
     STATUS_AUTH_FAILED,
@@ -702,6 +703,58 @@ def _build_chat_success_payload(
     }
 
 
+def _runtime_state_from_trace(trace: dict[str, Any]) -> dict[str, Any]:
+    response_mode = str(trace.get("response_mode") or "assistant").strip().lower()
+    final_status = str(trace.get("final_status") or "ok").strip().lower()
+    has_action_plan = bool(trace.get("action_plan"))
+    external_mode = response_mode in {"action", "control", "control_pending"} or has_action_plan
+    assistant_state = "error" if final_status == "error" else "responding"
+    if response_mode == "control_pending":
+        assistant_state = "responding"
+    return {
+        "assistant_state": assistant_state,
+        "response_state": final_status,
+        "task_scope": "external" if external_mode else "internal",
+        "orb_layout": "floating" if external_mode else "left",
+        "voice_state": "unchanged",
+    }
+
+
+def _attach_action_trace(
+    payload: dict[str, Any],
+    *,
+    context: Optional[dict[str, Any]] = None,
+    request_id: Optional[str] = None,
+    raw_input: Optional[str] = None,
+    final_status: Optional[str] = None,
+) -> dict[str, Any]:
+    context = dict(context or {})
+    trace = build_action_trace(
+        request_id=request_id or payload.get("request_id"),
+        raw_input=raw_input if raw_input is not None else str(context.get("raw_message") or ""),
+        intent=str(payload.get("intent") or context.get("detected_intent") or "general"),
+        provider=payload.get("provider"),
+        permission=payload.get("permission") or context.get("permission"),
+        action_plan=payload.get("action_plan"),
+        response_mode=payload.get("response_mode"),
+        final_status=final_status,
+        execution_mode=payload.get("execution_mode") or payload.get("mode"),
+        used_agents=payload.get("used_agents") or ([payload.get("agent_used")] if payload.get("agent_used") else []),
+        document_delivery=payload.get("document_delivery"),
+        kind=payload.get("kind"),
+        degraded=bool(payload.get("degraded") or payload.get("status") == "degraded"),
+        success=payload.get("success") if isinstance(payload.get("success"), bool) else None,
+        status=payload.get("action_status") or payload.get("status"),
+        error=payload.get("error"),
+        source=payload,
+    )
+    payload["request_id"] = trace["request_id"]
+    payload["action_trace"] = trace
+    payload["runtime_state"] = _runtime_state_from_trace(trace)
+    payload["response_mode"] = trace["response_mode"]
+    return payload
+
+
 DOCUMENT_PAYLOAD_FIELDS = (
     "download_url",
     "file_name",
@@ -1043,6 +1096,7 @@ def _log_chat_trace(
     output: str,
     execution_mode: Optional[str] = None,
     status: Optional[str] = None,
+    request_id: Optional[str] = None,
 ) -> None:
     input_preview = _chat_log_preview(raw_input, limit=120)
     output_preview = _chat_log_preview(output, limit=160)
@@ -1054,6 +1108,8 @@ def _log_chat_trace(
         extra.append(f"mode={execution_mode}")
     if status:
         extra.append(f"status={status}")
+    if request_id:
+        extra.append(f"request_id={request_id}")
     suffix = f" ({', '.join(extra)})" if extra else ""
     unicode_message = (
         f"[CHAT TRACE] input={input_preview} → intent={intent_label} → agent={agent_label} "
@@ -1605,8 +1661,11 @@ async def auth_session_status(request: Request):
     }
 
 
+# Legacy compatibility endpoint. The web_v2 source of truth is POST /api/chat;
+# keep this narrow wrapper traceable so old callers do not bypass observability.
 @app.post("/chat")
 async def chat(command: Command):
+    request_id = new_request_id("legacy-chat")
     try:
         result = process_command_detailed(command.text)
         response = result["response"]
@@ -1624,7 +1683,7 @@ async def chat(command: Command):
             result.get("execution_mode") or "hybrid",
         )
 
-        return {
+        response_payload = {
             "intent": result["intent"],
             "detected_intent": result["detected_intent"],
             "confidence": round(result["confidence"], 2),
@@ -1640,9 +1699,16 @@ async def chat(command: Command):
             "permission": result.get("permission", {}),
             "history_status": history_status,
         }
+        _attach_action_trace(
+            response_payload,
+            request_id=request_id,
+            raw_input=command.text,
+            final_status="ok",
+        )
+        return response_payload
 
     except Exception as e:
-        return {
+        response_payload = {
             "intent": "error",
             "detected_intent": "error",
             "confidence": 0.0,
@@ -1657,6 +1723,13 @@ async def chat(command: Command):
             "permission_action": None,
             "permission": {},
         }
+        _attach_action_trace(
+            response_payload,
+            request_id=request_id,
+            raw_input=command.text,
+            final_status="error",
+        )
+        return response_payload
 
 
 @app.post("/api/chat")
@@ -1664,6 +1737,7 @@ async def api_chat(payload: ChatApiRequest, request: Request):
     try:
         user = _current_user(request)
         session_id = _resolve_session_id(request)
+        request_id = new_request_id("chat")
 
         def _json_response(content: dict[str, Any], *, status_code: int = 200) -> JSONResponse:
             response = JSONResponse(content=content, status_code=status_code, headers=_cors_headers())
@@ -1685,8 +1759,9 @@ async def api_chat(payload: ChatApiRequest, request: Request):
                 output=reply,
                 execution_mode="validation_error",
                 status="error",
+                request_id=request_id,
             )
-            return _json_response(
+            error_payload = _attach_action_trace(
                 {
                     "success": False,
                     "content": reply,
@@ -1698,8 +1773,11 @@ async def api_chat(payload: ChatApiRequest, request: Request):
                     "status": "error",
                     "error": "No message provided",
                 },
-                status_code=400,
+                request_id=request_id,
+                raw_input="",
+                final_status="error",
             )
+            return _json_response(error_payload, status_code=400)
 
         print(f"[CHAT] Incoming message: {repr(raw_msg[:160])}")
 
@@ -1736,7 +1814,9 @@ async def api_chat(payload: ChatApiRequest, request: Request):
                 output=clarification_payload["reply"],
                 execution_mode="clarification",
                 status=clarification_payload.get("status"),
+                request_id=request_id,
             )
+            _attach_action_trace(clarification_payload, context=context, request_id=request_id, raw_input=raw_msg, final_status="ok")
             return _json_response(clarification_payload)
 
         if _should_rate_limit_document_request(context):
@@ -1758,7 +1838,9 @@ async def api_chat(payload: ChatApiRequest, request: Request):
                     output=rate_limited["reply"],
                     execution_mode="rate_limited",
                     status=rate_limited.get("status"),
+                    request_id=request_id,
                 )
+                _attach_action_trace(rate_limited, context=context, request_id=request_id, final_status="error")
                 return _json_response(rate_limited, status_code=429)
 
         print(
@@ -1786,7 +1868,9 @@ async def api_chat(payload: ChatApiRequest, request: Request):
                 output=casual_payload["reply"],
                 execution_mode=casual_payload.get("execution_mode"),
                 status=casual_payload.get("status"),
+                request_id=request_id,
             )
+            _attach_action_trace(casual_payload, context=context, request_id=request_id, final_status="ok")
             return _json_response(casual_payload)
 
         if not context["permission"].get("success", False):
@@ -1808,7 +1892,9 @@ async def api_chat(payload: ChatApiRequest, request: Request):
                 output=blocked_payload["reply"],
                 execution_mode=blocked_payload.get("execution_mode"),
                 status=blocked_payload.get("status"),
+                request_id=request_id,
             )
+            _attach_action_trace(blocked_payload, context=context, request_id=request_id, final_status="blocked")
             return _json_response(blocked_payload)
 
         print(f"[CHAT] Path: pipeline  mode={payload.mode!r}")
@@ -1834,12 +1920,15 @@ async def api_chat(payload: ChatApiRequest, request: Request):
             output=str(response_payload.get("reply") or ""),
             execution_mode=response_payload.get("execution_mode"),
             status=response_payload.get("status"),
+            request_id=request_id,
         )
 
+        _attach_action_trace(response_payload, context=context, request_id=request_id)
         return _json_response(response_payload)
     except ValueError as error:
         print(f"[CHAT ERROR] Validation: {error}")
         reply = "I couldn't process that message cleanly. Please check the request and try again."
+        request_id = locals().get("request_id") or new_request_id("chat")
         _log_chat_trace(
             raw_input=str(payload.message or ""),
             intent="validation",
@@ -1848,10 +1937,10 @@ async def api_chat(payload: ChatApiRequest, request: Request):
             output=reply,
             execution_mode="validation_error",
             status="error",
+            request_id=request_id,
         )
-        return JSONResponse(
-            status_code=400,
-            content={
+        error_payload = _attach_action_trace(
+            {
                 "success": False,
                 "content": reply,
                 "provider": None,
@@ -1862,11 +1951,19 @@ async def api_chat(payload: ChatApiRequest, request: Request):
                 "error": str(error),
                 "status": "error",
             },
+            request_id=request_id,
+            raw_input=str(payload.message or ""),
+            final_status="error",
+        )
+        return JSONResponse(
+            status_code=400,
+            content=error_payload,
             headers=_cors_headers(),
         )
     except Exception as error:
         print(f"[CHAT ERROR] Unhandled: {type(error).__name__}: {error}")
         reply = "I couldn't complete that request cleanly, but the chat path is still available. Please try again."
+        request_id = locals().get("request_id") or new_request_id("chat")
         _log_chat_trace(
             raw_input=str(payload.message or ""),
             intent="error",
@@ -1875,10 +1972,10 @@ async def api_chat(payload: ChatApiRequest, request: Request):
             output=reply,
             execution_mode="server_error",
             status="error",
+            request_id=request_id,
         )
-        return JSONResponse(
-            status_code=500,
-            content={
+        error_payload = _attach_action_trace(
+            {
                 "success": False,
                 "content": reply,
                 "provider": None,
@@ -1889,6 +1986,13 @@ async def api_chat(payload: ChatApiRequest, request: Request):
                 "error": str(error),
                 "status": "error",
             },
+            request_id=request_id,
+            raw_input=str(payload.message or ""),
+            final_status="error",
+        )
+        return JSONResponse(
+            status_code=500,
+            content=error_payload,
             headers=_cors_headers(),
         )
 
@@ -1896,6 +2000,7 @@ async def api_chat(payload: ChatApiRequest, request: Request):
 @app.post("/api/generate/document")
 async def api_generate_document(payload: DocumentGenerateRequest, request: Request):
     try:
+        request_id = new_request_id("document")
         user = _current_user(request)
         owner_session_id = _ensure_document_session_id(request)
         rate_limited = _consume_document_rate_limit(
@@ -1952,8 +2057,16 @@ async def api_generate_document(payload: DocumentGenerateRequest, request: Reque
             "document_delivery": generated.get("document_delivery"),
             "reply": generated.get("message"),
             "content": generated.get("message"),
+            "execution_mode": "document_generation",
+            "permission": build_permission_response("document_generation", confirmed=True),
             "status": "ok",
         }
+        _attach_action_trace(
+            response_payload,
+            request_id=request_id,
+            raw_input=f"{payload.type} on {payload.topic}",
+            final_status="ok",
+        )
         response = JSONResponse(
             content=response_payload,
             headers=_cors_headers(),
@@ -1975,7 +2088,7 @@ async def api_generate_document(payload: DocumentGenerateRequest, request: Reque
 
 
 def _build_transform_response(generated: dict[str, Any]) -> dict[str, Any]:
-    return {
+    payload = {
         "success": True,
         "kind": "document_delivery",
         "download_url": generated["download_url"],
@@ -2001,8 +2114,16 @@ def _build_transform_response(generated: dict[str, Any]) -> dict[str, Any]:
         "document_delivery": generated.get("document_delivery"),
         "reply": generated.get("message"),
         "content": generated.get("message"),
+        "execution_mode": "document_transformation",
+        "permission": build_permission_response("document_generation", confirmed=True),
         "status": "ok",
     }
+    return _attach_action_trace(
+        payload,
+        request_id=new_request_id("transform"),
+        raw_input=f"transform {generated.get('document_type') or 'document'} on {generated.get('topic') or ''}",
+        final_status="ok",
+    )
 
 
 @app.post("/api/transform")

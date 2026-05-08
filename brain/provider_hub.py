@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import warnings
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -29,7 +30,9 @@ except Exception:  # pragma: no cover
     OpenAI = None
 
 try:
-    import google.generativeai as genai  # type: ignore
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", FutureWarning)
+        import google.generativeai as genai  # type: ignore
 except Exception:  # pragma: no cover
     genai = None
 
