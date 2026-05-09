@@ -1,3 +1,4 @@
+import asyncio
 import json
 import sqlite3
 import sys
@@ -10,7 +11,7 @@ import re
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 import uvicorn
 
@@ -41,6 +42,7 @@ from brain.response_engine import (
     build_degraded_reply,
     clean_response,
     generate_response_payload,
+    shape_response_for_task,
 )
 from brain.system_trace import build_action_trace, new_request_id
 from brain.provider_hub import (
@@ -131,6 +133,11 @@ from tools.document_generator import (
     resolve_document_request,
     _is_unclear_document_request,
     secure_generated_document_access,
+)
+from tools.image_generation import (
+    detect_image_generation_request,
+    generate_image,
+    get_image_generation_status,
 )
 from tools.content_extractor import extract_content
 from brain.response_engine import generate_transformation_content_payload
@@ -306,6 +313,12 @@ class DocumentGenerateRequest(BaseModel):
     style: Optional[str] = None
     include_references: bool = False
     citation_style: Optional[str] = None
+
+
+class ImageGenerateRequest(BaseModel):
+    prompt: str
+    style: Optional[str] = None
+    size: Optional[str] = None
 
 
 class TransformRequest(BaseModel):
@@ -687,7 +700,7 @@ def _build_chat_success_payload(
     error: Optional[str] = None,
     response_kind: str = "chat",
 ) -> dict[str, Any]:
-    content = clean_response(reply) or "Something went wrong on my side. Try again."
+    content = shape_response_for_task(reply, mode or intent or response_kind) or "Something went wrong on my side. Try again."
     return {
         "success": bool(success),
         "kind": response_kind,
@@ -785,6 +798,96 @@ def _append_document_payload_fields(payload: dict[str, Any], source: dict[str, A
             payload[field] = source.get(field)
     if payload.get("document_delivery"):
         payload["kind"] = "document_delivery"
+    return payload
+
+
+def _sse_event(event: str, data: dict[str, Any]) -> str:
+    serialized = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    return f"event: {event}\ndata: {serialized}\n\n"
+
+
+def _chunk_stream_text(text: str, *, target_size: int = 72) -> list[str]:
+    """Split completed assistant text into stable UI chunks without duplicating content."""
+
+    normalized = str(text or "")
+    if not normalized:
+        return []
+    tokens = re.findall(r"\S+\s*", normalized)
+    chunks: list[str] = []
+    current = ""
+    for token in tokens:
+        current += token
+        if len(current) >= target_size or token.endswith((". ", "? ", "! ", "\n")):
+            chunks.append(current)
+            current = ""
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _should_stream_reply_payload(payload: dict[str, Any]) -> bool:
+    if payload.get("document_delivery") or payload.get("action_plan"):
+        return False
+    execution_mode = str(payload.get("execution_mode") or payload.get("mode") or "").lower()
+    if execution_mode.startswith("document") or "action" in execution_mode:
+        return False
+    return True
+
+
+def _json_response_payload(response: Response) -> tuple[dict[str, Any], int, Optional[str]]:
+    body = getattr(response, "body", b"") or b""
+    try:
+        payload = json.loads(body.decode("utf-8")) if body else {}
+    except Exception:
+        payload = {}
+    return payload if isinstance(payload, dict) else {}, int(getattr(response, "status_code", 200)), response.headers.get("set-cookie")
+
+
+def _build_image_generation_chat_payload(
+    *,
+    raw_message: str,
+    request_id: str,
+    session_id: str,
+    style: Optional[str] = None,
+    size: Optional[str] = None,
+) -> dict[str, Any]:
+    image_result = generate_image(raw_message, style=style, size=size)
+    reply = image_result.get("message") or "Image generation is not configured yet."
+    payload = _build_chat_success_payload(
+        reply=reply,
+        intent="image_generation",
+        agent_used="image_generation",
+        mode="image_generation_unavailable",
+        success=True,
+        provider=image_result.get("provider"),
+        error=image_result.get("error"),
+        response_kind="image_generation",
+    )
+    payload.update(
+        {
+            "kind": "image_generation",
+            "execution_mode": "image_generation_unavailable",
+            "session_id": session_id,
+            "degraded": True,
+            "image_generation": image_result,
+            "image_provider_status": get_image_generation_status(),
+            "permission": build_permission_response("image_generation", confirmed=True),
+            "routing_trace": {
+                "input": raw_message,
+                "intent": "image_generation",
+                "agent": "image_generation",
+                "provider": image_result.get("provider") or "none",
+                "output": reply,
+                "execution_mode": "image_generation_unavailable",
+            },
+        }
+    )
+    _attach_action_trace(
+        payload,
+        request_id=request_id,
+        raw_input=raw_message,
+        final_status="degraded",
+    )
     return payload
 
 
@@ -1163,7 +1266,7 @@ def _execute_chat_pipeline(context: dict[str, Any]) -> dict[str, Any]:
         payload["decision"] = result.get("decision") or context["decision"]
         return payload
 
-    reply_text = clean_response(result.get("response"))
+    reply_text = shape_response_for_task(result.get("response"), execution_mode or _chat_intent)
     if execution_mode == "document_generation":
         document_delivery = result.get("document_delivery") or {}
         delivery_message = clean_response(document_delivery.get("delivery_message"))
@@ -1180,7 +1283,7 @@ def _execute_chat_pipeline(context: dict[str, Any]) -> dict[str, Any]:
         )
         fallback_payload = generate_response_payload(context["cleaned_message"])
         if fallback_payload.get("success"):
-            reply_text = clean_response(fallback_payload.get("content"))
+            reply_text = shape_response_for_task(fallback_payload.get("content"), execution_mode or context["detected_intent"])
             result["provider"] = fallback_payload.get("provider")
             result["model"] = fallback_payload.get("model")
             result["providers_tried"] = fallback_payload.get("providers_tried") or []
@@ -1193,9 +1296,10 @@ def _execute_chat_pipeline(context: dict[str, Any]) -> dict[str, Any]:
                 f"providers_tried={providers_tried}  error={error_msg!r}. "
                 f"Using degraded reply."
             )
-            reply_text = clean_response(
+            reply_text = shape_response_for_task(
                 fallback_payload.get("degraded_reply")
-                or build_degraded_reply(context["cleaned_message"], providers_tried)
+                or build_degraded_reply(context["cleaned_message"], providers_tried),
+                "degraded_assistant",
             )
             result["provider"] = None
             result["model"] = None
@@ -1209,7 +1313,7 @@ def _execute_chat_pipeline(context: dict[str, Any]) -> dict[str, Any]:
         providers_tried = list(result.get("providers_tried") or [])
         error_message = str(result.get("error") or "The response path returned unusable content.").strip()
         _emit_chat_log("[CHAT FALLBACK] Reply still unusable after all fallbacks. Using structured degraded reply.")
-        reply_text = clean_response(build_degraded_reply(context["cleaned_message"], providers_tried))
+        reply_text = shape_response_for_task(build_degraded_reply(context["cleaned_message"], providers_tried), "degraded_assistant")
         result["provider"] = None
         result["model"] = None
         result["providers_tried"] = providers_tried
@@ -1404,7 +1508,10 @@ PUBLIC_PATHS = {
     "/api/voice/status",
     "/api/voice/text",
     "/api/desktop/apps",
+    "/api/chat/stream",
     "/api/generate/document",
+    "/api/generate/image",
+    "/api/image/status",
     "/api/transform",
     "/api/transform/file",
 }
@@ -1781,6 +1888,36 @@ async def api_chat(payload: ChatApiRequest, request: Request):
 
         print(f"[CHAT] Incoming message: {repr(raw_msg[:160])}")
 
+        if detect_image_generation_request(raw_msg):
+            image_payload = _build_image_generation_chat_payload(
+                raw_message=raw_msg,
+                request_id=request_id,
+                session_id=session_id,
+            )
+            image_payload["history_status"] = _attempt_persist_chat_turn(
+                {
+                    "raw_message": raw_msg,
+                    "session_id": session_id,
+                    "user": user,
+                    "user_profile": dict(user or {}),
+                },
+                image_payload["reply"],
+                image_payload["intent"],
+                image_payload.get("agent_used"),
+                image_payload.get("mode"),
+            )
+            _log_chat_trace(
+                raw_input=raw_msg,
+                intent="image_generation",
+                agent="image_generation",
+                provider=image_payload.get("provider"),
+                output=image_payload["reply"],
+                execution_mode=image_payload.get("execution_mode"),
+                status=image_payload.get("status"),
+                request_id=request_id,
+            )
+            return _json_response(image_payload)
+
         session_token = request.cookies.get("aura_session") if user else None
         context = _prepare_chat_context(
             payload.message,
@@ -1995,6 +2132,105 @@ async def api_chat(payload: ChatApiRequest, request: Request):
             content=error_payload,
             headers=_cors_headers(),
         )
+
+
+@app.post("/api/chat/stream")
+async def api_chat_stream(payload: ChatApiRequest, request: Request):
+    """SSE wrapper around the trusted chat path.
+
+    This prepares ChatGPT-style progressive rendering without depending on any
+    private provider streaming internals. The existing /api/chat path remains
+    the source of truth for metadata, document cards, action traces, and safety.
+    """
+
+    response = await api_chat(payload, request)
+    response_payload, status_code, set_cookie = _json_response_payload(response)
+    request_id = str(response_payload.get("request_id") or new_request_id("stream"))
+    reply_text = str(response_payload.get("reply") or response_payload.get("content") or "").strip()
+
+    async def _events():
+        yield _sse_event(
+            "start",
+            {
+                "request_id": request_id,
+                "status": "started",
+                "streaming": _should_stream_reply_payload(response_payload),
+            },
+        )
+        if status_code >= 400:
+            yield _sse_event(
+                "error",
+                {
+                    "request_id": request_id,
+                    "status_code": status_code,
+                    "message": reply_text or response_payload.get("error") or "The chat request could not complete.",
+                },
+            )
+        elif _should_stream_reply_payload(response_payload):
+            for index, chunk in enumerate(_chunk_stream_text(reply_text), start=1):
+                if await request.is_disconnected():
+                    break
+                yield _sse_event(
+                    "chunk",
+                    {
+                        "request_id": request_id,
+                        "index": index,
+                        "text": chunk,
+                    },
+                )
+                await asyncio.sleep(0.012)
+        yield _sse_event("final", response_payload)
+
+    stream_response = StreamingResponse(
+        _events(),
+        media_type="text/event-stream",
+        headers={
+            **_cors_headers(),
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+    if set_cookie:
+        stream_response.headers["set-cookie"] = set_cookie
+    return stream_response
+
+
+@app.get("/api/image/status")
+async def api_image_status():
+    return JSONResponse(
+        content={
+            "success": True,
+            "status": "ok",
+            "image_generation": get_image_generation_status(),
+        },
+        headers=_cors_headers(),
+    )
+
+
+@app.post("/api/generate/image")
+async def api_generate_image(payload: ImageGenerateRequest, request: Request):
+    request_id = new_request_id("image")
+    result = generate_image(payload.prompt, style=payload.style, size=payload.size)
+    response_payload = {
+        "success": bool(result.get("success")),
+        "kind": "image_generation",
+        "status": result.get("status"),
+        "reply": result.get("message"),
+        "content": result.get("message"),
+        "image_generation": result,
+        "image_provider_status": get_image_generation_status(),
+        "provider": result.get("provider"),
+        "error": result.get("error"),
+        "execution_mode": "image_generation" if result.get("success") else "image_generation_unavailable",
+        "permission": build_permission_response("image_generation", confirmed=True),
+    }
+    _attach_action_trace(
+        response_payload,
+        request_id=request_id,
+        raw_input=payload.prompt,
+        final_status="ok" if result.get("success") else "degraded",
+    )
+    return JSONResponse(content=response_payload, headers=_cors_headers())
 
 
 @app.post("/api/generate/document")

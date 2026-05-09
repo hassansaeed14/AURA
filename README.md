@@ -33,11 +33,13 @@ The project currently has a broad automated test suite. At the latest stable mil
 ## Key Features
 
 - Chat-first AURA interface with orb state presence.
+- ChatGPT-style progressive response rendering with safe markdown/code display.
 - Authenticated and public session handling.
 - Scoped memory and personalization safeguards.
 - Provider-backed response generation with degraded fallback behavior.
 - Document generation for notes, assignments, PDF, DOCX, TXT, and PPTX outputs.
 - Direct document download delivery and preview cards.
+- Provider-ready image generation abstraction that reports unavailable until a real adapter is configured.
 - Controlled desktop app launching for allowlisted apps.
 - Controlled browser actions such as safe URL/search flows.
 - Permission-gated OS automation wrappers for limited actions.
@@ -70,6 +72,18 @@ Important paths:
 - `voice/` - browser-independent desktop voice runtime scaffolding.
 - `interface/web_v2/` - current browser interface.
 - `tests/` - regression and system behavior tests.
+
+## Response Rendering and Artifacts
+
+AURA uses public, standard AI-app patterns for the writing experience:
+
+- progressive response rendering through `/api/chat/stream`;
+- safe markdown rendering in `web_v2`;
+- readable code blocks with copy-code controls;
+- document artifacts/cards for generated deliverables;
+- image generation hooks that stay honest when no provider is configured.
+
+See `docs/RESPONSE_RENDERING.md`.
 
 ## Safety and Trust Model
 
@@ -163,6 +177,7 @@ Suggested screenshots:
 
 - Voice reliability depends on local microphone, STT, TTS, and optional runtime dependencies.
 - Provider reliability currently depends heavily on configured provider keys, especially Groq in local development.
+- Image generation is provider-ready but inactive unless a real provider adapter is configured and verified.
 - OCR screen awareness is useful for safety checks but not deep visual understanding.
 - OS automation is intentionally narrow and permission-gated.
 - Long-form document quality is improving but still needs stronger research and references.
@@ -185,4 +200,3 @@ See `ROADMAP.md` for the full plan.
 ## License / Status
 
 No license file is currently present. Until a license is added, this repository should be treated as private/all-rights-reserved by default.
-

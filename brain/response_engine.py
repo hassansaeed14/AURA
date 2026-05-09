@@ -434,6 +434,335 @@ def build_explanation_guidance(user_input: str, *, web_used: bool = False) -> Di
     return {"mode": mode, "guidance": guidance}
 
 
+CRITICAL_DOMAIN_PATTERNS: Dict[str, tuple[str, ...]] = {
+    "medical": (
+        r"\bmedical\b",
+        r"\bdoctor\b",
+        r"\bdiagnos(?:e|is)\b",
+        r"\bsymptom(?:s)?\b",
+        r"\bmedicine\b",
+        r"\bmedication\b",
+        r"\bdosage\b",
+        r"\btreatment\b",
+        r"\bsurgery\b",
+        r"\bblood pressure\b",
+        r"\bmental health\b",
+    ),
+    "legal": (
+        r"\blegal\b",
+        r"\blaw\b",
+        r"\blawsuit\b",
+        r"\bsue\b",
+        r"\bcourt\b",
+        r"\bcontract\b",
+        r"\battorney\b",
+        r"\blawyer\b",
+        r"\bpolice\b",
+        r"\bjail\b",
+        r"\bvisa\b",
+    ),
+    "financial": (
+        r"\bfinancial\b",
+        r"\binvest(?:ing|ment)?\b",
+        r"\bstock(?:s)?\b",
+        r"\bcrypto\b",
+        r"\btax(?:es)?\b",
+        r"\bloan\b",
+        r"\bmortgage\b",
+        r"\binsurance\b",
+        r"\bretirement\b",
+        r"\bportfolio\b",
+    ),
+    "security": (
+        r"\bsecurity\b",
+        r"\bvulnerabilit(?:y|ies)\b",
+        r"\bexploit\b",
+        r"\bmalware\b",
+        r"\bphishing\b",
+        r"\bcredential(?:s)?\b",
+        r"\bpassword(?:s)?\b",
+        r"\bauth(?:entication)?\b",
+        r"\binjection\b",
+        r"\bencryption\b",
+    ),
+    "safety": (
+        r"\bsafe\b",
+        r"\bsafety\b",
+        r"\brisk(?:s)?\b",
+        r"\bdanger(?:ous)?\b",
+        r"\bharm(?:ful)?\b",
+        r"\bcritical\b",
+        r"\bemergency\b",
+    ),
+    "architecture": (
+        r"\barchitecture\b",
+        r"\bsystem design\b",
+        r"\bdesign decision\b",
+        r"\bscal(?:e|able|ability)\b",
+        r"\bproduction\b",
+        r"\bdeployment\b",
+        r"\bmigrate\b",
+        r"\btrade[- ]?off(?:s)?\b",
+        r"\bprovider routing\b",
+        r"\bapi design\b",
+        r"\bdatabase\b",
+        r"\bmicroservice(?:s)?\b",
+    ),
+    "academic": (
+        r"\bacademic\b",
+        r"\bresearch\b",
+        r"\bthesis\b",
+        r"\bdissertation\b",
+        r"\bliterature review\b",
+        r"\bmethodology\b",
+        r"\bcitation(?:s)?\b",
+        r"\bassignment\b",
+        r"\bpaper\b",
+    ),
+    "technical": (
+        r"\bapi\b",
+        r"\bbackend\b",
+        r"\bfrontend\b",
+        r"\balgorithm\b",
+        r"\bmodel\b",
+        r"\bcode\b",
+        r"\bpython\b",
+        r"\brust\b",
+        r"\bjavascript\b",
+        r"\bdocker\b",
+        r"\bcloud\b",
+        r"\blatency\b",
+        r"\breliability\b",
+    ),
+    "factual_claims": (
+        r"\blatest\b",
+        r"\bcurrent\b",
+        r"\btoday\b",
+        r"\bnow\b",
+        r"\brecent\b",
+        r"\bstatus\b",
+        r"\bpricing\b",
+        r"\bversion\b",
+        r"\bverify\b",
+        r"\bfact[- ]?check\b",
+        r"\bis it true\b",
+    ),
+}
+
+HIGH_RISK_CRITICAL_DOMAINS = {"medical", "legal", "financial", "security", "safety"}
+CRITICAL_REASONING_PATTERNS = (
+    r"\bshould\b",
+    r"\brecommend\b",
+    r"\bdecide\b",
+    r"\banaly[sz]e\b",
+    r"\bevaluate\b",
+    r"\bstrategy\b",
+    r"\bplan\b",
+    r"\bstep[- ]?by[- ]?step\b",
+    r"\bpros and cons\b",
+    r"\broot cause\b",
+    r"\bwhy\b",
+    r"\bhow would\b",
+    r"\bhow should\b",
+)
+EXTERNAL_FACT_PATTERNS = (
+    r"\blatest\b",
+    r"\bcurrent\b",
+    r"\btoday\b",
+    r"\bnow\b",
+    r"\brecent\b",
+    r"\brecently\b",
+    r"\bstatus\b",
+    r"\bpricing\b",
+    r"\brate(?:s)?\b",
+    r"\blaw(?:s)?\b",
+    r"\bregulation(?:s)?\b",
+    r"\bversion\b",
+)
+AURA_CONTEXT_PATTERNS = (
+    r"\baura\b",
+    r"\bthis project\b",
+    r"\bthe project\b",
+    r"\bthis repo(?:sitory)?\b",
+    r"\bour runtime\b",
+    r"\bprovider routing\b",
+    r"\bweb_v2\b",
+)
+
+
+def _matches_any_pattern(text: str, patterns: tuple[str, ...]) -> bool:
+    return any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in patterns)
+
+
+def classify_critical_question(user_input: str) -> Dict[str, Any]:
+    """Classify whether a prompt needs guarded, deeper critical-question handling."""
+
+    normalized = str(user_input or "").strip().lower()
+    words = re.findall(r"[a-zA-Z0-9_'-]+", normalized)
+    if not normalized:
+        return {
+            "is_critical": False,
+            "domains": [],
+            "reasons": [],
+            "risk_level": "low",
+            "needs_uncertainty": False,
+            "needs_clarification": False,
+            "needs_external_facts": False,
+            "needs_project_context": False,
+        }
+
+    domains: List[str] = []
+    reasons: List[str] = []
+    for domain, patterns in CRITICAL_DOMAIN_PATTERNS.items():
+        if _matches_any_pattern(normalized, patterns):
+            domains.append(domain)
+
+    high_risk_domains = sorted(set(domains) & HIGH_RISK_CRITICAL_DOMAINS)
+    reasoning_signal = _matches_any_pattern(normalized, CRITICAL_REASONING_PATTERNS)
+    external_facts = _matches_any_pattern(normalized, EXTERNAL_FACT_PATTERNS)
+    project_context = _matches_any_pattern(normalized, AURA_CONTEXT_PATTERNS)
+    complex_prompt = len(words) >= 16 or reasoning_signal
+    technical_complexity = "technical" in domains and (
+        complex_prompt or bool({"architecture", "security", "safety"} & set(domains))
+    )
+    high_impact_advice = bool(high_risk_domains) or (
+        reasoning_signal and bool({"architecture", "technical", "academic", "factual_claims"} & set(domains))
+    )
+    needs_clarification = bool(
+        len(words) <= 9
+        and re.search(r"\b(it|this|that|they|the setup|my setup)\b", normalized)
+        and re.search(r"\b(should|safe|better|fix|decide|recommend)\b", normalized)
+    )
+
+    if high_risk_domains:
+        reasons.append("high_impact_safe_domain")
+    if technical_complexity:
+        reasons.append("technical_or_architecture_complexity")
+    if "academic" in domains:
+        reasons.append("academic_rigor_needed")
+    if external_facts:
+        reasons.append("external_or_current_facts_needed")
+    if high_impact_advice:
+        reasons.append("decision_or_high_impact_advice")
+    if needs_clarification:
+        reasons.append("clarification_needed")
+    if project_context:
+        reasons.append("aura_project_context_needed")
+
+    is_critical = bool(
+        high_risk_domains
+        or "architecture" in domains
+        or "academic" in domains
+        or technical_complexity
+        or high_impact_advice
+        or external_facts
+        or needs_clarification
+        or (project_context and reasoning_signal)
+    )
+
+    if _looks_like_casual_conversation(normalized):
+        is_critical = False
+        reasons = []
+
+    if high_risk_domains:
+        risk_level = "high"
+    elif is_critical:
+        risk_level = "medium"
+    else:
+        risk_level = "low"
+
+    return {
+        "is_critical": is_critical,
+        "domains": sorted(set(domains)),
+        "reasons": sorted(set(reasons)),
+        "risk_level": risk_level,
+        "needs_uncertainty": bool(is_critical),
+        "needs_clarification": needs_clarification,
+        "needs_external_facts": external_facts,
+        "needs_project_context": project_context,
+    }
+
+
+def _load_aura_project_context(max_chars: int = 3600) -> str:
+    candidates = (
+        "SYSTEM_AUDIT.md",
+        "MASTER_SPEC.md",
+        "README.md",
+        os.path.join("docs", "FINAL_PROJECT_REPORT.md"),
+    )
+    snippets: List[str] = []
+    for relative_path in candidates:
+        path = os.path.join(os.getcwd(), relative_path)
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                content = handle.read(max_chars // 2)
+        except Exception:
+            continue
+        compact = re.sub(r"\n{3,}", "\n\n", content).strip()
+        if compact:
+            snippets.append(f"[{relative_path}]\n{compact[: max_chars // 2]}")
+        if sum(len(item) for item in snippets) >= max_chars:
+            break
+    return "\n\n".join(snippets)[:max_chars].strip()
+
+
+def build_critical_reasoning_system_prompt(system_prompt: str, profile: Dict[str, Any]) -> str:
+    domains = ", ".join(profile.get("domains") or ["general"])
+    reasons = ", ".join(profile.get("reasons") or ["critical reasoning requested"])
+    high_risk = bool(set(profile.get("domains") or []) & HIGH_RISK_CRITICAL_DOMAINS)
+    safe_domain_guidance = (
+        "\nFor medical, legal, financial, security, or safety questions: give cautious general guidance only; "
+        "do not give dangerous instructions, diagnosis, guaranteed outcomes, or professional directives; "
+        "recommend qualified expert verification where appropriate."
+        if high_risk
+        else ""
+    )
+    external_guidance = (
+        "\nIf the answer depends on current or external facts and no source context is supplied, say that live/source verification is needed instead of inventing details."
+        if profile.get("needs_external_facts")
+        else ""
+    )
+    clarification_guidance = (
+        "\nIf the request is under-specified, state the working assumptions and ask one targeted clarification question after the useful answer."
+        if profile.get("needs_clarification")
+        else ""
+    )
+    return (
+        f"{str(system_prompt or '').strip()}\n\n"
+        "CRITICAL QUESTION MODE:\n"
+        f"Domains: {domains}. Reasons: {reasons}. Risk level: {profile.get('risk_level', 'medium')}.\n"
+        "Answer hard, important, technical, academic, safety, and decision questions with disciplined reasoning.\n"
+        "Use this structure with clear labels: Direct verdict, Reasoning, Assumptions / uncertainty, Risks, Recommendation, Next step.\n"
+        "Be specific and useful, but do not overclaim. Include uncertainty when facts may be incomplete.\n"
+        "Avoid vague claims, unsupported certainty, filler, and shallow one-paragraph answers."
+        f"{safe_domain_guidance}"
+        f"{external_guidance}"
+        f"{clarification_guidance}"
+    ).strip()
+
+
+def _append_project_context_if_needed(system_prompt: str, profile: Dict[str, Any]) -> tuple[str, bool]:
+    if not profile.get("needs_project_context"):
+        return system_prompt, False
+    context = _load_aura_project_context()
+    if not context:
+        return (
+            f"{system_prompt}\n\nAURA PROJECT CONTEXT:\nNo project context file was available to load. State that limitation if needed.",
+            False,
+        )
+    return (
+        f"{system_prompt}\n\nAURA PROJECT CONTEXT:\nUse this repository context for AURA-specific claims. Do not invent project capabilities.\n\n{context}",
+        True,
+    )
+
+
+def _replace_system_prompt(messages: List[Dict[str, str]], system_prompt: str) -> List[Dict[str, str]]:
+    without_system = [dict(item) for item in messages if str(item.get("role", "")).lower() != "system"]
+    return [{"role": "system", "content": str(system_prompt or "").strip()}] + without_system
+
+
 def build_runtime_system_prompt(
     user_input: str,
     system_prompt: str,
@@ -2174,6 +2503,52 @@ def _strip_direct_address_phrases(text: str) -> str:
     return cleaned.strip()
 
 
+def _normalize_markdown_spacing(text: str) -> str:
+    """Normalize prose spacing without destroying markdown/code fences."""
+
+    parts = re.split(r"(```[\s\S]*?```)", str(text or ""))
+    normalized_parts: list[str] = []
+    for part in parts:
+        if part.startswith("```") and part.endswith("```"):
+            normalized_parts.append(part.strip("\n"))
+            continue
+        cleaned_lines = []
+        for line in part.replace("\r\n", "\n").split("\n"):
+            if line.strip():
+                cleaned_lines.append(re.sub(r"[ \t]{2,}", " ", line.rstrip()))
+            else:
+                cleaned_lines.append("")
+        normalized_parts.append("\n".join(cleaned_lines))
+    cleaned = "\n".join(part for part in normalized_parts if part.strip())
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+def shape_response_for_task(text: Optional[str], task_type: Optional[str] = None) -> str:
+    """Final assistant-tone pass that keeps markdown renderable for the UI."""
+
+    if not is_meaningful_text(text):
+        return ""
+
+    cleaned = str(text or "").strip()
+    cleaned = _strip_leading_filler(cleaned)
+    cleaned = _strip_direct_address_phrases(cleaned)
+    cleaned = re.sub(r"^as an ai(?: language model)?[,:\s-]*", "", cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"^i(?: would|'d) be happy to(?: help)?[,:\s-]*", "", cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"^here(?:'s| is) some information(?: about .+?)?[,:\s-]*", "", cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"^certainly[,!\s-]*", "", cleaned, flags=re.IGNORECASE).strip()
+    cleaned = _normalize_markdown_spacing(cleaned)
+
+    normalized_task = str(task_type or "").strip().lower()
+    if normalized_task in {"greeting", "casual_local", "conversation"} and len(cleaned) > 240:
+        return re.split(r"(?<=[.!?])\s+", cleaned, maxsplit=1)[0].strip()
+    if "action" in normalized_task and len(cleaned) > 360:
+        return re.split(r"(?<=[.!?])\s+", cleaned, maxsplit=1)[0].strip()
+    if "blocked" in normalized_task or "permission" in normalized_task:
+        cleaned = cleaned.replace("policy violation", "I can't safely do that")
+    return cleaned
+
+
 def _strip_meta_section_wrappers(text: str) -> str:
     cleaned = str(text or "").strip()
     if not cleaned:
@@ -2372,7 +2747,7 @@ def _dedupe_adjacent_sentences(text: str) -> str:
     return " ".join(filtered).strip()
 
 
-def polish_assistant_reply(text: Optional[str], user_input: str = "") -> str:
+def polish_assistant_reply(text: Optional[str], user_input: str = "", *, preserve_depth: bool = False) -> str:
     cleaned = clean_response(text)
     if not cleaned:
         return ""
@@ -2396,9 +2771,136 @@ def polish_assistant_reply(text: Optional[str], user_input: str = "") -> str:
             cleaned = _strip_stale_memory_filler(cleaned)
 
     cleaned = _dedupe_adjacent_sentences(cleaned)
-    cleaned = _apply_mode_length_guard(cleaned, user_input)
+    if not preserve_depth:
+        cleaned = _apply_mode_length_guard(cleaned, user_input)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
+
+
+CRITICAL_REQUIRED_SECTION_LABELS = (
+    "direct verdict",
+    "reasoning",
+    "assumptions",
+    "uncertainty",
+    "risks",
+    "recommendation",
+    "next step",
+)
+OVERCONFIDENT_CRITICAL_PATTERNS = (
+    r"\bguaranteed\b",
+    r"\b100%\b",
+    r"\balways\b",
+    r"\bnever\b",
+    r"\brisk[- ]?free\b",
+    r"\bdefinitely\b",
+    r"\bno doubt\b",
+)
+VAGUE_CRITICAL_PATTERNS = (
+    r"\bvarious things\b",
+    r"\bsome stuff\b",
+    r"\bit depends\b(?![^.?!]{0,80}\b(because|on|if|when)\b)",
+    r"\bmany factors\b(?![^.?!]{0,80}\b(include|are|such as)\b)",
+)
+
+
+def verify_critical_answer(answer: Optional[str], profile: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a verification result for critical-mode responses."""
+
+    text = clean_response(answer)
+    normalized = text.lower()
+    words = re.findall(r"[a-zA-Z0-9_'-]+", normalized)
+    domains = set(profile.get("domains") or [])
+    high_risk = bool(domains & HIGH_RISK_CRITICAL_DOMAINS)
+    professional_domain = bool(domains & {"medical", "legal", "financial"})
+    security_domain = "security" in domains
+    min_words = 70 if high_risk else 90
+    found_labels = [
+        label for label in CRITICAL_REQUIRED_SECTION_LABELS
+        if re.search(rf"\b{re.escape(label)}\b", normalized)
+    ]
+
+    issues: List[str] = []
+    if len(words) < min_words:
+        issues.append("too_short")
+    if len(set(found_labels)) < 4:
+        issues.append("missing_critical_structure")
+    if professional_domain and not re.search(r"\b(professional|doctor|lawyer|attorney|financial advisor|qualified expert|emergency)\b", normalized):
+        issues.append("missing_expert_verification")
+    if security_domain and not re.search(r"\b(security review|security audit|qualified expert|threat model|test safely)\b", normalized):
+        issues.append("missing_security_review")
+    if profile.get("needs_uncertainty") and not re.search(r"\b(assum|uncertain|uncertainty|depends|not enough|cannot verify|source)\b", normalized):
+        issues.append("missing_uncertainty")
+    if any(re.search(pattern, normalized) for pattern in OVERCONFIDENT_CRITICAL_PATTERNS):
+        issues.append("unsupported_certainty")
+    if any(re.search(pattern, normalized) for pattern in VAGUE_CRITICAL_PATTERNS):
+        issues.append("vague_claims")
+    if profile.get("needs_external_facts") and not re.search(r"\b(source|verify|current|latest|live|up[- ]?to[- ]?date)\b", normalized):
+        issues.append("missing_source_caveat")
+    if profile.get("needs_clarification") and not re.search(r"\b(clarify|question|assum)\b", normalized):
+        issues.append("missing_clarification_or_assumption")
+
+    return {
+        "ok": not issues,
+        "issues": sorted(set(issues)),
+        "word_count": len(words),
+        "section_labels_found": sorted(set(found_labels)),
+        "min_words": min_words,
+    }
+
+
+def _build_critical_retry_prompt(system_prompt: str, verification: Dict[str, Any]) -> str:
+    issues = ", ".join(verification.get("issues") or ["quality check failed"])
+    return (
+        f"{str(system_prompt or '').strip()}\n\n"
+        "CRITICAL ANSWER VERIFICATION FAILED:\n"
+        f"Issues detected: {issues}.\n"
+        "Regenerate the answer once. Keep the same critical structure, add concrete reasoning, "
+        "state assumptions and uncertainty, include risks, give a practical recommendation, "
+        "and avoid unsupported certainty."
+    ).strip()
+
+
+def build_critical_degraded_reply(
+    user_input: str,
+    profile: Dict[str, Any],
+    providers_tried: Optional[List[Any]] = None,
+    *,
+    verification: Optional[Dict[str, Any]] = None,
+) -> str:
+    domains = ", ".join(profile.get("domains") or ["critical question"])
+    issues = ", ".join((verification or {}).get("issues") or [])
+    provider_note = ""
+    if providers_tried:
+        provider_names = []
+        for item in providers_tried:
+            if isinstance(item, dict):
+                name = str(item.get("provider") or "").strip()
+                status = str(item.get("status") or "").strip().replace("_", " ")
+                label = f"{name} {status}".strip()
+            else:
+                label = str(item).strip()
+            if label and label not in provider_names:
+                provider_names.append(label)
+        if provider_names:
+            provider_note = f" Provider path: {', '.join(provider_names[:3])}."
+    quality_note = f" The last answer failed checks for: {issues}." if issues else ""
+    domains_set = set(profile.get("domains") or [])
+    if domains_set & {"medical", "legal", "financial"}:
+        expert_line = "For this domain, verify with a qualified professional before acting."
+    elif "security" in domains_set:
+        expert_line = "Treat this as a limited reasoning scaffold and verify with a controlled security review before acting."
+    elif "safety" in domains_set:
+        expert_line = "Do not act on this until the missing context is verified and the safe path is clear."
+    else:
+        expert_line = "Treat this as a limited reasoning scaffold until a live model/source check is available."
+    return (
+        "Direct verdict: I do not have a clean verified live-model answer for this critical question right now.\n\n"
+        f"Reasoning: The request touches {domains}, so I should not invent details or answer with false confidence.{quality_note}{provider_note}\n\n"
+        "Assumptions / uncertainty: I can only provide a limited safe frame from the prompt itself; current facts, project-specific evidence, or professional context may be missing.\n\n"
+        "Risks: A shallow or overconfident answer could mislead decisions, especially in safety, legal, medical, financial, security, or architecture contexts.\n\n"
+        f"Recommendation: {expert_line}\n\n"
+        "Next step: Re-run the question with the needed context or enable a verified provider/search path, then ask for a sourced critical answer."
+    )
 
 
 def build_degraded_reply(user_input: str, providers_tried: Optional[List[Any]] = None) -> str:
@@ -2526,13 +3028,13 @@ def _build_quality_retry_prompt(system_prompt: str) -> str:
     ).strip()
 
 
-def _extract_usable_payload_content(payload: Dict[str, Any], user_input: str) -> str:
+def _extract_usable_payload_content(payload: Dict[str, Any], user_input: str, *, preserve_depth: bool = False) -> str:
     if not payload.get("success"):
         return ""
     content = clean_response(payload.get("content"))
     if not is_meaningful_text(content):
         return ""
-    polished = polish_assistant_reply(content, user_input=user_input)
+    polished = polish_assistant_reply(content, user_input=user_input, preserve_depth=preserve_depth)
     if not is_meaningful_text(polished):
         return ""
     if _response_contains_bad_phrases(polished):
@@ -2547,6 +3049,7 @@ def _run_response_attempt_chain(
     system_prompt: str,
     max_tokens: int,
     temperature: float,
+    preserve_depth: bool = False,
 ) -> Dict[str, Any]:
     primary_payload = generate_with_fallback(
         provider_messages,
@@ -2556,7 +3059,7 @@ def _run_response_attempt_chain(
         temperature=temperature,
     )
     merged_attempts = _merge_provider_attempts(primary_payload.get("providers_tried") or [])
-    primary_content = _extract_usable_payload_content(primary_payload, user_input)
+    primary_content = _extract_usable_payload_content(primary_payload, user_input, preserve_depth=preserve_depth)
     if primary_content:
         primary_payload["content"] = primary_content
         primary_payload["providers_tried"] = merged_attempts
@@ -2572,7 +3075,7 @@ def _run_response_attempt_chain(
         temperature=temperature,
     )
     merged_attempts = _merge_provider_attempts(merged_attempts, retry_payload.get("providers_tried") or [])
-    retry_content = _extract_usable_payload_content(retry_payload, user_input)
+    retry_content = _extract_usable_payload_content(retry_payload, user_input, preserve_depth=preserve_depth)
     if retry_content:
         retry_payload["content"] = retry_content
         retry_payload["providers_tried"] = merged_attempts
@@ -2587,7 +3090,7 @@ def _run_response_attempt_chain(
         temperature=temperature,
     )
     merged_attempts = _merge_provider_attempts(merged_attempts, fallback_payload.get("providers_tried") or [])
-    fallback_content = _extract_usable_payload_content(fallback_payload, user_input)
+    fallback_content = _extract_usable_payload_content(fallback_payload, user_input, preserve_depth=preserve_depth)
     if fallback_content:
         fallback_payload["content"] = fallback_content
         fallback_payload["providers_tried"] = merged_attempts
@@ -2785,16 +3288,71 @@ def generate_response_payload(
             "success": True,
         }
 
+    critical_profile = classify_critical_question(user_input)
     system_prompt, explanation_mode = build_runtime_system_prompt(user_input, base_system_prompt)
+    project_context_used = False
+    if critical_profile.get("is_critical"):
+        system_prompt = build_critical_reasoning_system_prompt(system_prompt, critical_profile)
+        system_prompt, project_context_used = _append_project_context_if_needed(system_prompt, critical_profile)
+        explanation_mode = "critical_reasoning"
+        temperature = min(float(temperature), 0.4)
+    provider_messages = _replace_system_prompt(provider_messages, system_prompt)
     payload = _run_response_attempt_chain(
         user_input=user_input,
         provider_messages=provider_messages,
         system_prompt=system_prompt,
         max_tokens=max_tokens,
         temperature=temperature,
+        preserve_depth=bool(critical_profile.get("is_critical")),
     )
     content = clean_response(payload.get("content"))
     if payload.get("success") and is_meaningful_text(content):
+        if critical_profile.get("is_critical"):
+            verification = verify_critical_answer(content, critical_profile)
+            if not verification.get("ok"):
+                retry_prompt = _build_critical_retry_prompt(system_prompt, verification)
+                retry_payload = _run_response_attempt_chain(
+                    user_input=user_input,
+                    provider_messages=_replace_system_prompt(provider_messages, retry_prompt),
+                    system_prompt=retry_prompt,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    preserve_depth=True,
+                )
+                retry_content = clean_response(retry_payload.get("content"))
+                retry_verification = verify_critical_answer(retry_content, critical_profile)
+                payload["providers_tried"] = _merge_provider_attempts(
+                    payload.get("providers_tried") or [],
+                    retry_payload.get("providers_tried") or [],
+                )
+                if retry_payload.get("success") and is_meaningful_text(retry_content) and retry_verification.get("ok"):
+                    retry_payload["providers_tried"] = payload["providers_tried"]
+                    retry_payload["response_stage"] = f"{retry_payload.get('response_stage') or 'primary'}_critical_retry"
+                    payload = retry_payload
+                    content = retry_content
+                    verification = retry_verification
+                else:
+                    payload["success"] = False
+                    payload["content"] = None
+                    payload["error"] = "Critical response did not pass verification."
+                    payload["critical_question"] = True
+                    payload["critical_profile"] = {**critical_profile, "project_context_used": project_context_used}
+                    payload["critical_verification"] = retry_verification
+                    payload["degraded_reply"] = build_critical_degraded_reply(
+                        user_input,
+                        critical_profile,
+                        payload.get("providers_tried") or [],
+                        verification=retry_verification,
+                    )
+                    payload["explanation_mode"] = explanation_mode
+                    return payload
+            payload["critical_question"] = True
+            payload["critical_profile"] = {**critical_profile, "project_context_used": project_context_used}
+            payload["critical_verification"] = verification
+            payload["content"] = content
+        else:
+            payload["critical_question"] = False
+            payload["critical_profile"] = critical_profile
         payload["explanation_mode"] = explanation_mode
         add_to_history("user", user_input)
         add_to_history("assistant", payload["content"])
@@ -2812,7 +3370,15 @@ def generate_response_payload(
         f"error={payload.get('error')!r}  "
         f"input={repr(user_input[:80])}"
     )
-    payload["degraded_reply"] = build_degraded_reply(user_input=user_input, providers_tried=providers_tried)
+    if critical_profile.get("is_critical"):
+        payload["critical_question"] = True
+        payload["critical_profile"] = {**critical_profile, "project_context_used": project_context_used}
+        payload["critical_verification"] = {"ok": False, "issues": ["provider_unavailable"]}
+        payload["degraded_reply"] = build_critical_degraded_reply(user_input, critical_profile, providers_tried)
+    else:
+        payload["critical_question"] = False
+        payload["critical_profile"] = critical_profile
+        payload["degraded_reply"] = build_degraded_reply(user_input=user_input, providers_tried=providers_tried)
     payload["explanation_mode"] = explanation_mode
     return payload
 

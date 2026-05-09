@@ -97,6 +97,7 @@
     currentExternal: null,
     lastActionTrace: null,
     requestInFlight: false,
+    activeChatAbortController: null,
     screenShareActive: false,
     screenShareLabel: "Off",
     screenStream: null,
@@ -331,6 +332,10 @@
   }
 
   async function handleInterrupt() {
+    if (state.activeChatAbortController) {
+      state.activeChatAbortController.abort();
+      state.activeChatAbortController = null;
+    }
     if (state.recognitionActive) {
       stopRecognition("Listening stopped.");
     }
@@ -348,7 +353,7 @@
       setComposerStatus("Stopped. Ready when you are.");
       settleToIdleLayout();
     } else {
-      setComposerStatus("Interrupt noted. Waiting for the current request to finish.");
+      setComposerStatus("Stopping the current response.");
     }
   }
 
@@ -553,6 +558,7 @@
       return;
     }
     const desktopActive = Boolean(state.desktopVoiceStatus?.active);
+    const chatStreaming = Boolean(state.requestInFlight && state.activeChatAbortController);
 
     if (state.voiceSupported) {
       el.talkButton.hidden = false;
@@ -562,8 +568,8 @@
         el.wakeButton.classList.remove("is-active");
       }
       if (el.interruptButton) {
-        el.interruptButton.hidden = !state.recognitionActive && !state.speakingMessageId && !desktopActive;
-        el.interruptButton.classList.toggle("is-active", state.recognitionActive || Boolean(state.speakingMessageId) || desktopActive);
+        el.interruptButton.hidden = !state.recognitionActive && !state.speakingMessageId && !desktopActive && !chatStreaming;
+        el.interruptButton.classList.toggle("is-active", state.recognitionActive || Boolean(state.speakingMessageId) || desktopActive || chatStreaming);
       }
       syncAssistantModeChrome();
       return;
@@ -576,7 +582,7 @@
     }
     el.talkButton.classList.remove("is-active");
     if (el.interruptButton) {
-      el.interruptButton.hidden = !state.speakingMessageId && !desktopActive;
+      el.interruptButton.hidden = !state.speakingMessageId && !desktopActive && !chatStreaming;
     }
     syncAssistantModeChrome();
   }
@@ -776,10 +782,7 @@
     renderConversation();
 
     try {
-      const payload = await apiJson("/api/chat", {
-        method: "POST",
-        body: JSON.stringify({ message: commandText, mode: "hybrid" }),
-      });
+      const { payload, message: streamedMessage } = await requestChatPayload(commandText, classification);
 
       const delivery = normalizeDocumentDeliveryPayload(payload);
       const actionPlan = normalizeActionPlanPayload(payload);
@@ -803,7 +806,7 @@
         state.panelVisible = true;
         state.panelMode = "context";
       }
-      await revealAssistantMessage({
+      const finalMessage = {
         role: "assistant",
         text: replyText,
         badge: humanizeBadge(payload.execution_mode || (actionPlan ? "action_plan" : classification.taskKind) || "Assistant"),
@@ -812,10 +815,24 @@
         actionPlan,
         actionSuggestions,
         actionTrace,
-      }, {
-        stateName: "responding",
-        event: "api:response_ready",
-      });
+      };
+      if (streamedMessage) {
+        Object.assign(streamedMessage, finalMessage, {
+          id: streamedMessage.id,
+          streaming: false,
+          effect: "response",
+        });
+        setAssistantState("responding", "api:response_ready");
+        renderConversation();
+        scrollConversationToBottom();
+        triggerOrbResponsePulse();
+        maybeSpeakAssistantMessage(streamedMessage);
+      } else {
+        await revealAssistantMessage(finalMessage, {
+          stateName: "responding",
+          event: "api:response_ready",
+        });
+      }
 
       if (delivery) {
         state.recentOutputs = [delivery, ...state.recentOutputs.filter((item) => item.downloadUrl !== delivery.downloadUrl)].slice(0, 6);
@@ -858,6 +875,12 @@
       renderSidebarSessions();
       renderRightPanel();
     } catch (error) {
+      if (error?.name === "AbortError") {
+        setAssistantState("idle", "api:stream_aborted");
+        setComposerStatus("Stopped. Ready when you are.");
+        updateWorkspaceSummary("AURA stopped the response cleanly.");
+        return;
+      }
       setAssistantState("error", "api:request_failed");
       setComposerStatus("I couldn't complete that yet.");
       updateWorkspaceSummary("That task did not finish cleanly inside AURA.");
@@ -880,6 +903,8 @@
       });
     } finally {
       state.requestInFlight = false;
+      state.activeChatAbortController = null;
+      syncVoiceControls();
       renderRightPanel();
       resetToCalmIdle();
     }
@@ -1148,6 +1173,140 @@
     return message;
   }
 
+  async function requestChatPayload(commandText, classification) {
+    if (!window.ReadableStream || !window.TextDecoder || !window.AbortController) {
+      return {
+        payload: await apiJson("/api/chat", {
+          method: "POST",
+          body: JSON.stringify({ message: commandText, mode: "hybrid" }),
+        }),
+        message: null,
+      };
+    }
+
+    try {
+      return await streamChatPayload(commandText, classification);
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        throw error;
+      }
+      return {
+        payload: await apiJson("/api/chat", {
+          method: "POST",
+          body: JSON.stringify({ message: commandText, mode: "hybrid" }),
+        }),
+        message: null,
+      };
+    }
+  }
+
+  async function streamChatPayload(commandText, classification) {
+    const controller = new AbortController();
+    state.activeChatAbortController = controller;
+    syncVoiceControls();
+
+    const streamingMessage = appendMessage({
+      role: "assistant",
+      text: "",
+      badge: humanizeBadge(classification.taskKind || "Assistant"),
+      timestamp: new Date().toISOString(),
+      streaming: true,
+    });
+
+    let finalPayload = null;
+    let sawChunk = false;
+    try {
+      const response = await fetch("/api/chat/stream", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "text/event-stream",
+          "X-AURA-Session-Id": state.sessionId,
+        },
+        body: JSON.stringify({ message: commandText, mode: "hybrid" }),
+        signal: controller.signal,
+      });
+      if (!response.ok || !response.body) {
+        throw new Error(`Streaming unavailable (${response.status})`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
+        for (const rawEvent of events) {
+          const event = parseSseEvent(rawEvent);
+          if (!event) {
+            continue;
+          }
+          if (event.event === "chunk" && event.data?.text) {
+            sawChunk = true;
+            streamingMessage.text += String(event.data.text);
+            renderConversation();
+            scrollConversationToBottom();
+          } else if (event.event === "error") {
+            streamingMessage.text = String(event.data?.message || streamingMessage.text || "I couldn't complete that yet.");
+            renderConversation();
+          } else if (event.event === "final") {
+            finalPayload = event.data || {};
+          }
+        }
+      }
+      if (!finalPayload) {
+        throw new Error("Streaming ended before the final response arrived.");
+      }
+      return { payload: finalPayload, message: streamingMessage };
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        streamingMessage.streaming = false;
+        streamingMessage.text = streamingMessage.text || "Stopped.";
+        renderConversation();
+        throw error;
+      }
+      state.messages = state.messages.filter((message) => message.id !== streamingMessage.id);
+      renderConversation();
+      if (sawChunk) {
+        setComposerStatus("Streaming stopped early. Falling back to the standard response path.");
+      }
+      throw error;
+    } finally {
+      state.activeChatAbortController = null;
+      syncVoiceControls();
+    }
+  }
+
+  function parseSseEvent(rawEvent) {
+    const lines = String(rawEvent || "").split("\n");
+    let eventName = "message";
+    const dataLines = [];
+    lines.forEach((line) => {
+      if (line.startsWith("event:")) {
+        eventName = line.slice(6).trim();
+      } else if (line.startsWith("data:")) {
+        dataLines.push(line.slice(5).trimStart());
+      }
+    });
+    if (!dataLines.length) {
+      return null;
+    }
+    try {
+      return {
+        event: eventName,
+        data: JSON.parse(dataLines.join("\n")),
+      };
+    } catch (_error) {
+      return null;
+    }
+  }
+
   function responseRevealDelay(message) {
     const textLength = String(message?.text || "").length;
     if (textLength > 900 || message?.delivery) {
@@ -1231,6 +1390,9 @@
     if (message.effect === "response" && message.role !== "user") {
       row.classList.add("message-row--response");
     }
+    if (message.streaming) {
+      row.classList.add("message-row--streaming");
+    }
 
     const card = document.createElement("div");
     card.className = "message-card";
@@ -1256,14 +1418,14 @@
     time.textContent = formatClock(message.timestamp);
     metaRight.appendChild(time);
 
-    if (message.role !== "user") {
+    if (message.role !== "user" && !message.streaming) {
       metaRight.appendChild(buildMessageActions(message));
     }
 
     meta.append(label, metaRight);
     card.appendChild(meta);
 
-    if (message.text) {
+    if (message.text || message.streaming) {
       card.appendChild(renderRichText(message.text));
     }
 
@@ -1333,6 +1495,27 @@
     button.append(glyph, text);
   }
 
+  async function copyTextValue(text, trigger, successLabel = "Copied") {
+    if (!text) {
+      return false;
+    }
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      fallbackCopyText(text);
+    }
+    if (trigger) {
+      const originalText = trigger.textContent;
+      trigger.textContent = successLabel;
+      trigger.classList.add("is-success");
+      window.setTimeout(() => {
+        trigger.textContent = originalText || "Copy";
+        trigger.classList.remove("is-success");
+      }, 1400);
+    }
+    return true;
+  }
+
   async function copyMessageText(message, trigger) {
     const text = messageTextForControls(message);
     if (!text) {
@@ -1366,6 +1549,9 @@
     const parts = [String(message?.text || "").trim()];
     const delivery = message?.delivery;
     if (delivery?.files?.length) {
+      if (delivery.title || delivery.previewText) {
+        parts.push([delivery.title, delivery.previewText].filter(Boolean).join("\n\n"));
+      }
       parts.push(
         delivery.files
           .map((file) => `${String(file.format || "").toUpperCase()}: ${file.downloadUrl}`)
@@ -1546,66 +1732,188 @@
     const container = document.createElement("div");
     container.className = "rich-text";
 
-    const segments = String(text || "").split(/```/);
-    segments.forEach((segment, index) => {
-      if (!segment.trim()) {
-        return;
-      }
-      if (index % 2 === 1) {
-        const pre = document.createElement("pre");
-        pre.textContent = segment.trim();
-        container.appendChild(pre);
-        return;
-      }
+    const source = String(text || "");
+    if (!source.trim()) {
+      const placeholder = document.createElement("p");
+      placeholder.className = "rich-text__placeholder";
+      placeholder.textContent = "AURA is writing";
+      container.appendChild(placeholder);
+      return container;
+    }
 
-      const blocks = segment
-        .replace(/\r\n/g, "\n")
-        .split(/\n{2,}/)
-        .map((block) => block.trim())
-        .filter(Boolean);
-
-      blocks.forEach((block) => {
-        const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-        if (!lines.length) {
-          return;
-        }
-
-        if (lines.every((line) => /^[-*]\s+/.test(line))) {
-          const list = document.createElement("ul");
-          lines.forEach((line) => {
-            const item = document.createElement("li");
-            item.textContent = cleanInlineMarkdown(line.replace(/^[-*]\s+/, ""));
-            list.appendChild(item);
-          });
-          container.appendChild(list);
-          return;
-        }
-
-        if (lines.every((line) => /^\d+\.\s+/.test(line))) {
-          const list = document.createElement("ol");
-          lines.forEach((line) => {
-            const item = document.createElement("li");
-            item.textContent = cleanInlineMarkdown(line.replace(/^\d+\.\s+/, ""));
-            list.appendChild(item);
-          });
-          container.appendChild(list);
-          return;
-        }
-
-        if (lines.length === 1 && /^#{1,4}\s+/.test(lines[0])) {
-          const heading = document.createElement("h4");
-          heading.textContent = cleanInlineMarkdown(lines[0].replace(/^#{1,4}\s+/, ""));
-          container.appendChild(heading);
-          return;
-        }
-
-        const paragraph = document.createElement("p");
-        paragraph.textContent = cleanInlineMarkdown(lines.join(" "));
-        container.appendChild(paragraph);
-      });
-    });
+    let cursor = 0;
+    const fencePattern = /```([a-zA-Z0-9_+\-.#]*)\n?([\s\S]*?)```/g;
+    let match = fencePattern.exec(source);
+    while (match) {
+      renderMarkdownBlocks(source.slice(cursor, match.index), container);
+      container.appendChild(buildCodeBlock(match[2] || "", match[1] || ""));
+      cursor = fencePattern.lastIndex;
+      match = fencePattern.exec(source);
+    }
+    renderMarkdownBlocks(source.slice(cursor), container);
 
     return container;
+  }
+
+  function renderMarkdownBlocks(source, container) {
+    const lines = String(source || "").replace(/\r\n/g, "\n").split("\n");
+    let paragraph = [];
+
+    const flushParagraph = () => {
+      const text = paragraph.join(" ").trim();
+      paragraph = [];
+      if (!text) {
+        return;
+      }
+      const element = document.createElement("p");
+      appendInlineMarkdown(element, text);
+      container.appendChild(element);
+    };
+
+    for (let index = 0; index < lines.length; index += 1) {
+      const rawLine = lines[index] || "";
+      const line = rawLine.trim();
+      if (!line) {
+        flushParagraph();
+        continue;
+      }
+
+      const heading = line.match(/^(#{1,4})\s+(.+)$/);
+      if (heading) {
+        flushParagraph();
+        const level = Math.min(4, Math.max(2, heading[1].length + 1));
+        const element = document.createElement(`h${level}`);
+        appendInlineMarkdown(element, heading[2]);
+        container.appendChild(element);
+        continue;
+      }
+
+      if (/^>\s?/.test(line)) {
+        flushParagraph();
+        const quote = document.createElement("blockquote");
+        while (index < lines.length && /^>\s?/.test(String(lines[index] || "").trim())) {
+          const part = String(lines[index] || "").trim().replace(/^>\s?/, "");
+          const paragraphElement = document.createElement("p");
+          appendInlineMarkdown(paragraphElement, part);
+          quote.appendChild(paragraphElement);
+          index += 1;
+        }
+        index -= 1;
+        container.appendChild(quote);
+        continue;
+      }
+
+      if (/^[-*]\s+/.test(line) || /^\d+\.\s+/.test(line)) {
+        flushParagraph();
+        const ordered = /^\d+\.\s+/.test(line);
+        const list = document.createElement(ordered ? "ol" : "ul");
+        while (index < lines.length) {
+          const current = String(lines[index] || "").trim();
+          const matches = ordered ? current.match(/^\d+\.\s+(.+)$/) : current.match(/^[-*]\s+(.+)$/);
+          if (!matches) {
+            break;
+          }
+          const item = document.createElement("li");
+          appendInlineMarkdown(item, matches[1]);
+          list.appendChild(item);
+          index += 1;
+        }
+        index -= 1;
+        container.appendChild(list);
+        continue;
+      }
+
+      if (looksLikeMarkdownTable(lines, index)) {
+        flushParagraph();
+        const tableLines = [];
+        while (index < lines.length && String(lines[index] || "").includes("|")) {
+          tableLines.push(String(lines[index] || "").trim());
+          index += 1;
+        }
+        index -= 1;
+        container.appendChild(buildMarkdownTable(tableLines));
+        continue;
+      }
+
+      paragraph.push(line);
+    }
+    flushParagraph();
+  }
+
+  function looksLikeMarkdownTable(lines, index) {
+    const current = String(lines[index] || "");
+    const next = String(lines[index + 1] || "");
+    return current.includes("|") && /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(next);
+  }
+
+  function buildMarkdownTable(lines) {
+    const table = document.createElement("table");
+    table.className = "markdown-table";
+    const rows = lines
+      .filter((line, index) => index !== 1)
+      .map((line) => line.replace(/^\||\|$/g, "").split("|").map((cell) => cell.trim()));
+    rows.forEach((cells, rowIndex) => {
+      const row = document.createElement("tr");
+      cells.forEach((cell) => {
+        const element = document.createElement(rowIndex === 0 ? "th" : "td");
+        appendInlineMarkdown(element, cell);
+        row.appendChild(element);
+      });
+      table.appendChild(row);
+    });
+    return table;
+  }
+
+  function buildCodeBlock(code, language) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-block";
+
+    const header = document.createElement("div");
+    header.className = "code-block__header";
+    const label = document.createElement("span");
+    label.textContent = language ? language.toLowerCase() : "code";
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "code-copy-button";
+    copy.textContent = "Copy code";
+    copy.setAttribute("aria-label", "Copy code block");
+    copy.addEventListener("click", async () => {
+      await copyTextValue(String(code || ""), copy, "Copied");
+    });
+    header.append(label, copy);
+
+    const pre = document.createElement("pre");
+    const codeElement = document.createElement("code");
+    codeElement.textContent = String(code || "").replace(/^\n+|\n+$/g, "");
+    pre.appendChild(codeElement);
+
+    wrapper.append(header, pre);
+    return wrapper;
+  }
+
+  function appendInlineMarkdown(parent, value) {
+    const text = String(value || "");
+    const tokenPattern = /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_)/g;
+    let cursor = 0;
+    let match = tokenPattern.exec(text);
+    while (match) {
+      if (match.index > cursor) {
+        parent.appendChild(document.createTextNode(text.slice(cursor, match.index)));
+      }
+      const token = match[0];
+      const element = token.startsWith("`")
+        ? document.createElement("code")
+        : token.startsWith("**") || token.startsWith("__")
+          ? document.createElement("strong")
+          : document.createElement("em");
+      element.textContent = token.replace(/^(`|\*\*|__|\*|_)|(`|\*\*|__|\*|_)$/g, "");
+      parent.appendChild(element);
+      cursor = tokenPattern.lastIndex;
+      match = tokenPattern.exec(text);
+    }
+    if (cursor < text.length) {
+      parent.appendChild(document.createTextNode(text.slice(cursor)));
+    }
   }
 
   function cleanInlineMarkdown(value) {
@@ -1782,6 +2090,16 @@
     delivery.files.forEach((file, index) => {
       row.appendChild(buildDocumentLink(`Download ${String(file.format || delivery.format).toUpperCase()}`, file.downloadUrl, index === 0));
     });
+    if (delivery.previewText) {
+      const copyPreview = document.createElement("button");
+      copyPreview.type = "button";
+      copyPreview.className = "document-link document-link--ghost";
+      copyPreview.textContent = "Copy preview";
+      copyPreview.addEventListener("click", async () => {
+        await copyTextValue([delivery.title, delivery.previewText].filter(Boolean).join("\n\n"), copyPreview, "Copied");
+      });
+      row.appendChild(copyPreview);
+    }
     links.appendChild(row);
     card.appendChild(links);
     return card;
@@ -3291,6 +3609,7 @@
         ...(options?.headers || {}),
       },
       body: options?.body,
+      signal: options?.signal,
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
