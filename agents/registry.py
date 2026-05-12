@@ -145,10 +145,10 @@ def _agent(
 
 
 MANUAL_AGENT_REGISTRY: tuple[AgentDescriptor, ...] = (
-    _agent("general", "General AURA", "core", "Primary assistant.", "hybrid", "safe", "llm_orchestrated_runtime", "Intent routing plus LLM response generation.", icon="GEN"),
+    _agent("general", "General VORIS", "core", "Primary assistant.", "hybrid", "safe", "llm_orchestrated_runtime", "Intent routing plus LLM response generation.", icon="GEN"),
     _agent("reasoning", "Reasoning Agent", "core", "Logic and analysis support.", "placeholder", "safe", "rule_plus_llm_reasoning", "Connect this reasoning agent to verified multi-step analysis before enabling live routing.", icon="RSN"),
     _agent("compare", "Compare Agent", "core", "Tradeoff comparisons.", "placeholder", "safe", "structured_prompting", "Connect this comparison agent to validated comparison workflows before enabling live routing.", icon="CMP"),
-    _agent("identity", "Identity Agent", "core", "AURA persona responses.", "placeholder", "safe", "prompted_persona", "Connect this identity agent to a distinct runtime behavior before enabling live routing.", icon="ID"),
+    _agent("identity", "Identity Agent", "core", "VORIS persona responses.", "placeholder", "safe", "prompted_persona", "Connect this identity agent to a distinct runtime behavior before enabling live routing.", icon="ID"),
     _agent("insights", "Insights Agent", "memory", "User insight summaries.", "hybrid", "private", "memory_analysis", "Stored interactions plus learned pattern summaries.", icon="MEM", stateful=True),
     _agent("permission", "Permission Guard", "security", "Deterministic policy checks.", "real", "safe", "policy_engine", "Connected to security.trust_engine.", icon="SEC"),
     _agent("study", "Study Agent", "productivity", "Teaching and explanation.", "placeholder", "safe", "llm_teaching", "Connect this study agent to a distinct teaching workflow before enabling live routing.", icon="STU"),
