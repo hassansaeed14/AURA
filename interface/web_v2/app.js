@@ -1,12 +1,23 @@
 ﻿(function () {
+  const LEGACY_STORAGE_KEYS = {
+    sessionId: "aura-v2-session-id",
+    sessionTitles: "aura-v2-session-titles",
+    speechEnabled: "aura-v2-speech-enabled",
+  };
   const STORAGE_KEYS = {
-    sessionId: "VORIS-v2-session-id",
-    sessionTitles: "VORIS-v2-session-titles",
-    speechEnabled: "VORIS-v2-speech-enabled",
+    sessionId: "voris-v2-session-id",
+    sessionTitles: "voris-v2-session-titles",
+    speechEnabled: "voris-v2-speech-enabled",
   };
 
   const WAKE_FALLBACK = "Hey VORIS";
-  const DEBUG_LOGS = localStorage.getItem("VORIS.debug") === "true";
+  for (const [key, storageKey] of Object.entries(STORAGE_KEYS)) {
+    const legacyKey = LEGACY_STORAGE_KEYS[key];
+    if (legacyKey && localStorage.getItem(storageKey) === null && localStorage.getItem(legacyKey) !== null) {
+      localStorage.setItem(storageKey, localStorage.getItem(legacyKey));
+    }
+  }
+  const DEBUG_LOGS = localStorage.getItem("voris.debug") === "true" || localStorage.getItem("aura.debug") === "true";
   const ICONS = {
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>',
     copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"></path></svg>',
