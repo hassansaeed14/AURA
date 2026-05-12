@@ -1,6 +1,6 @@
-@echo off
+﻿@echo off
 setlocal enabledelayedexpansion
-title AURA
+title VORIS
 color 0B
 cls
 
@@ -71,10 +71,10 @@ timeout /t 1 >nul
 echo  Checking dependencies...
 pip install -r requirements.txt -q 2>nul
 
-:: ── STEP 7: Launch AURA ───────────────────────────
+:: ── STEP 7: Launch VORIS ───────────────────────────
 echo.
 echo  ╔══════════════════════════════════════════════╗
-echo  ║  AURA is starting...                         ║
+echo  ║  VORIS is starting...                         ║
 echo  ║  Opening browser shortly...                  ║
 echo  ║                                              ║
 echo  ║  http://localhost:5000                       ║
@@ -90,7 +90,7 @@ python run_aura.py
 :: ── Crash Handling ────────────────────────────────
 echo.
 echo  ╔══════════════════════════════════════════════╗
-echo  ║  AURA stopped unexpectedly.                  ║
+echo  ║  VORIS stopped unexpectedly.                  ║
 echo  ║  Check logs above.                           ║
 echo  ╚══════════════════════════════════════════════╝
 echo.

@@ -1,10 +1,10 @@
-# AURA Response Rendering
+﻿# VORIS Response Rendering
 
-This document explains AURA's public, standard AI-app response rendering mechanisms. It does not describe or claim any private ChatGPT/OpenAI backend internals.
+This document explains VORIS's public, standard AI-app response rendering mechanisms. It does not describe or claim any private ChatGPT/OpenAI backend internals.
 
 ## Streaming / Typing Mechanism
 
-AURA keeps `POST /api/chat` as the source of truth.
+VORIS keeps `POST /api/chat` as the source of truth.
 
 `POST /api/chat/stream` is an SSE wrapper around the same trusted chat path:
 
@@ -25,7 +25,7 @@ Behavior:
 - chunks append to that message progressively;
 - the conversation stays pinned near the newest response;
 - the Stop control aborts the active request when possible;
-- if streaming is unavailable, AURA falls back to `/api/chat`.
+- if streaming is unavailable, VORIS falls back to `/api/chat`.
 
 ## Markdown Rendering
 
@@ -39,7 +39,7 @@ The web renderer supports:
 - blockquotes;
 - simple markdown tables.
 
-Safety rule: user/model text is inserted with `textContent` or text nodes. AURA does not execute code and does not trust markdown as HTML.
+Safety rule: user/model text is inserted with `textContent` or text nodes. VORIS does not execute code and does not trust markdown as HTML.
 
 ## Code Blocks
 
@@ -92,7 +92,7 @@ The UI does not display raw internal JSON. Download links remain served by the b
 Current truth:
 
 - no verified image provider adapter is active by default;
-- AURA returns a clear unavailable response;
+- VORIS returns a clear unavailable response;
 - no fake placeholder image is produced.
 
 Future providers can include OpenAI image generation, local Stable Diffusion, or another configured image provider. A provider must pass a real adapter implementation before the UI should claim image generation works.

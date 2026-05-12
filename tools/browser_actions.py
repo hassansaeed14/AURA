@@ -54,7 +54,7 @@ def _google_search_url(query: str, *, top_result: bool = False, result_index: in
     if safe_index > 1:
         params["start"] = str(safe_index - 1)
     if top_result:
-        # Google handles the result redirect; AURA does not scrape or inspect the page.
+        # Google handles the result redirect; VORIS does not scrape or inspect the page.
         params["btnI"] = "I"
     return "https://www.google.com/search?" + urlencode(params)
 

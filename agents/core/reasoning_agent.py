@@ -1,6 +1,6 @@
-import re
+﻿import re
 from groq import Groq
-from config.settings import GROQ_API_KEY, MODEL_NAME, AURA_PERSONALITY
+from config.settings import GROQ_API_KEY, MODEL_NAME, VORIS_PERSONALITY
 from memory.vector_memory import store_memory
 
 
@@ -23,8 +23,8 @@ def clean(text):
 def reason(problem, context=None):
     try:
         system = (
-            f"{AURA_PERSONALITY} "
-            "You are AURA Reasoning Agent. "
+            f"{VORIS_PERSONALITY} "
+            "You are VORIS Reasoning Agent. "
             "Think carefully and explain reasoning in plain text.\n\n"
             "Structure:\n"
             "PROBLEM ANALYSIS\n"
@@ -80,7 +80,7 @@ def analyze_pros_cons(topic):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Reasoning Agent. "
+                        "You are VORIS Reasoning Agent. "
                         "Analyze pros and cons objectively in plain text.\n\n"
                         "Structure:\n"
                         "PROS AND CONS ANALYSIS\n"
@@ -146,7 +146,7 @@ def compare(item1, item2=None):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Reasoning Agent. "
+                        "You are VORIS Reasoning Agent. "
                         "Compare two items objectively in plain text.\n\n"
                         "Structure:\n"
                         "COMPARISON\n"

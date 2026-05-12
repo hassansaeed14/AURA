@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AURA</title>
+  <title>VORIS</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -64,7 +64,7 @@
       <div class="nav-brand">
         <div class="nav-brand__orb" id="navBrandOrb" aria-hidden="true"></div>
         <div class="nav-brand__text">
-          <p class="nav-brand__name">AURA</p>
+          <p class="nav-brand__name">VORIS</p>
           <p class="nav-brand__sub" id="navBrandSub">Standby</p>
         </div>
       </div>
@@ -133,7 +133,7 @@
         <div class="identity-block">
           <div class="identity-text">
             <p class="eyebrow">Autonomous Universal Responsive Assistant</p>
-            <h1>AURA</h1>
+            <h1>VORIS</h1>
             <p class="identity-summary" id="presenceSummary">Private assistant conversation console.</p>
           </div>
         </div>
@@ -149,7 +149,7 @@
           </div>
           <button class="detail-button detail-button--quiet" id="overlayToggle" type="button" aria-pressed="false">Overlay</button>
           <button class="detail-button detail-button--quiet" id="detailsToggle" type="button" aria-expanded="false" aria-controls="detailsDrawer">Details</button>
-          <button class="orb-mini" id="orbMini" type="button" aria-label="AURA orb">
+          <button class="orb-mini" id="orbMini" type="button" aria-label="VORIS orb">
             <span class="orb-mini__dot"></span>
           </button>
         </div>
@@ -161,7 +161,7 @@
         <main class="presence-stage">
           <section class="chat-view" id="chatView">
             <div class="assistant-core">
-              <button class="core-orb" id="assistantCoreButton" type="button" aria-label="Activate AURA">
+              <button class="core-orb" id="assistantCoreButton" type="button" aria-label="Activate VORIS">
                 <span class="core-orb__ring core-orb__ring--outer"></span>
                 <span class="core-orb__ring core-orb__ring--mid"></span>
                 <span class="core-orb__ring core-orb__ring--inner"></span>
@@ -172,7 +172,7 @@
               <div class="core-status">
                 <p class="core-status__kicker" id="stateKicker">Standby</p>
                 <h2 id="stateHeadline">Ready when you are.</h2>
-                <p id="stateDescription">Say "Hey AURA" after wake mode is active, or use Talk and the composer below.</p>
+                <p id="stateDescription">Say "Hey VORIS" after wake mode is active, or use Talk and the composer below.</p>
               </div>
 
               <div class="idle-suggestions" id="idleSuggestions" hidden>
@@ -181,7 +181,7 @@
                   <button class="idle-chip" data-fill="Write 10 python programs" type="button">Write code</button>
                   <button class="idle-chip" data-fill="Write assignment on artificial intelligence" type="button">Make assignment</button>
                   <button class="idle-chip" data-fill="Open YouTube" type="button">Open YouTube</button>
-                  <button class="idle-chip" data-fill="Explain artificial intelligence simply" type="button">Ask AURA</button>
+                  <button class="idle-chip" data-fill="Explain artificial intelligence simply" type="button">Ask VORIS</button>
                 </div>
               </div>
             </div>
@@ -189,8 +189,8 @@
             <div class="chat-thread-shell">
               <div class="chat-thread" id="conversationThread">
                 <div class="chat-empty" id="conversationEmpty">
-                  <p class="chat-empty__eyebrow">AURA ready</p>
-                  <h3>Talk to AURA like a real assistant.</h3>
+                  <p class="chat-empty__eyebrow">VORIS ready</p>
+                  <h3>Talk to VORIS like a real assistant.</h3>
                   <p>Internal work opens a chat flow. External actions can run while the orb stays present.</p>
                 </div>
               </div>
@@ -202,8 +202,8 @@
                 </article>
 
                 <article class="live-card live-card--response">
-                  <p class="eyebrow">AURA</p>
-                  <div class="live-copy live-copy--response" id="liveResponse" aria-live="polite">AURA is standing by.</div>
+                  <p class="eyebrow">VORIS</p>
+                  <div class="live-copy live-copy--response" id="liveResponse" aria-live="polite">VORIS is standing by.</div>
                   <div class="response-meta">
                     <span id="responseMetaProvider">Provider: checking...</span>
                     <span id="responseMetaMode">Mode: public</span>
@@ -219,7 +219,7 @@
               <p class="eyebrow">System</p>
               <h2>Memory</h2>
             </div>
-            <p class="panel-description">AURA's active memory layers are tracked here.</p>
+            <p class="panel-description">VORIS's active memory layers are tracked here.</p>
             <div class="panel-stats" id="memoryStats">
               <div class="stat-row"><span>Episodic events</span><strong id="memEpisodic">-</strong></div>
               <div class="stat-row"><span>Semantic entries</span><strong id="memSemantic">-</strong></div>
@@ -233,7 +233,7 @@
               <p class="eyebrow">System</p>
               <h2>Tools</h2>
             </div>
-            <p class="panel-description">Active AURA capabilities and available tools.</p>
+            <p class="panel-description">Active VORIS capabilities and available tools.</p>
             <div class="tool-grid" id="toolGrid"></div>
           </section>
 
@@ -406,7 +406,7 @@
             Screen
           </button>
           <div class="text-command-shell">
-            <input id="textCommandInput" type="text" placeholder="Message AURA" autocomplete="off" aria-label="Message AURA">
+            <input id="textCommandInput" type="text" placeholder="Message VORIS" autocomplete="off" aria-label="Message VORIS">
           </div>
           <button class="dock-button dock-button--secondary" id="sendButton" type="button">Send</button>
         </div>

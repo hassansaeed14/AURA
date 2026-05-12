@@ -1,4 +1,4 @@
-import re
+﻿import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
 from memory.vector_memory import store_memory
@@ -44,7 +44,7 @@ def is_detailed_request(topic):
 def build_study_prompt(topic):
     if is_detailed_request(topic):
         return (
-            "You are AURA Study Agent, an expert professor and academic tutor. "
+            "You are VORIS Study Agent, an expert professor and academic tutor. "
             "Create a detailed university-level study guide in plain text. "
             "Use this structure:\n\n"
             "TITLE: [Topic Name]\n\n"
@@ -61,7 +61,7 @@ def build_study_prompt(topic):
         )
 
     return (
-        "You are AURA Study Agent, an expert professor and academic tutor. "
+        "You are VORIS Study Agent, an expert professor and academic tutor. "
         "Explain the topic clearly for a student in plain text. "
         "Use this structure:\n\n"
         "TITLE: [Topic Name]\n\n"

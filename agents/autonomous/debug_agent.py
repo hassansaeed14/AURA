@@ -1,4 +1,4 @@
-from groq import Groq
+﻿from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
 import re
 
@@ -45,7 +45,7 @@ def detect_basic_issue(code):
 def ai_fix(code):
 
     prompt = f"""
-You are AURA Debug Agent.
+You are VORIS Debug Agent.
 
 Fix the code properly and explain briefly.
 
@@ -89,7 +89,7 @@ Code:
 
 def fix_code(code):
 
-    print("\nAURA Debug Agent running...")
+    print("\nVORIS Debug Agent running...")
 
     if not code or len(code.strip()) < 5:
         return "Please provide valid code to debug."

@@ -1,10 +1,10 @@
-# AURA Demo Script
+﻿# VORIS Demo Script
 
 Use this script for controlled teacher/demo presentations. Do not demo unsafe or unsupported claims.
 
 ## Setup
 
-1. Start AURA:
+1. Start VORIS:
 
 ```powershell
 python run_aura.py
@@ -116,5 +116,5 @@ Show:
 
 ## Honest Closing Line
 
-AURA is not finished or real JARVIS yet. It is a Level 3 / early Level 4 assistant prototype with real controlled capabilities and a safety-first roadmap.
+VORIS is not finished or real JARVIS yet. It is a Level 3 / early Level 4 assistant prototype with real controlled capabilities and a safety-first roadmap.
 

@@ -1,4 +1,4 @@
-import re
+﻿import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
 from memory.vector_memory import store_memory
@@ -34,7 +34,7 @@ def detect_summary_type(text):
 def build_summary_prompt(summary_type):
     if summary_type == "detailed":
         return (
-            "You are AURA Summarizer Agent. "
+            "You are VORIS Summarizer Agent. "
             "Summarize clearly in plain text using this structure:\n\n"
             "DETAILED SUMMARY\n\n"
             "OVERVIEW\n"
@@ -46,7 +46,7 @@ def build_summary_prompt(summary_type):
 
     if summary_type == "bullet":
         return (
-            "You are AURA Summarizer Agent. "
+            "You are VORIS Summarizer Agent. "
             "Summarize clearly in bullet-style plain text:\n\n"
             "Main Idea\n"
             "Key Points\n"
@@ -55,7 +55,7 @@ def build_summary_prompt(summary_type):
         )
 
     return (
-        "You are AURA Summarizer Agent. "
+        "You are VORIS Summarizer Agent. "
         "Summarize clearly in plain text using this structure:\n\n"
         "BRIEF SUMMARY\n"
         "MAIN POINT\n"
@@ -113,7 +113,7 @@ def summarize_topic(topic):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Summarizer Agent. "
+                        "You are VORIS Summarizer Agent. "
                         "Explain and summarize a topic clearly in plain text:\n\n"
                         "TOPIC SUMMARY\n"
                         "WHAT IT IS\n"

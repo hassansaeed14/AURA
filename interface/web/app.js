@@ -1,11 +1,11 @@
-(() => {
+﻿(() => {
   const STORAGE_KEYS = {
     sessionId: "aura_live_session_id",
     detailsOpen: "aura_details_open",
   };
 
   const FALLBACK_REPLY = "Something went wrong on my side. Try again.";
-  const WAKE_FALLBACK = "Hey AURA";
+  const WAKE_FALLBACK = "Hey VORIS";
   const DEFAULT_WAKE_GREETING = "Hey. I'm here.";
   const COMMAND_NO_SPEECH_RETRY_LIMIT = 1;
   const CHAT_REQUEST_TIMEOUT_MS = 90000;
@@ -115,7 +115,7 @@
       description: `Say "${preferredWakePhrase()}" after wake mode is active, or use Talk and the text command field below.`,
     });
     updateLiveTranscript("Waiting for your voice or text command.");
-    updateLiveResponse("AURA is standing by.");
+    updateLiveResponse("VORIS is standing by.");
     updateWakeBanner("Checking voice and provider status...");
     await bootstrap();
     scheduleRefresh();
@@ -574,7 +574,7 @@
     }
     if (el.textCommandInput) {
       el.textCommandInput.readOnly = locked;
-      el.textCommandInput.placeholder = locked ? "Chat is locked" : "Message AURA";
+      el.textCommandInput.placeholder = locked ? "Chat is locked" : "Message VORIS";
     }
   }
 
@@ -615,7 +615,7 @@
 
       const label = document.createElement("p");
       label.className = "conversation-label";
-      label.textContent = message.role === "assistant" ? "AURA" : "You";
+      label.textContent = message.role === "assistant" ? "VORIS" : "You";
 
       const bubble = document.createElement("div");
       bubble.className = "conversation-bubble";
@@ -692,7 +692,7 @@
     const lastUser = [...state.chatMessages].reverse().find((item) => item.role === "user");
     const lastAssistant = [...state.chatMessages].reverse().find((item) => item.role === "assistant");
     updateLiveTranscript(lastUser?.text || "Waiting for your voice or text command.");
-    updateLiveResponse(lastAssistant?.text || "AURA is standing by.");
+    updateLiveResponse(lastAssistant?.text || "VORIS is standing by.");
     addActivity("Archive", "Archived conversation restored.", "neutral");
   }
 
@@ -926,7 +926,7 @@
       description: "I stopped speaking. I'm listening to you now.",
     });
     updateWakeBanner("Interrupted. Listening for your command now.");
-    addActivity("Interrupted", `AURA stopped speaking when it heard: ${transcript}`, "warn");
+    addActivity("Interrupted", `VORIS stopped speaking when it heard: ${transcript}`, "warn");
   }
 
   function handleSpeechStopPhrase(transcript) {
@@ -943,7 +943,7 @@
       description: "I stopped speaking. Waiting for your next command.",
     });
     updateWakeBanner("Silenced. Waiting for your next command.");
-    addActivity("Silenced", `AURA stopped speaking when it heard: ${transcript}`, "warn");
+    addActivity("Silenced", `VORIS stopped speaking when it heard: ${transcript}`, "warn");
     if (state.wakeModeEnabled) {
       scheduleRecognitionStart("wake", { reason: "after_silence" });
     }
@@ -981,7 +981,7 @@
 
   function logVoiceEvent(eventName, detail = {}) {
     try {
-      console.debug("[AURA voice]", eventName, detail);
+      console.debug("[VORIS voice]", eventName, detail);
     } catch (_error) {
       // keep diagnostics lightweight
     }
@@ -1075,7 +1075,7 @@
     });
 
     if (activeMode === "command" && hadPartial) {
-      addActivity("Partial voice", "AURA used the speech it captured instead of discarding it.", "warn");
+      addActivity("Partial voice", "VORIS used the speech it captured instead of discarding it.", "warn");
       void handleCommandTranscript(transcript);
       return;
     }
@@ -1133,7 +1133,7 @@
         ...updates,
         permission: "Unsupported",
         inputDevice: "Browser microphone API is unavailable",
-        lastIssue: "This browser cannot provide the microphone path AURA needs.",
+        lastIssue: "This browser cannot provide the microphone path VORIS needs.",
       });
       return false;
     }
@@ -1235,7 +1235,7 @@
     const started = await enableWakeMode({ automatic: true });
     if (!started) {
       state.wakeModeGestureNeeded = true;
-      updateWakeBanner('Wake mode needs one tap in this browser before "Hey AURA" can work reliably.');
+      updateWakeBanner('Wake mode needs one tap in this browser before "Hey VORIS" can work reliably.');
     }
   }
 
@@ -1293,7 +1293,7 @@
       clearRecognitionStartTimer();
 
       if (state.busy || state.voicePhase === "processing" || state.voicePhase === "speaking") {
-        updateWakeBanner(`Wake mode will arm as soon as AURA is free. Then say "${preferredWakePhrase()}".`);
+        updateWakeBanner(`Wake mode will arm as soon as VORIS is free. Then say "${preferredWakePhrase()}".`);
         return true;
       }
 
@@ -1329,7 +1329,7 @@
   }
 
   async function startTalkCapture() {
-    console.log("[AURA Voice] Talk button clicked — voiceActionInFlight:", state.voiceActionInFlight, "recognition:", state.recognition, "phase:", state.voicePhase);
+    console.log("[VORIS Voice] Talk button clicked — voiceActionInFlight:", state.voiceActionInFlight, "recognition:", state.recognition, "phase:", state.voicePhase);
     if (state.voiceActionInFlight) {
       return;
     }
@@ -1363,10 +1363,10 @@
 
   function setupRecognition() {
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    console.log("[AURA Voice] setupRecognition — SpeechRecognition available:", !!Recognition);
+    console.log("[VORIS Voice] setupRecognition — SpeechRecognition available:", !!Recognition);
     if (!Recognition) {
       const errMsg = "SpeechRecognition is not supported in this browser.";
-      console.error("[AURA Voice] FATAL:", errMsg);
+      console.error("[VORIS Voice] FATAL:", errMsg);
       setBrowserVoiceDiagnostics({
         mode: "Browser voice is unavailable",
         permission: "Unsupported",
@@ -1383,7 +1383,7 @@
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
-      console.log("[AURA Voice] recognition.onstart — mode:", state.recognitionMode, "lang:", recognition.lang, "continuous:", recognition.continuous, "interimResults:", recognition.interimResults);
+      console.log("[VORIS Voice] recognition.onstart — mode:", state.recognitionMode, "lang:", recognition.lang, "continuous:", recognition.continuous, "interimResults:", recognition.interimResults);
       clearRecognitionStartTimer();
       state.recognitionActive = true;
       state.recognitionStopReason = "running";
@@ -1406,7 +1406,7 @@
       } else if (state.bargeInArmed && state.currentSpokenText) {
         setBrowserVoiceDiagnostics({
           lastEvent: "barge_in_ready",
-          lastIssue: "Listening for a live interruption while AURA is speaking.",
+          lastIssue: "Listening for a live interruption while VORIS is speaking.",
         });
       } else {
         setVoicePhase("command_listening");
@@ -1434,10 +1434,10 @@
         .join(" ")
         .trim();
       const transcript = finalTranscript || interimTranscript;
-      console.log("[AURA Voice] recognition.onresult — final:", JSON.stringify(finalTranscript), "interim:", JSON.stringify(interimTranscript), "resultCount:", event.results.length);
+      console.log("[VORIS Voice] recognition.onresult — final:", JSON.stringify(finalTranscript), "interim:", JSON.stringify(interimTranscript), "resultCount:", event.results.length);
 
       if (!transcript) {
-        console.warn("[AURA Voice] onresult fired but transcript is empty");
+        console.warn("[VORIS Voice] onresult fired but transcript is empty");
         return;
       }
 
@@ -1447,7 +1447,7 @@
           lastTranscript: transcript,
           heardSpeech: true,
           lastEvent: "barge_in_echo_ignored",
-          lastIssue: "Ignoring AURA's own speech while waiting for an interruption.",
+          lastIssue: "Ignoring VORIS's own speech while waiting for an interruption.",
         });
         return;
       }
@@ -1496,7 +1496,7 @@
       if (state.bargeInTriggered && activeMode === "command") {
         setVoicePhase("command_listening");
       }
-      console.log("[AURA Voice] Final transcript ready to send:", JSON.stringify(finalTranscript), "mode:", activeMode);
+      console.log("[VORIS Voice] Final transcript ready to send:", JSON.stringify(finalTranscript), "mode:", activeMode);
       state.recognitionHandoffPending = true;
       stopRecognition("handoff");
       if (activeMode === "wake") {
@@ -1508,7 +1508,7 @@
 
     recognition.onerror = (event) => {
       const code = String(event.error || "").trim().toLowerCase();
-      console.error("[AURA Voice] recognition.onerror — error:", code, "raw event:", event.error, "phase:", state.voicePhase, "mode:", state.recognitionMode);
+      console.error("[VORIS Voice] recognition.onerror — error:", code, "raw event:", event.error, "phase:", state.voicePhase, "mode:", state.recognitionMode);
       updateWakeBanner(`Voice error: ${code}`);
       const partialTranscript = String(state.partialTranscript || "").trim();
       const phaseBeforeError = state.voicePhase;
@@ -1590,7 +1590,7 @@
     recognition.onend = () => {
       const endedMode = state.recognitionMode;
       const stopReason = state.recognitionStopReason || "idle";
-      console.log("[AURA Voice] recognition.onend — endedMode:", endedMode, "stopReason:", stopReason, "handoffPending:", state.recognitionHandoffPending);
+      console.log("[VORIS Voice] recognition.onend — endedMode:", endedMode, "stopReason:", stopReason, "handoffPending:", state.recognitionHandoffPending);
       state.recognitionActive = false;
       state.recognitionMode = "off";
       if (state.voicePhase === "wake_listening" || state.voicePhase === "command_listening") {
@@ -1657,12 +1657,12 @@
     state.recognition.maxAlternatives = 1;
 
     try {
-      console.log("[AURA Voice] recognition.start() called — mode:", mode, "lang:", state.recognition.lang, "continuous:", state.recognition.continuous, "interimResults:", state.recognition.interimResults);
+      console.log("[VORIS Voice] recognition.start() called — mode:", mode, "lang:", state.recognition.lang, "continuous:", state.recognition.continuous, "interimResults:", state.recognition.interimResults);
       state.recognition.start();
       logVoiceEvent("speech_start", { mode, automatic });
       return true;
     } catch (error) {
-      console.error("[AURA Voice] recognition.start() threw:", error.message, error);
+      console.error("[VORIS Voice] recognition.start() threw:", error.message, error);
       updateWakeBanner(`Failed to start mic: ${error.message}`);
       if (!automatic) {
         updateWakeBanner(error.message || "Voice listening could not start.");
@@ -1704,7 +1704,7 @@
     if (!wakeMatch.detected) {
       logVoiceEvent("wake_miss", { transcript });
       addActivity("Standby", "Heard speech, but the wake phrase was not detected.", "neutral");
-      updateWakeBanner(`Standby is active. Say "${preferredWakePhrase()}" to wake AURA.`);
+      updateWakeBanner(`Standby is active. Say "${preferredWakePhrase()}" to wake VORIS.`);
       setVoicePhase("idle");
       setIdleState();
       if (state.wakeModeEnabled && !state.busy && state.voicePhase === "idle") {
@@ -1721,7 +1721,7 @@
       transcript,
       remainingText: wakeMatch.remainingText,
     });
-    addActivity("Wake detected", `AURA heard ${preferredWakePhrase()}.`, "good");
+    addActivity("Wake detected", `VORIS heard ${preferredWakePhrase()}.`, "good");
     setOrbLayout("center");
     // Expand orb if minimized
     if (state.idleMinimized) restoreFromIdleMinimize();
@@ -1990,7 +1990,7 @@
         credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
-          "X-AURA-Session-Id": state.sessionId,
+          "X-VORIS-Session-Id": state.sessionId,
         },
         body: JSON.stringify(payload),
         signal: controller.signal,
@@ -2450,7 +2450,7 @@
   }
 
   function updateLiveResponse(text, { provider = null, mode = null, documentDelivery = null } = {}) {
-    renderResponseContent(el.liveResponse, text || "AURA is standing by.");
+    renderResponseContent(el.liveResponse, text || "VORIS is standing by.");
     if (documentDelivery) {
       renderDocumentDelivery(documentDelivery);
     } else {
@@ -2471,7 +2471,7 @@
     if (!text) {
       const placeholder = document.createElement("p");
       placeholder.className = "response-body";
-      placeholder.textContent = "AURA is standing by.";
+      placeholder.textContent = "VORIS is standing by.";
       container.appendChild(placeholder);
       return;
     }
@@ -2644,7 +2644,7 @@
   }
 
   function assistantRuntimeMessage() {
-    return currentRuntime().message || "AURA is routing around an unhealthy path right now.";
+    return currentRuntime().message || "VORIS is routing around an unhealthy path right now.";
   }
 
   function currentUserName() {
@@ -2744,7 +2744,7 @@
     const response = await fetch(url, {
       credentials: "same-origin",
       headers: {
-        "X-AURA-Session-Id": state.sessionId,
+        "X-VORIS-Session-Id": state.sessionId,
       },
     });
 
@@ -3098,7 +3098,7 @@
       pill: "Analyzing",
       kicker: route.taskType === "chat" ? "Conversation" : route.taskType,
       headline: "Working on it.",
-      description: "I'm routing this through AURA now.",
+      description: "I'm routing this through VORIS now.",
     });
     updateLiveTranscript(commandText);
     appendConversationMessage("user", commandText, { meta: route.taskType });
@@ -3139,7 +3139,7 @@
         pill: "Idle",
         kicker: "External task",
         headline: `${route.label} is opening.`,
-        description: "AURA is still here when you need the next command.",
+        description: "VORIS is still here when you need the next command.",
       });
     } else {
       setAssistantState("error", {
@@ -3363,8 +3363,8 @@
         track.addEventListener("ended", () => stopScreenShare());
       });
 
-      addActivity("Screen share", "Screen is being shared with AURA. Visual context is captured — analysis pending.", "good");
-      updateWakeBanner("Screen sharing active. AURA has your screen captured.");
+      addActivity("Screen share", "Screen is being shared with VORIS. Visual context is captured — analysis pending.", "good");
+      updateWakeBanner("Screen sharing active. VORIS has your screen captured.");
     } catch (error) {
       if (error?.name !== "NotAllowedError") {
         addActivity("Screen share", error?.message || "Could not start screen capture.", "error");
@@ -3382,7 +3382,7 @@
     if (el.screenShareBadge) el.screenShareBadge.hidden = true;
     if (el.screenShareStatus) el.screenShareStatus.textContent = "Off";
     if (el.screenShareButton) {
-      el.screenShareButton.title = "Share your screen with AURA";
+      el.screenShareButton.title = "Share your screen with VORIS";
       el.screenShareButton.classList.remove("dock-button--active");
     }
     if (el.screenPreviewVideo) el.screenPreviewVideo.srcObject = null;
@@ -3606,7 +3606,7 @@
     renderChatLockState();
     setOrbLayout("topbar");
     updateLiveTranscript("Waiting for your voice or text command.");
-    updateLiveResponse("AURA is standing by.");
+    updateLiveResponse("VORIS is standing by.");
     updateWakeBanner(currentWakeBanner());
   }
 

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass, field
@@ -525,7 +525,7 @@ class SummaryEngine:
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA's website summarizer. "
+                        "You are VORIS's website summarizer. "
                         "Summarize the provided website content clearly, accurately, and faithfully. "
                         "Do not invent facts. "
                         "Return only the summary. "

@@ -1,4 +1,4 @@
-import json
+﻿import json
 import os
 import datetime
 from collections import Counter
@@ -91,7 +91,7 @@ def generate_improvement_report():
     if not data["failures"] and not data["agent_errors"] and not data["low_confidence_commands"]:
         return "No major improvement issues detected yet."
 
-    report = "AURA IMPROVEMENT REPORT\n\n"
+    report = "VORIS IMPROVEMENT REPORT\n\n"
 
     if data["failures"]:
         report += f"Recent failures: {len(data['failures'])}\n"

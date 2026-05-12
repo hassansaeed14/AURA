@@ -1,4 +1,4 @@
-import re
+﻿import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
 from memory.vector_memory import store_memory
@@ -39,7 +39,7 @@ def detect_email_type(text):
 
 def build_email_prompt(email_type, tone):
     return (
-        "You are AURA Email Writer Agent, an expert business communicator. "
+        "You are VORIS Email Writer Agent, an expert business communicator. "
         f"Write a {tone} {email_type} email in plain text.\n\n"
         "Structure:\n\n"
         "Subject: [Clear subject]\n\n"

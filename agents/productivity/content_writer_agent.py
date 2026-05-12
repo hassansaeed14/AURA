@@ -1,4 +1,4 @@
-import re
+﻿import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
 from memory.vector_memory import store_memory
@@ -38,7 +38,7 @@ def detect_content_type(text):
 def build_content_prompt(content_type, tone, word_count):
     if content_type == "article":
         return (
-            "You are AURA Content Writer Agent, an expert writer and editor. "
+            "You are VORIS Content Writer Agent, an expert writer and editor. "
             f"Write a {tone} article in plain text of about {word_count} words.\n\n"
             "Structure:\n"
             "ARTICLE TITLE\n"
@@ -53,7 +53,7 @@ def build_content_prompt(content_type, tone, word_count):
 
     if content_type == "social":
         return (
-            "You are AURA Content Writer Agent, an expert social media writer. "
+            "You are VORIS Content Writer Agent, an expert social media writer. "
             f"Write a {tone} social media post in plain text.\n\n"
             "Structure:\n"
             "POST CAPTION\n"
@@ -65,7 +65,7 @@ def build_content_prompt(content_type, tone, word_count):
 
     if content_type == "essay":
         return (
-            "You are AURA Content Writer Agent, an expert academic writer. "
+            "You are VORIS Content Writer Agent, an expert academic writer. "
             f"Write a {tone} essay in plain text of about {word_count} words.\n\n"
             "Structure:\n"
             "ESSAY TITLE\n"
@@ -80,7 +80,7 @@ def build_content_prompt(content_type, tone, word_count):
         )
 
     return (
-        "You are AURA Content Writer Agent, an expert blog writer. "
+        "You are VORIS Content Writer Agent, an expert blog writer. "
         f"Write a {tone} blog post in plain text of about {word_count} words.\n\n"
         "Structure:\n"
         "BLOG POST TITLE\n"
@@ -145,7 +145,7 @@ def write_social_post(topic, platform="instagram", tone="engaging"):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Social Media Expert. "
+                        "You are VORIS Social Media Expert. "
                         f"Write an engaging {tone} {platform} post in plain text.\n\n"
                         "Structure:\n"
                         "POST CAPTION\n"

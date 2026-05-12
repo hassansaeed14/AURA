@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AURA - First Run Setup</title>
+  <title>VORIS - First Run Setup</title>
   <style>
     :root {
       color-scheme: dark;
@@ -118,11 +118,11 @@
 </head>
 <body>
   <main class="shell">
-    <p class="eyebrow">AURA Private Bootstrap</p>
-    <h1>Welcome to AURA. Create your owner account.</h1>
+    <p class="eyebrow">VORIS Private Bootstrap</p>
+    <h1>Welcome to VORIS. Create your owner account.</h1>
     <p class="lead">
       This is the only public bootstrap step. You will create the private owner account,
-      define the master PIN, and lock AURA into invite-only access from this point forward.
+      define the master PIN, and lock VORIS into invite-only access from this point forward.
     </p>
 
     <form id="setupForm">
@@ -156,7 +156,7 @@
         </label>
       </div>
       <div class="actions">
-        <button type="submit" id="setupButton">Bring AURA Online</button>
+        <button type="submit" id="setupButton">Bring VORIS Online</button>
         <span id="statusText">Awaiting initialization.</span>
       </div>
       <div class="note" id="successBox"></div>
@@ -194,7 +194,7 @@
       }
 
       button.disabled = true
-      statusText.textContent = 'Creating the owner account and securing AURA...'
+      statusText.textContent = 'Creating the owner account and securing VORIS...'
 
       try {
         const response = await fetch('/api/setup', {
@@ -206,7 +206,7 @@
         if (!response.ok) {
           throw new Error(data.detail || data.error || 'Setup failed.')
         }
-        successBox.textContent = data.message || 'AURA online. Owner account created.'
+        successBox.textContent = data.message || 'VORIS online. Owner account created.'
         successBox.style.display = 'block'
         statusText.textContent = 'Owner account ready. Redirecting to login...'
         setTimeout(() => {

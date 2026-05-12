@@ -846,7 +846,7 @@ def transform_content_request(
     if source is None:
         topic = _extract_topic_from_prompt(prompt) or _normalize_topic_label(prompt)
         source = register_text_source(
-            f"Topic focus: {topic}\n\nThis source was created from the user's prompt so AURA can transform it into structured output.",
+            f"Topic focus: {topic}\n\nThis source was created from the user's prompt so VORIS can transform it into structured output.",
             session_id=normalized_session,
             title=topic,
         )

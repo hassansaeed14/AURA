@@ -1,4 +1,4 @@
-import re
+﻿import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
 from memory.vector_memory import store_memory
@@ -36,7 +36,7 @@ def detect_code_type(task):
 
 def build_prompt(task, language):
     return f"""
-You are AURA Autonomous Coding Agent.
+You are VORIS Autonomous Coding Agent.
 
 Write clean, working {language} code for the task.
 

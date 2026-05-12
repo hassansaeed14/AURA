@@ -1,4 +1,4 @@
-CAPABILITY_MODE = "hybrid"
+﻿CAPABILITY_MODE = "hybrid"
 
 import requests
 from groq import Groq
@@ -57,7 +57,7 @@ def convert_currency(amount, from_currency, to_currency):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Currency Agent. "
+                        "You are VORIS Currency Agent. "
                         "Provide approximate currency conversion clearly in plain text. "
                         "Do not use markdown symbols."
                     )

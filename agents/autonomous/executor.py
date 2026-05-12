@@ -1,4 +1,4 @@
-from agents.autonomous.tool_selector import choose_tool
+﻿from agents.autonomous.tool_selector import choose_tool
 from agents.autonomous.coding_agent import write_code
 from agents.autonomous.debug_agent import fix_code
 
@@ -64,7 +64,7 @@ def execute_step(step):
 
 def execute_plan(plan):
 
-    print("\nAURA Executor started...")
+    print("\nVORIS Executor started...")
 
     steps = extract_steps(plan)
 
@@ -95,7 +95,7 @@ def execute_plan(plan):
 
 def execute_with_context(plan, context=None):
 
-    print("\nAURA Smart Execution Mode...")
+    print("\nVORIS Smart Execution Mode...")
 
     steps = extract_steps(plan)
     results = []

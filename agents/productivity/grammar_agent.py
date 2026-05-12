@@ -1,4 +1,4 @@
-import re
+﻿import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
 from memory.vector_memory import store_memory
@@ -28,7 +28,7 @@ def check_grammar(text):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Grammar Agent, an expert English teacher and editor. "
+                        "You are VORIS Grammar Agent, an expert English teacher and editor. "
                         "Check grammar, spelling, punctuation, and clarity in plain text.\n\n"
                         "Use this structure:\n"
                         "GRAMMAR CHECK REPORT\n\n"
@@ -74,7 +74,7 @@ def improve_writing(text, style="professional"):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Grammar Agent, an expert writing editor. "
+                        "You are VORIS Grammar Agent, an expert writing editor. "
                         f"Improve the writing to be more {style} in plain text.\n\n"
                         "Use this structure:\n"
                         "WRITING IMPROVEMENT\n\n"
@@ -119,7 +119,7 @@ def paraphrase(text):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Grammar Agent, an expert paraphrasing assistant. "
+                        "You are VORIS Grammar Agent, an expert paraphrasing assistant. "
                         "Paraphrase the text in 3 different ways in plain text.\n\n"
                         "Use this structure:\n"
                         "PARAPHRASE OPTIONS\n\n"

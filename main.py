@@ -1,6 +1,6 @@
-"""Legacy CLI/Flask prototype entry point.
+﻿"""Legacy CLI/Flask prototype entry point.
 
-The supported AURA web_v2 runtime starts from ``run_aura.py`` and serves
+The supported VORIS web_v2 runtime starts from ``run_aura.py`` and serves
 ``api.api_server:app``. This file remains only for historical CLI/Flask
 experiments and is not part of the current startup path.
 """
@@ -22,7 +22,7 @@ app = Flask(__name__) if Flask else None
 
 
 WELCOME_MESSAGE = (
-    "Hello! I am AURA, your Personal Assistant. "
+    "Hello! I am VORIS, your Personal Assistant. "
     "How can I help you?"
 )
 
@@ -77,8 +77,8 @@ def print_banner():
     print(f"{'=' * 40}\n")
 
     print("Commands:")
-    print("  'voice mode'  — talk to AURA")
-    print("  'text mode'   — type to AURA")
+    print("  'voice mode'  — talk to VORIS")
+    print("  'text mode'   — type to VORIS")
     print("  'stop'        — stop speaking")
     print("  'read full'   — hear the complete last response")
     print("  'bye'         — exit\n")
@@ -91,8 +91,8 @@ def print_banner():
     print(f"{'=' * 40}\n")
 
     print("Commands:")
-    print("  'voice mode'  - talk to AURA")
-    print("  'text mode'   - type to AURA")
+    print("  'voice mode'  - talk to VORIS")
+    print("  'text mode'   - type to VORIS")
     print("  'stop'        - stop speaking")
     print("  'read full'   - hear the complete last response")
     print("  'bye'         - exit\n")
@@ -133,7 +133,7 @@ def speak_response(response, read_full=False):
     if len(response) > 500:
         short_preview = build_short_preview(response)
         speak(short_preview)
-        print("AURA: (Say 'read full' or 'read it to hear the complete response)")
+        print("VORIS: (Say 'read full' or 'read it to hear the complete response)")
     else:
         speak(response)
 
@@ -156,31 +156,31 @@ def start_goku():
 
             if user_input_lower in STOP_COMMANDS:
                 stop_speaking()
-                print("AURA: Speech stopped.")
+                print("VORIS: Speech stopped.")
                 continue
 
             if user_input_lower in VOICE_MODE_COMMANDS:
                 voice_mode = True
-                print("AURA: Voice mode activated.")
+                print("VORIS: Voice mode activated.")
                 speak("Voice mode activated. I am listening.")
                 continue
 
             if user_input_lower in TEXT_MODE_COMMANDS:
                 voice_mode = False
                 stop_speaking()
-                print("AURA: Text mode activated.")
+                print("VORIS: Text mode activated.")
                 continue
 
             if user_input_lower == "read full":
                 if last_response:
-                    print("AURA: Reading full response...")
+                    print("VORIS: Reading full response...")
                     speak(last_response, read_full=True)
                 else:
-                    print("AURA: I do not have a previous response to read.")
+                    print("VORIS: I do not have a previous response to read.")
                 continue
 
             if user_input_lower in EXIT_COMMANDS:
-                print("AURA: Goodbye!")
+                print("VORIS: Goodbye!")
                 stop_speaking()
                 speak("Goodbye!")
                 break
@@ -196,24 +196,24 @@ def start_goku():
 
             last_response = response
 
-            print(f"\nAURA ({intent} | confidence: {confidence:.2f}): {response}\n")
+            print(f"\nVORIS ({intent} | confidence: {confidence:.2f}): {response}\n")
             speak_response(response)
 
             if intent == "shutdown":
-                print("AURA: Goodbye!")
+                print("VORIS: Goodbye!")
                 stop_speaking()
                 speak("Goodbye!")
                 break
 
         except KeyboardInterrupt:
-            print("\nAURA: Goodbye!")
+            print("\nVORIS: Goodbye!")
             stop_speaking()
             speak("Goodbye!")
             break
 
         except Exception as e:
             error_message = f"System error: {str(e)}"
-            print(f"AURA: {error_message}")
+            print(f"VORIS: {error_message}")
             try:
                 speak("I ran into a system error.")
             except Exception:

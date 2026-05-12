@@ -1,4 +1,4 @@
-import re
+﻿import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
 from memory.vector_memory import store_memory
@@ -35,7 +35,7 @@ def build_coding_prompt(request):
 
     if mode == "debug":
         return (
-            "You are AURA Coding Agent, an expert software engineer and debugger. "
+            "You are VORIS Coding Agent, an expert software engineer and debugger. "
             "Help the user debug code clearly in plain text using this structure:\n\n"
             "DEBUGGING HELP: [Problem]\n\n"
             "1. PROBLEM ANALYSIS\n"
@@ -51,7 +51,7 @@ def build_coding_prompt(request):
 
     if mode == "explain":
         return (
-            "You are AURA Coding Agent, an expert software engineer and teacher. "
+            "You are VORIS Coding Agent, an expert software engineer and teacher. "
             "Explain programming clearly in plain text using this structure:\n\n"
             "CODING EXPLANATION: [Topic]\n\n"
             "1. WHAT IT IS\n"
@@ -65,7 +65,7 @@ def build_coding_prompt(request):
         )
 
     return (
-        "You are AURA Coding Agent, an expert software engineer. "
+        "You are VORIS Coding Agent, an expert software engineer. "
         "Help with programming in plain text using this structure:\n\n"
         "CODING SOLUTION: [Problem]\n\n"
         "1. UNDERSTANDING THE PROBLEM\n"

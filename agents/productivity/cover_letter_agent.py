@@ -1,4 +1,4 @@
-import re
+﻿import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
 from memory.vector_memory import store_memory
@@ -28,7 +28,7 @@ def write_cover_letter(name, position, company, experience, skills):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Cover Letter Agent, an expert career coach. "
+                        "You are VORIS Cover Letter Agent, an expert career coach. "
                         "Write a strong, professional and personalized cover letter in plain text.\n\n"
                         "Structure:\n"
                         "NAME\n"

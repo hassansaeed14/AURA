@@ -1,5 +1,5 @@
 """
-Content extraction for AURA's transformation engine.
+Content extraction for VORIS's transformation engine.
 Normalizes: raw text, .txt, .pdf (text + OCR fallback), .docx, images, YouTube URLs.
 """
 from __future__ import annotations

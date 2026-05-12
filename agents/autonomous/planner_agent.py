@@ -1,4 +1,4 @@
-from groq import Groq
+﻿from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
 import re
 
@@ -54,7 +54,7 @@ def simple_plan(user_request):
 def ai_plan(user_request):
 
     prompt = f"""
-You are AURA Planner Agent (advanced).
+You are VORIS Planner Agent (advanced).
 
 Break the request into structured steps.
 
@@ -98,7 +98,7 @@ User request:
 
 def create_plan(user_request):
 
-    print(f"\nAURA Planner Agent: {user_request}")
+    print(f"\nVORIS Planner Agent: {user_request}")
 
     # 1. Try REAL fast plan
     basic = simple_plan(user_request)

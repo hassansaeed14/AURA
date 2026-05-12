@@ -17,8 +17,8 @@ SAFE_FILE_ROOTS: tuple[Path, ...] = (
 SUPPORTED_TEXT_EXTENSIONS = {".txt", ".md", ".py", ".js", ".html", ".css", ".json"}
 SUPPORTED_PDF_EXTENSIONS = {".pdf"}
 SAFE_FILE_ACCESS_MESSAGE = (
-    "AURA file access is limited to the active workspace. "
-    "Choose a file inside the current AURA project."
+    "VORIS file access is limited to the active workspace. "
+    "Choose a file inside the current VORIS project."
 )
 
 client = Groq(api_key=GROQ_API_KEY)
@@ -86,7 +86,7 @@ def summarize_content(content, file_type="Text Document"):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA File Agent. "
+                        "You are VORIS File Agent. "
                         "Summarize file content clearly in plain text.\n\n"
                         "Structure:\n"
                         "FILE SUMMARY\n"

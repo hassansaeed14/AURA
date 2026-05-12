@@ -1,4 +1,4 @@
-from groq import Groq
+﻿from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
 
 client = Groq(api_key=GROQ_API_KEY)
@@ -36,7 +36,7 @@ def rule_based_tool(task):
 def ai_tool_selection(task):
     try:
         prompt = f"""
-You are AURA Tool Selector.
+You are VORIS Tool Selector.
 
 Choose the BEST tool for this task.
 

@@ -298,7 +298,7 @@ def _humanize_status(status: str) -> str:
 
 
 class ProviderHub:
-    """Shared provider routing and health source of truth for AURA."""
+"""Shared provider routing and health source of truth for VORIS."""
 
     def __init__(self) -> None:
         self._status_cache: dict[str, ProviderStatus] = {}

@@ -1,16 +1,16 @@
-# AURA Final Project Report
+﻿# VORIS Final Project Report
 
 Report date: 2026-05-08
 
 ## 1. Project Overview
 
-AURA stands for Autonomous Universal Responsive Assistant. It is a local-first AI assistant prototype designed to combine conversation, document generation, memory, controlled actions, voice, screen awareness, and security into one coherent assistant runtime.
+VORIS stands for Autonomous Universal Responsive Assistant. It is a local-first AI assistant prototype designed to combine conversation, document generation, memory, controlled actions, voice, screen awareness, and security into one coherent assistant runtime.
 
-AURA is currently a serious Level 3 / early Level 4 JARVIS-style assistant prototype. It is not a complete production assistant and it is not Level 5 real JARVIS.
+VORIS is currently a serious Level 3 / early Level 4 JARVIS-style assistant prototype. It is not a complete production assistant and it is not Level 5 real JARVIS.
 
 ## 2. Problem Statement
 
-Most assistant projects either answer text only or fake system control through UI effects. AURA tries to solve a harder problem: building a truthful assistant that can answer, plan, generate deliverables, act on the local system in controlled ways, remember safely, and explain what it can or cannot do.
+Most assistant projects either answer text only or fake system control through UI effects. VORIS tries to solve a harder problem: building a truthful assistant that can answer, plan, generate deliverables, act on the local system in controlled ways, remember safely, and explain what it can or cannot do.
 
 ## 3. Objectives
 
@@ -100,12 +100,12 @@ Truth:
 
 ## 9. Memory / Personalization
 
-AURA has scoped memory and identity rules:
+VORIS has scoped memory and identity rules:
 
 - public session memory is temporary;
 - authenticated user memory is tied to user identity;
 - names and preferences should be stored only from explicit user signals;
-- AURA must not guess a name or reuse stale names.
+- VORIS must not guess a name or reuse stale names.
 
 Truth:
 
@@ -114,7 +114,7 @@ Truth:
 
 ## 10. Voice System
 
-AURA has two voice paths:
+VORIS has two voice paths:
 
 - browser push-to-talk using Web Speech API when supported;
 - desktop voice runtime scaffolding with start/stop/status/interrupt endpoints.
@@ -123,11 +123,11 @@ Truth:
 
 - Browser push-to-talk is real when the browser supports it and permission is granted.
 - Desktop voice is dependency-based and disabled by default for production safety unless explicitly enabled.
-- AURA does not yet have fully reliable always-available voice.
+- VORIS does not yet have fully reliable always-available voice.
 
 ## 11. Document Generation
 
-AURA can generate:
+VORIS can generate:
 
 - notes;
 - assignments;
@@ -145,7 +145,7 @@ Truth:
 
 ## 12. Action Intelligence
 
-AURA can classify some internal versus external tasks and create action plans.
+VORIS can classify some internal versus external tasks and create action plans.
 
 Examples:
 
@@ -187,7 +187,7 @@ Truth:
 
 ## 15. Screen Awareness / OCR
 
-AURA can capture a screenshot and use OCR-style context to detect visible text and sensitive content.
+VORIS can capture a screenshot and use OCR-style context to detect visible text and sensitive content.
 
 Truth:
 
@@ -203,7 +203,7 @@ Trust levels:
 - sensitive;
 - critical.
 
-AURA blocks or gates sensitive and critical behavior. It should never silently control the system.
+VORIS blocks or gates sensitive and critical behavior. It should never silently control the system.
 
 Truth:
 
@@ -212,7 +212,7 @@ Truth:
 
 ## 17. UI / Orb Design
 
-The `web_v2` interface is chat-first and uses AURA's orb as state presence.
+The `web_v2` interface is chat-first and uses VORIS's orb as state presence.
 
 It includes:
 
@@ -250,7 +250,7 @@ Manual/live verification is still required for microphone, OCR, real OS windows,
 
 ## 19. Current Limitations
 
-- AURA is not 100% complete.
+- VORIS is not 100% complete.
 - Desktop voice is not fully reliable always-on voice.
 - Provider reliability depends on configured API keys and external services.
 - Screen understanding is OCR-level.
@@ -259,15 +259,15 @@ Manual/live verification is still required for microphone, OCR, real OS windows,
 - Documents need stronger research/references for serious academic use.
 - Packaging and release flow need more work.
 
-## 20. Is AURA 100% Working?
+## 20. Is VORIS 100% Working?
 
-No. AURA is not 100% complete or production-ready. It is stable for controlled demo flows and local development, but voice reliability, provider dependency, screen understanding, long-term memory, and real-world automation still need improvement.
+No. VORIS is not 100% complete or production-ready. It is stable for controlled demo flows and local development, but voice reliability, provider dependency, screen understanding, long-term memory, and real-world automation still need improvement.
 
-## 21. Is AURA Real JARVIS?
+## 21. Is VORIS Real JARVIS?
 
-No. AURA is not Level 5 real JARVIS.
+No. VORIS is not Level 5 real JARVIS.
 
-AURA is a Level 3 / early Level 4 JARVIS-style assistant prototype. It has real assistant components, real controlled actions, real document generation, and a serious safety model, but it does not yet have reliable always-available voice, deep screen understanding, robust daily autonomy, or production-grade reliability.
+VORIS is a Level 3 / early Level 4 JARVIS-style assistant prototype. It has real assistant components, real controlled actions, real document generation, and a serious safety model, but it does not yet have reliable always-available voice, deep screen understanding, robust daily autonomy, or production-grade reliability.
 
 ## 22. Future Upgrades
 
@@ -282,5 +282,5 @@ AURA is a Level 3 / early Level 4 JARVIS-style assistant prototype. It has real 
 
 ## 23. Final Conclusion
 
-AURA has moved beyond a basic chatbot into a controlled assistant system. It can chat, generate files, route tasks, launch safe apps, perform limited permission-gated automation, speak through supported paths, and use OCR for safety checks. The project is meaningful and demo-ready for selected flows, but it must remain honest: AURA is not finished, not production-ready, and not real JARVIS yet. The best path forward is to make fewer systems deeply reliable instead of adding more flashy but fragile features.
+VORIS has moved beyond a basic chatbot into a controlled assistant system. It can chat, generate files, route tasks, launch safe apps, perform limited permission-gated automation, speak through supported paths, and use OCR for safety checks. The project is meaningful and demo-ready for selected flows, but it must remain honest: VORIS is not finished, not production-ready, and not real JARVIS yet. The best path forward is to make fewer systems deeply reliable instead of adding more flashy but fragile features.
 

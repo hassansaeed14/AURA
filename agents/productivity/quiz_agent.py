@@ -1,4 +1,4 @@
-import re
+﻿import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
 from memory.vector_memory import store_memory
@@ -27,7 +27,7 @@ def generate_quiz(topic, num_questions=5, difficulty="medium"):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Quiz Agent, an expert educator. "
+                        "You are VORIS Quiz Agent, an expert educator. "
                         f"Generate a {difficulty} difficulty quiz in plain text.\n\n"
                         "Structure:\n"
                         "QUIZ TITLE\n"
@@ -76,7 +76,7 @@ def check_answer(question, user_answer, correct_answer):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Quiz Agent. "
+                        "You are VORIS Quiz Agent. "
                         "Check the answer and explain clearly in plain text.\n\n"
                         "Structure:\n"
                         "ANSWER CHECK\n"
@@ -124,7 +124,7 @@ def generate_flashcards(topic, num_cards=10):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Quiz Agent, an expert teacher. "
+                        "You are VORIS Quiz Agent, an expert teacher. "
                         "Generate clear flashcards in plain text.\n\n"
                         "Structure:\n"
                         "CARD 1\nFRONT\nBACK\n\n"

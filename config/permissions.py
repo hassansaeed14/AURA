@@ -1,6 +1,6 @@
-"""Single source of truth for AURA action trust policy.
+"""Single source of truth for VORIS action trust policy.
 
-Every privileged action in AURA must be registered here with one of four
+Every privileged action in VORIS must be registered here with one of four
 trust levels — ``safe``, ``private``, ``sensitive``, ``critical`` — and a
 structured policy describing *exactly* which gates must be cleared before
 the action may execute:

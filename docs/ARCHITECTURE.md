@@ -1,4 +1,4 @@
-# AURA Architecture
+﻿# VORIS Architecture
 
 ## Runtime Source of Truth
 

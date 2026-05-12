@@ -1,4 +1,4 @@
-import re
+﻿import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
 from memory.vector_memory import store_memory
@@ -148,7 +148,7 @@ def build_quick_template(goal, level, days):
 
 def build_ai_prompt(goal, level, days, user_request):
     return (
-        "You are AURA Fitness Agent, part of a JARVIS-style assistant system. "
+        "You are VORIS Fitness Agent, part of a JARVIS-style assistant system. "
         "Create a realistic, practical fitness plan in plain text.\n\n"
         "Requirements:\n"
         "- Keep it structured and actionable\n"

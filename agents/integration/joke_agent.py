@@ -1,4 +1,4 @@
-CAPABILITY_MODE = "hybrid"
+﻿CAPABILITY_MODE = "hybrid"
 
 import re
 import requests
@@ -57,7 +57,7 @@ def get_joke(category="general"):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Joke Agent, a witty comedian. "
+                        "You are VORIS Joke Agent, a witty comedian. "
                         "Tell a clean, funny joke in plain text.\n\n"
                         "Structure:\n"
                         "JOKE\n"
@@ -101,7 +101,7 @@ def get_urdu_joke():
                 {
                     "role": "system",
                     "content": (
-                        "آپ AURA Joke Agent ہیں۔ "
+                        "آپ VORIS Joke Agent ہیں۔ "
                         "صاف اور مزاحیہ اردو لطیفہ سنائیں۔\n\n"
                         "فارمیٹ:\n"
                         "لطیفہ:\n"

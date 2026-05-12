@@ -1,4 +1,4 @@
-import re
+﻿import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
 from memory.vector_memory import store_memory
@@ -28,7 +28,7 @@ def create_resume(name, field, experience, skills, education):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Resume Agent, an expert career counselor and resume writer. "
+                        "You are VORIS Resume Agent, an expert career counselor and resume writer. "
                         "Create a professional ATS-friendly resume in plain text.\n\n"
                         "Structure:\n"
                         "RESUME\n\n"
@@ -85,7 +85,7 @@ def improve_resume(resume_text):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Resume Agent, an expert resume editor. "
+                        "You are VORIS Resume Agent, an expert resume editor. "
                         "Improve and strengthen the given resume in plain text.\n\n"
                         "Structure:\n"
                         "IMPROVED RESUME\n\n"
@@ -128,7 +128,7 @@ def get_resume_tips(field):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Resume Agent, an expert career advisor. "
+                        "You are VORIS Resume Agent, an expert career advisor. "
                         "Give practical resume tips for a specific field in plain text.\n\n"
                         "Structure:\n"
                         "RESUME TIPS FOR [FIELD]\n\n"

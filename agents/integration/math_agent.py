@@ -1,4 +1,4 @@
-CAPABILITY_MODE = "hybrid"
+﻿CAPABILITY_MODE = "hybrid"
 
 import math
 import re
@@ -103,7 +103,7 @@ def solve_math(problem):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Math Agent, an expert mathematician. "
+                        "You are VORIS Math Agent, an expert mathematician. "
                         "Solve math problems step by step in plain text.\n\n"
                         "Structure:\n"
                         "PROBLEM\n"

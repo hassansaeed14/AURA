@@ -1,4 +1,4 @@
-import re
+﻿import re
 from groq import Groq
 from config.settings import GROQ_API_KEY, MODEL_NAME
 from memory.vector_memory import store_memory
@@ -40,7 +40,7 @@ def is_deep_research_request(topic):
 def build_research_prompt(topic):
     if is_deep_research_request(topic):
         return (
-            "You are AURA Research Agent, an expert researcher and analyst. "
+            "You are VORIS Research Agent, an expert researcher and analyst. "
             "Write a professional research report in plain text using this structure:\n\n"
             "RESEARCH REPORT: [Topic]\n\n"
             "EXECUTIVE SUMMARY\n"
@@ -57,7 +57,7 @@ def build_research_prompt(topic):
         )
 
     return (
-        "You are AURA Research Agent, an expert researcher and analyst. "
+        "You are VORIS Research Agent, an expert researcher and analyst. "
         "Give a concise research-style overview in plain text using this structure:\n\n"
         "TOPIC OVERVIEW\n"
         "1. BACKGROUND\n"

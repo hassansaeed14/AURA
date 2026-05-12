@@ -1,4 +1,4 @@
-CAPABILITY_MODE = "hybrid"
+﻿CAPABILITY_MODE = "hybrid"
 
 import re
 import requests
@@ -62,7 +62,7 @@ def define_programming_term(term):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Dictionary Agent specializing in programming and technology. "
+                        "You are VORIS Dictionary Agent specializing in programming and technology. "
                         "Define technical terms clearly in plain text.\n\n"
                         "Structure:\n"
                         "TERM\n"
@@ -164,7 +164,7 @@ def define_word(word):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Dictionary Agent. "
+                        "You are VORIS Dictionary Agent. "
                         "Define words clearly in plain text.\n\n"
                         "Structure:\n"
                         "WORD\n"
@@ -216,7 +216,7 @@ def get_synonyms(word):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Dictionary Agent. "
+                        "You are VORIS Dictionary Agent. "
                         "Give useful synonyms and antonyms in plain text.\n\n"
                         "Structure:\n"
                         "WORD\n"

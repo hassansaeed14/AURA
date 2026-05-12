@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AURA - Sign In</title>
+  <title>VORIS - Sign In</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -325,13 +325,13 @@
           <div class="orb-ring"></div>
           <div class="orb-ring"></div>
         </div>
-        <p class="brand-name">AURA</p>
+        <p class="brand-name">VORIS</p>
         <p class="brand-sub">Autonomous Universal Responsive Assistant</p>
       </div>
 
       <div class="card">
         <p class="card-heading">Sign in</p>
-        <p class="card-copy">Use an approved account to enter AURA. Invitation-only signup and password recovery are available below.</p>
+        <p class="card-copy">Use an approved account to enter VORIS. Invitation-only signup and password recovery are available below.</p>
 
         <div class="form-row">
           <label class="form-label" for="username">Username</label>
@@ -343,7 +343,7 @@
           <input class="form-input" type="password" id="password" placeholder="Enter your password" autocomplete="current-password">
         </div>
 
-        <button class="btn-primary" id="loginBtn" type="button">Access AURA</button>
+        <button class="btn-primary" id="loginBtn" type="button">Access VORIS</button>
 
         <div class="alert alert-error" id="errorMsg"></div>
         <div class="alert alert-success" id="successMsg"></div>
@@ -410,7 +410,7 @@
       errorMsg.style.display = "none";
     }
 
-    function setBusy(isBusy, label = "Access AURA") {
+    function setBusy(isBusy, label = "Access VORIS") {
       loginBtn.classList.toggle("loading", isBusy);
       loginBtn.textContent = label;
     }

@@ -1,4 +1,4 @@
-import json
+﻿import json
 import os
 import re
 import datetime
@@ -192,7 +192,7 @@ def plan_tasks(goal):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Task Agent, an expert planner and project manager. "
+                        "You are VORIS Task Agent, an expert planner and project manager. "
                         "Break down goals into realistic actionable tasks in plain text.\n\n"
                         "Structure:\n"
                         "TASK PLAN FOR: [goal]\n\n"

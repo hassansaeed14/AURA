@@ -1,4 +1,4 @@
-CAPABILITY_MODE = "hybrid"
+﻿CAPABILITY_MODE = "hybrid"
 
 import re
 import requests
@@ -60,7 +60,7 @@ def get_quote(category="motivation"):
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Quote Agent. "
+                        "You are VORIS Quote Agent. "
                         "Share an inspiring and meaningful quote in plain text.\n\n"
                         "Structure:\n"
                         "QUOTE\n"
@@ -109,7 +109,7 @@ def get_islamic_quote():
                 {
                     "role": "system",
                     "content": (
-                        "You are AURA Quote Agent. "
+                        "You are VORIS Quote Agent. "
                         "Share an Islamic quote or hadith in plain text.\n\n"
                         "Structure:\n"
                         "ISLAMIC QUOTE\n"

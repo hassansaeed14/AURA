@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Small read-only health check for the supported local AURA runtime."""
+"""Small read-only health check for the supported local VORIS runtime."""
 
 import json
 import sys
