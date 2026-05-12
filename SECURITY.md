@@ -1,6 +1,6 @@
-# Security Policy
+﻿# Security Policy
 
-AURA is a local-first assistant prototype with real execution capabilities. Security is part of the runtime, not a UI label.
+VORIS is a local-first assistant prototype with real execution capabilities. Security is part of the runtime, not a UI label.
 
 ## Reporting Vulnerabilities
 
@@ -14,7 +14,7 @@ Do not publish sensitive vulnerability details in public issues. Report privatel
 
 ## Trust Levels
 
-AURA classifies actions before execution.
+VORIS classifies actions before execution.
 
 ### Safe
 
@@ -76,7 +76,7 @@ Critical actions must be blocked or require a stronger verification flow. They m
 
 Browser push-to-talk starts only when the user clicks Talk and browser support/permission allows it.
 
-Desktop voice runtime is disabled by default for production safety unless explicitly enabled in the local environment. AURA must not claim always-on listening unless the runtime is actually active.
+Desktop voice runtime is disabled by default for production safety unless explicitly enabled in the local environment. VORIS must not claim always-on listening unless the runtime is actually active.
 
 ## Screen Capture Privacy Note
 

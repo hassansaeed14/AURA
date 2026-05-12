@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   const view = document.body?.dataset?.authView || "";
   const state = {
     resetToken: "",
@@ -61,7 +61,7 @@
         return;
       }
 
-      setBusy(submitButton, true, "Opening AURA...");
+      setBusy(submitButton, true, "Opening VORIS...");
       setStatus("Checking your sign-in");
 
       try {
@@ -79,8 +79,8 @@
           return;
         }
 
-        showSuccess(payload.message || "You're in. Opening AURA.");
-        setStatus("Opening AURA");
+        showSuccess(payload.message || "You're in. Opening VORIS.");
+        setStatus("Opening VORIS");
         window.setTimeout(() => {
           window.location.href = "/";
         }, 900);
@@ -88,7 +88,7 @@
         showError("Connection error. Please try again.");
         setStatus("Connection issue");
       } finally {
-        setBusy(submitButton, false, "Access AURA");
+        setBusy(submitButton, false, "Access VORIS");
       }
     });
   }

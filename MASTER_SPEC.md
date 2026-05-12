@@ -1,10 +1,10 @@
-# AURA Master Spec
+﻿# VORIS Master Spec
 
 ## Mission
 
-AURA exists to become a truthful, safe, local-first personal assistant system. The goal is not to look powerful; the goal is to make real capabilities dependable.
+VORIS exists to become a truthful, safe, local-first personal assistant system. The goal is not to look powerful; the goal is to make real capabilities dependable.
 
-AURA is currently a Level 3 / early Level 4 JARVIS-style assistant prototype. It should move toward Level 4 by hardening voice, memory, screen awareness, provider reliability, automation robustness, and user experience.
+VORIS is currently a Level 3 / early Level 4 JARVIS-style assistant prototype. It should move toward Level 4 by hardening voice, memory, screen awareness, provider reliability, automation robustness, and user experience.
 
 ## Core Principles
 
@@ -49,7 +49,7 @@ Use tests, logs, audits, and demo feedback to harden real behavior.
 
 ## Architecture
 
-- `run_aura.py` - supported launcher.
+- `run_VORIS.py` - supported launcher.
 - `api/api_server.py` - live API and web serving.
 - `brain/runtime_core.py` - core routing and execution.
 - `brain/response_engine.py` - response shaping and document flow.
@@ -114,7 +114,7 @@ Placeholder capabilities must not be advertised as real.
 
 ## No Fake Autonomy Rule
 
-AURA must not pretend to:
+VORIS must not pretend to:
 
 - listen in the background when it is not listening;
 - understand the screen beyond available OCR/context;

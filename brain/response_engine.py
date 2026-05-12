@@ -236,7 +236,7 @@ SOCIAL_ASSIGNMENT_MARKERS = (
 )
 
 JARVIS_SYSTEM_PROMPT = """
-You are AURA - Autonomous Universal Responsive Assistant.
+You are VORIS - Voice-Oriented Responsive Intelligence System.
 You are a real AI assistant, not a chatbot.
 You are modeled after JARVIS from Iron Man.
 
@@ -580,6 +580,7 @@ EXTERNAL_FACT_PATTERNS = (
     r"\bversion\b",
 )
 AURA_CONTEXT_PATTERNS = (
+    r"\bvoris\b",
     r"\baura\b",
     r"\bthis project\b",
     r"\bthe project\b",
@@ -749,11 +750,11 @@ def _append_project_context_if_needed(system_prompt: str, profile: Dict[str, Any
     context = _load_aura_project_context()
     if not context:
         return (
-            f"{system_prompt}\n\nAURA PROJECT CONTEXT:\nNo project context file was available to load. State that limitation if needed.",
+            f"{system_prompt}\n\nVORIS PROJECT CONTEXT:\nNo project context file was available to load. State that limitation if needed.",
             False,
         )
     return (
-        f"{system_prompt}\n\nAURA PROJECT CONTEXT:\nUse this repository context for AURA-specific claims. Do not invent project capabilities.\n\n{context}",
+        f"{system_prompt}\n\nVORIS PROJECT CONTEXT:\nUse this repository context for VORIS-specific claims. Legacy AURA docs may appear because this project was rebranded; do not invent project capabilities.\n\n{context}",
         True,
     )
 
@@ -3228,7 +3229,7 @@ def generate_web_search_response_payload(
                 f"User question: {normalized_input}\n\n"
                 "Live web findings:\n"
                 f"{grounding_text}\n\n"
-                "Answer as AURA. Lead with the answer, then explain the most important supporting facts. "
+                "Answer as VORIS. Lead with the answer, then explain the most important supporting facts. "
                 "Do not dump raw search results or mention searching unless it helps the user."
             ),
         }

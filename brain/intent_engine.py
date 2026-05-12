@@ -5,6 +5,9 @@ GREETING_PHRASES = {
     "hi",
     "hello",
     "hey",
+    "hey voris",
+    "hi voris",
+    "hello voris",
     "hey aura",
     "hi aura",
     "hello aura",
@@ -29,6 +32,8 @@ CONVERSATION_PHRASES = {
 GRATITUDE_PHRASES = {
     "thanks",
     "thank you",
+    "thanks voris",
+    "thank you voris",
     "thanks aura",
     "thank you aura",
     "appreciate it",
@@ -162,7 +167,7 @@ def detect_intent_with_confidence(command: str):
     # -----------------------------
 
     add("greeting", _score_match(text, [
-        "hi", "hello", "hey", "hey aura", "hi aura"
+        "hi", "hello", "hey", "hey voris", "hi voris", "hello voris", "hey aura", "hi aura"
     ], whole_match=True))
 
     add("shutdown", _score_match(text, [

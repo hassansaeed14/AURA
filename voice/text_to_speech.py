@@ -8,7 +8,7 @@ from voice.voice_manager import build_spoken_preview, format_speech_text
 BROWSER_TTS_PROVIDER = "browser_speech_synthesis"
 DISABLED_BACKEND_PROVIDER = "elevenlabs"
 BACKEND_TTS_DISABLED_MESSAGE = (
-    "Backend TTS is disabled in this build. AURA speaks through browser speech synthesis only."
+    "Backend TTS is disabled in this build. VORIS speaks through browser speech synthesis only."
 )
 
 

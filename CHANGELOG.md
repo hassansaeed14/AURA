@@ -1,12 +1,12 @@
-# Changelog
+﻿# Changelog
 
-All notable AURA changes are summarized here. This changelog favors verified capability over hype.
+All notable VORIS changes are summarized here. This changelog favors verified capability over hype.
 
 ## Current Stable Milestone - 2026-05-08
 
 ### Added / Stabilized
 
-- `run_aura.py` confirmed as the supported launcher.
+- `run_VORIS.py` confirmed as the supported launcher.
 - FastAPI backend and `web_v2` interface stabilized for local demo flows.
 - Auth flows wired for register, login, forgot password, session state, and logout.
 - Public/authenticated state made more truthful in the UI.
@@ -31,8 +31,8 @@ All notable AURA changes are summarized here. This changelog favors verified cap
 
 ### Known Limitations
 
-- AURA is not production-ready.
-- AURA is not Level 5 real JARVIS.
+- VORIS is not production-ready.
+- VORIS is not Level 5 real JARVIS.
 - Desktop voice requires local dependencies and explicit opt-in.
 - Screen awareness remains OCR-level.
 - Automation is intentionally narrow and can be fragile around focus/window state.
@@ -41,7 +41,7 @@ All notable AURA changes are summarized here. This changelog favors verified cap
 
 ## Earlier Milestones
 
-- Initial terminal assistant evolved into AURA.
+- Initial terminal assistant evolved into VORIS.
 - Web interface introduced and later replaced by `web_v2`.
 - Document generation introduced.
 - Trust model and security foundations introduced.

@@ -6,7 +6,7 @@ from voice.desktop_voice_runtime import get_desktop_voice_status
 from voice.voice_controller import get_voice_status
 
 
-WAKE_PHRASE = "hey aura"
+WAKE_PHRASE = "hey voris"
 
 
 def get_desktop_voice_runtime_status() -> Dict[str, Any]:
@@ -57,7 +57,7 @@ def get_assistant_runtime_status() -> Dict[str, Any]:
             "client_managed": True,
             "backend_enabled": False,
             "auto_speak_responses": bool(settings.get("auto_speak_responses")),
-            "message": tts.get("message") or "AURA speaks through browser speech synthesis.",
+            "message": tts.get("message") or "VORIS speaks through browser speech synthesis.",
         },
         "safety": {
             "always_on_browser_wake": False,

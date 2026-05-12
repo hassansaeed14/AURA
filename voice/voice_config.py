@@ -15,7 +15,7 @@ class VoiceSettings:
     rate: float = 0.95
     pitch: float = 0.85
     volume: float = 1.0
-    wake_words: List[str] = field(default_factory=lambda: ["hey aura", "aura"])
+    wake_words: List[str] = field(default_factory=lambda: ["hey voris", "voris", "hey aura", "aura"])
     wake_word_sensitivity: float = 0.7
     phrase_time_limit: int = 8
     ambient_noise_adjustment: bool = True

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-"""Supported AURA desktop/web launcher.
+"""Supported VORIS desktop/web launcher.
 
-This is the runtime source of truth for the current AURA build:
+This is the runtime source of truth for the current VORIS build:
 ``run_aura.py`` serves ``api.api_server:app`` through Waitress. Legacy entry
 points such as ``main.py`` are not used for the web_v2/FastAPI runtime.
 """
@@ -58,7 +58,7 @@ def configure_console_encoding() -> None:
 
 
 def configure_runtime_logging() -> None:
-    """Keep demo logs readable without hiding AURA's own categorized logs."""
+    """Keep demo logs readable without hiding VORIS's own categorized logs."""
 
     logging.getLogger("waitress.queue").setLevel(logging.ERROR)
 
@@ -177,7 +177,7 @@ def open_browser(url: str, host: str, port: int) -> None:
 def print_boot_banner(url: str, config: dict[str, Any]) -> None:
     safe_print()
     safe_print("=" * 55)
-    safe_print(" AURA - Autonomous Universal Responsive Assistant")
+    safe_print(" VORIS - Voice-Oriented Responsive Intelligence System")
     safe_print("=" * 55)
 
     safe_print()
@@ -195,7 +195,7 @@ def print_boot_banner(url: str, config: dict[str, Any]) -> None:
     safe_print("API           : STARTING")
     safe_print("Interface     : WAITING FOR SERVER")
     safe_print()
-    safe_print("AURA is starting.")
+    safe_print("VORIS is starting.")
     safe_print()
 
 
@@ -203,8 +203,8 @@ def print_port_in_use_message(host: str, port: int) -> None:
     safe_print()
     safe_print("[Startup blocked]")
     safe_print(f"Port {port} is already in use on {host}.")
-    safe_print("AURA did not start a second server.")
-    safe_print("Stop the existing AURA process or change config/server.json to use another port.")
+    safe_print("VORIS did not start a second server.")
+    safe_print("Stop the existing VORIS process or change config/server.json to use another port.")
 
 
 # --------------------------------------------------
@@ -238,13 +238,13 @@ def main() -> None:
     try:
         from api.api_server import app as fastapi_app
 
-        aura_app = ASGIMiddleware(fastapi_app)
-        safe_print(f"[Startup] Serving AURA on {url}")
-        serve(aura_app, host=host, port=port, threads=threads)
+        voris_app = ASGIMiddleware(fastapi_app)
+        safe_print(f"[Startup] Serving VORIS on {url}")
+        serve(voris_app, host=host, port=port, threads=threads)
 
     except KeyboardInterrupt:
         safe_print()
-        safe_print("[Shutdown] AURA stopped manually.")
+        safe_print("[Shutdown] VORIS stopped manually.")
 
     except Exception as error:
         safe_print()

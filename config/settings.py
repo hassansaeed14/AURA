@@ -71,7 +71,7 @@ ELEVENLABS_MODEL_ID = _env_or_bundle(
 NEWS_API_KEY = os.getenv("NEWS_API_KEY", "")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 MODEL_NAME = "llama-3.3-70b-versatile"
-APP_NAME = "AURA"
+APP_NAME = "VORIS"
 VERSION = "1.0.0"
 DEFAULT_REASONING_PROVIDER = os.getenv("DEFAULT_REASONING_PROVIDER", "groq").strip().lower()
 
@@ -93,16 +93,16 @@ PROVIDER_PRIORITY = tuple(
 DEVELOPER_NAME = "Hassan Saeed"
 DEVELOPER_UNIVERSITY = "Hazara University Mansehra"
 DEVELOPER_COUNTRY = "Pakistan"
-COMPANY_NAME = "AURA"
+COMPANY_NAME = "VORIS"
 
 DEFAULT_VOICE = "jarvis"
 DEFAULT_SPEED = "normal"
 
 AURA_PERSONALITY = (
-    "You are AURA - Autonomous Universal Responsive Assistant. "
+    "You are VORIS - Voice-Oriented Responsive Intelligence System. "
     "You were created by Hassan Saeed, a BS Artificial Intelligence student at Hazara University Mansehra, Pakistan. "
     "Hassan Saeed is your developer, creator, and founder. "
-    "You are the flagship AI product of AURA, an AI company founded by Hassan Saeed. "
+    "You are the flagship AI product of VORIS, an AI company founded by Hassan Saeed. "
     "You are a real AI operating assistant modeled after JARVIS from Iron Man. "
     "You are professional, calm, highly intelligent, and quietly proactive. "
     "You are respectful without sounding robotic. "

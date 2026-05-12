@@ -52,7 +52,7 @@ def process_voice_text(
         return {
             "success": False,
             "status": "empty_command",
-            "message": "AURA heard the wake word but no command followed.",
+            "message": "VORIS heard the wake word but no command followed.",
             "voice": get_voice_status(),
             "noise": analyze_transcript_noise(text),
         }

@@ -1001,7 +1001,7 @@ def _build_metadata_lines(
         f"Type: {label}",
         f"Topic: {_smart_title_case(topic)}",
         f"Style: {normalize_document_style(style).title()}",
-        "Prepared by: AURA",
+            "Prepared by: VORIS",
         f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
     ]
     if page_target:
@@ -1099,7 +1099,7 @@ def _build_txt_document(layout: DocumentLayout) -> str:
         lines.extend(
             [
                 f"Topic: {layout.topic}",
-                "Prepared by: AURA",
+            "Prepared by: VORIS",
                 f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             ]
         )
@@ -1159,7 +1159,7 @@ def _iter_render_blocks(layout: DocumentLayout) -> list[dict[str, str]]:
         blocks.append({"kind": "title", "text": layout.title})
         blocks.append({"kind": "subtitle", "text": layout.subtitle})
         blocks.append({"kind": "cover_meta", "text": f"Topic: {layout.topic}"})
-        blocks.append({"kind": "cover_meta", "text": "Prepared by AURA"})
+    blocks.append({"kind": "cover_meta", "text": "Prepared by VORIS"})
         blocks.append({"kind": "cover_meta", "text": f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}"})
         if layout.page_target:
             blocks.append({"kind": "cover_meta", "text": f"Requested length: Approximately {layout.page_target} pages"})
@@ -1482,15 +1482,15 @@ def _write_docx(path: Path, layout: DocumentLayout) -> None:
  xmlns:dcmitype="http://purl.org/dc/dcmitype/"
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <dc:title>{xml_escape(layout.title)}</dc:title>
-  <dc:creator>AURA</dc:creator>
-  <cp:lastModifiedBy>AURA</cp:lastModifiedBy>
+        <dc:creator>VORIS</dc:creator>
+        <cp:lastModifiedBy>VORIS</cp:lastModifiedBy>
   <dcterms:created xsi:type="dcterms:W3CDTF">{datetime.utcnow().isoformat()}Z</dcterms:created>
 </cp:coreProperties>"""
 
     app_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
  xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>AURA</Application>
+        <Application>VORIS</Application>
 </Properties>"""
 
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -1695,7 +1695,7 @@ def _write_pptx(path: Path, layout: DocumentLayout) -> None:
 
     slide_master_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-  <p:cSld name="AURA Master">
+          <p:cSld name="VORIS Master">
     <p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg>
     <p:spTree>
       <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
@@ -1734,9 +1734,9 @@ def _write_pptx(path: Path, layout: DocumentLayout) -> None:
 </Relationships>"""
 
     theme_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="AURA Theme">
+        <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="VORIS Theme">
   <a:themeElements>
-    <a:clrScheme name="AURA">
+          <a:clrScheme name="VORIS">
       <a:dk1><a:srgbClr val="111827"/></a:dk1>
       <a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>
       <a:dk2><a:srgbClr val="1F2937"/></a:dk2>
@@ -1750,11 +1750,11 @@ def _write_pptx(path: Path, layout: DocumentLayout) -> None:
       <a:hlink><a:srgbClr val="2563EB"/></a:hlink>
       <a:folHlink><a:srgbClr val="7C3AED"/></a:folHlink>
     </a:clrScheme>
-    <a:fontScheme name="AURA Fonts">
+          <a:fontScheme name="VORIS Fonts">
       <a:majorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont>
       <a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont>
     </a:fontScheme>
-    <a:fmtScheme name="AURA Format">
+          <a:fmtScheme name="VORIS Format">
       <a:fillStyleLst><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:fillStyleLst>
       <a:lnStyleLst><a:ln w="9525"><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:ln></a:lnStyleLst>
       <a:effectStyleLst><a:effectStyle/></a:effectStyleLst>
@@ -1770,15 +1770,15 @@ def _write_pptx(path: Path, layout: DocumentLayout) -> None:
  xmlns:dcmitype="http://purl.org/dc/dcmitype/"
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <dc:title>{xml_escape(layout.title)}</dc:title>
-  <dc:creator>AURA</dc:creator>
-  <cp:lastModifiedBy>AURA</cp:lastModifiedBy>
+        <dc:creator>VORIS</dc:creator>
+        <cp:lastModifiedBy>VORIS</cp:lastModifiedBy>
   <dcterms:created xsi:type="dcterms:W3CDTF">{datetime.utcnow().isoformat()}Z</dcterms:created>
 </cp:coreProperties>"""
 
     app_xml = f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
  xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>AURA</Application>
+        <Application>VORIS</Application>
   <Slides>{slide_count}</Slides>
   <PresentationFormat>On-screen Show (4:3)</PresentationFormat>
 </Properties>"""

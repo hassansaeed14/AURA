@@ -1,18 +1,18 @@
-# AURA
+﻿# VORIS
 
 Autonomous Universal Responsive Assistant
 
-AURA is a local-first, JARVIS-style assistant prototype that combines chat, document generation, controlled desktop actions, voice scaffolding, memory, and a safety-first execution model.
+VORIS is a local-first, JARVIS-style assistant prototype that combines chat, document generation, controlled desktop actions, voice scaffolding, memory, and a safety-first execution model.
 
-AURA is currently a **Level 3 / early Level 4 JARVIS-style assistant prototype**. It is useful for controlled local demos and continued development, but it is **not** a finished production assistant and it is **not** real JARVIS-level autonomy.
+VORIS is currently a **Level 3 / early Level 4 JARVIS-style assistant prototype**. It is useful for controlled local demos and continued development, but it is **not** a finished production assistant and it is **not** real JARVIS-level autonomy.
 
-## What AURA Is
+## What VORIS Is
 
 - A FastAPI-based assistant runtime with a modern `web_v2` interface.
 - A controlled assistant system that can answer, plan, generate documents, launch safe apps, run limited browser actions, and perform permission-gated OS automation.
 - A truth-first project: unsupported, unsafe, or dependency-based capabilities should be labeled clearly instead of pretending to work.
 
-## What AURA Is Not
+## What VORIS Is Not
 
 - Not a production-ready personal AI operating system.
 - Not a fully autonomous desktop controller.
@@ -26,13 +26,13 @@ Status: active local development and controlled demo readiness.
 
 The stable path is:
 
-`run_aura.py` -> FastAPI app in `api/api_server.py` -> runtime/brain/tools/security modules -> `interface/web_v2`
+`run_VORIS.py` -> FastAPI app in `api/api_server.py` -> runtime/brain/tools/security modules -> `interface/web_v2`
 
 The project currently has a broad automated test suite. At the latest stable milestone, the local unittest suite covered more than 250 tests, with the recent full run reporting 293 passing tests.
 
 ## Key Features
 
-- Chat-first AURA interface with orb state presence.
+- Chat-first VORIS interface with orb state presence.
 - ChatGPT-style progressive response rendering with safe markdown/code display.
 - Authenticated and public session handling.
 - Scoped memory and personalization safeguards.
@@ -63,7 +63,7 @@ User input
 
 Important paths:
 
-- `run_aura.py` - supported local launcher.
+- `run_VORIS.py` - supported local launcher.
 - `api/api_server.py` - live FastAPI API.
 - `brain/` - runtime orchestration, response quality, providers, traces.
 - `security/` - sessions, permissions, trust enforcement.
@@ -75,7 +75,7 @@ Important paths:
 
 ## Response Rendering and Artifacts
 
-AURA uses public, standard AI-app patterns for the writing experience:
+VORIS uses public, standard AI-app patterns for the writing experience:
 
 - progressive response rendering through `/api/chat/stream`;
 - safe markdown rendering in `web_v2`;
@@ -87,14 +87,14 @@ See `docs/RESPONSE_RENDERING.md`.
 
 ## Safety and Trust Model
 
-AURA uses trust levels to prevent unsafe behavior:
+VORIS uses trust levels to prevent unsafe behavior:
 
 - `safe` - normal chat, document generation, safe app open/search.
 - `private` - user/account information and memory-related actions.
 - `sensitive` - keyboard/mouse control, typing into apps, screen-aware automation.
 - `critical` - passwords, payments, banking, destructive actions, account/security changes.
 
-Critical actions must remain blocked or require a stronger verification flow. AURA must not silently control the system.
+Critical actions must remain blocked or require a stronger verification flow. VORIS must not silently control the system.
 
 ## Setup
 
@@ -118,7 +118,7 @@ Create a local `.env` file only for your own machine. Do not commit secrets.
 ## Run
 
 ```powershell
-python run_aura.py
+python run_VORIS.py
 ```
 
 Then open:
@@ -136,7 +136,7 @@ python tools/health_check.py
 ## Test
 
 ```powershell
-python -m py_compile run_aura.py api\api_server.py
+python -m py_compile run_VORIS.py api\api_server.py
 node --check interface\web_v2\app.js
 node --check interface\web_v2\auth.js
 python -m unittest discover -s tests -p "test_*.py"
@@ -167,7 +167,7 @@ Screenshots are not committed in this cleanup pass. Add verified screenshots lat
 
 Suggested screenshots:
 
-- AURA web_v2 chat shell.
+- VORIS web_v2 chat shell.
 - Document delivery card.
 - Action plan approval card.
 - Desktop voice status panel.

@@ -1,6 +1,6 @@
----
+﻿---
 name: Bug report
-about: Report something broken in AURA
+about: Report something broken in VORIS
 title: "[BUG] "
 labels: bug
 ---
@@ -43,4 +43,4 @@ Add anything useful here.
 ## Environment
 - OS:
 - Python version:
-- AURA version:
+- VORIS version:

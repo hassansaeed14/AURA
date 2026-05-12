@@ -1,12 +1,12 @@
-(function () {
+﻿(function () {
   const STORAGE_KEYS = {
-    sessionId: "aura-v2-session-id",
-    sessionTitles: "aura-v2-session-titles",
-    speechEnabled: "aura-v2-speech-enabled",
+    sessionId: "VORIS-v2-session-id",
+    sessionTitles: "VORIS-v2-session-titles",
+    speechEnabled: "VORIS-v2-speech-enabled",
   };
 
-  const WAKE_FALLBACK = "hey aura";
-  const DEBUG_LOGS = localStorage.getItem("aura.debug") === "true";
+  const WAKE_FALLBACK = "Hey VORIS";
+  const DEBUG_LOGS = localStorage.getItem("VORIS.debug") === "true";
   const ICONS = {
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>',
     copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"></path></svg>',
@@ -122,18 +122,18 @@
       return;
     }
     if (typeof details === "undefined") {
-      console.info(`[AURA voice] ${message}`);
+      console.info(`[VORIS voice] ${message}`);
       return;
     }
-    console.info(`[AURA voice] ${message}`, details);
+    console.info(`[VORIS voice] ${message}`, details);
   }
 
   function logVoiceError(message, details) {
     if (typeof details === "undefined") {
-      console.error(`[AURA voice] ${message}`);
+      console.error(`[VORIS voice] ${message}`);
       return;
     }
-    console.error(`[AURA voice] ${message}`, details);
+    console.error(`[VORIS voice] ${message}`, details);
   }
 
   function logOrbState(stateName, eventName) {
@@ -481,8 +481,8 @@
 
     clearPresenceTimer();
     const mode = options.mode || "center";
-    el.presenceEyebrow.textContent = options.eyebrow || "AURA presence";
-    el.presenceTitle.textContent = options.title || "AURA is here.";
+    el.presenceEyebrow.textContent = options.eyebrow || "VORIS presence";
+    el.presenceTitle.textContent = options.title || "VORIS is here.";
     el.presenceText.textContent = options.text || "Calm, present, and ready when you are.";
     el.presenceStage.hidden = false;
     el.presenceStage.classList.remove(
@@ -600,7 +600,7 @@
           : desktopVoice.awake
             ? "Desktop voice awake"
             : desktopVoice.listening
-              ? 'Listening for "Hey AURA"'
+              ? 'Listening for "Hey VORIS"'
               : "Desktop voice active"
       : desktopVoice.available === false
         ? "Desktop voice unavailable"
@@ -709,7 +709,7 @@
 
     setAssistantState("analyzing", "chat:input_received");
     setComposerStatus("I hear you. Let me route that.");
-    updateWorkspaceSummary("AURA is choosing the cleanest path for this request.");
+    updateWorkspaceSummary("VORIS is choosing the cleanest path for this request.");
     await delay(120);
 
     const classification = classifyCommand(commandText);
@@ -732,7 +732,7 @@
       text: "I'm with you now. Tell me what you want handled next.",
     });
     setComposerStatus(buildWakeGreeting());
-    updateWorkspaceSummary("AURA is awake, present, and listening for the next step.");
+    updateWorkspaceSummary("VORIS is awake, present, and listening for the next step.");
     await delay(220);
     setAssistantState("responding", "wake:greeting_ready");
     await revealAssistantMessage({
@@ -747,7 +747,7 @@
     });
     showPresence({
       mode: "center",
-      eyebrow: "AURA awake",
+      eyebrow: "VORIS awake",
       title: buildWakeGreeting(),
       text: "Tell me what you want handled next.",
       duration: 1800,
@@ -770,12 +770,12 @@
     setOrbLayout("left");
     setAssistantState("thinking", "api:request_started");
     setComposerStatus("Working on that now.");
-    updateWorkspaceSummary("I can handle that inside AURA, so the workspace is staying focused.");
+    updateWorkspaceSummary("I can handle that inside VORIS, so the workspace is staying focused.");
     showPresence({
       mode: "docked",
       eyebrow: "Workspace mode",
       title: "Working on that now.",
-      text: "I can handle that inside AURA and keep the work close at hand.",
+      text: "I can handle that inside VORIS and keep the work close at hand.",
       duration: 1700,
     });
     renderRightPanel();
@@ -844,14 +844,14 @@
         ? "Done. I've prepared it."
         : payload.degraded
           ? "Limited response, but I still got you the best available result."
-          : "Done. I've handled that inside AURA.");
+          : "Done. I've handled that inside VORIS.");
       updateWorkspaceSummary(delivery
         ? `${capitalize(delivery.documentType)} ready with a preview and direct downloads.`
         : actionPlan
-          ? "AURA ran the controlled browser action plan and exposed each step clearly."
+          ? "VORIS ran the controlled browser action plan and exposed each step clearly."
           : payload.degraded
-          ? "AURA stayed inside the workspace and used the safest limited path."
-          : "AURA handled the work inside the workspace.");
+          ? "VORIS stayed inside the workspace and used the safest limited path."
+          : "VORIS handled the work inside the workspace.");
       showPresence({
         mode: actionPlan ? "floating" : "docked",
         eyebrow: actionPlan ? "Controlled browser action" : delivery ? "Work completed" : payload.degraded ? "Limited response" : "Work completed",
@@ -861,13 +861,13 @@
             ? "Action plan complete."
           : payload.degraded
             ? "Limited response."
-            : "Done. I've handled that inside AURA.",
+            : "Done. I've handled that inside VORIS.",
         text: delivery
           ? `Your ${delivery.documentType} is ready below with direct downloads and a preview.`
           : actionPlan
             ? "The browser action plan is shown below with exact step statuses."
             : payload.degraded
-            ? "I used the safest available path and kept the work inside AURA."
+            ? "I used the safest available path and kept the work inside VORIS."
             : "The result is ready here in the workspace.",
         duration: 2200,
       });
@@ -878,12 +878,12 @@
       if (error?.name === "AbortError") {
         setAssistantState("idle", "api:stream_aborted");
         setComposerStatus("Stopped. Ready when you are.");
-        updateWorkspaceSummary("AURA stopped the response cleanly.");
+        updateWorkspaceSummary("VORIS stopped the response cleanly.");
         return;
       }
       setAssistantState("error", "api:request_failed");
       setComposerStatus("I couldn't complete that yet.");
-      updateWorkspaceSummary("That task did not finish cleanly inside AURA.");
+      updateWorkspaceSummary("That task did not finish cleanly inside VORIS.");
       showPresence({
         mode: "docked",
         eyebrow: "Need a retry",
@@ -929,8 +929,8 @@
     state.panelMode = shouldShowExternalPanel ? "context" : "";
     setOrbLayout("floating");
     setAssistantState("analyzing", "external:routing_started");
-    setComposerStatus("Let me route that outside AURA.");
-    updateWorkspaceSummary("AURA is routing this outside the workspace while staying present.");
+    setComposerStatus("Let me route that outside VORIS.");
+    updateWorkspaceSummary("VORIS is routing this outside the workspace while staying present.");
 
     let replyText = "";
     let actionTrace = null;
@@ -944,15 +944,15 @@
         }
       }
       if (popup) {
-        replyText = `Opening ${classification.label} for you. AURA will stay here as your assistant presence.`;
+        replyText = `Opening ${classification.label} for you. VORIS will stay here as your assistant presence.`;
         setAssistantState("responding", "external:launch_succeeded");
         setComposerStatus("Opening that for you.");
-        updateWorkspaceSummary(`${classification.label} is opening outside AURA while the assistant stays nearby.`);
+        updateWorkspaceSummary(`${classification.label} is opening outside VORIS while the assistant stays nearby.`);
         showPresence({
           mode: "floating",
           eyebrow: "External action",
           title: "Opening that for you.",
-          text: `${classification.label} is moving outside AURA while I stay present here.`,
+          text: `${classification.label} is moving outside VORIS while I stay present here.`,
           duration: 2200,
         });
       } else {
@@ -971,12 +971,12 @@
     } else {
       state.requestInFlight = true;
       setComposerStatus("Opening that for you.");
-      updateWorkspaceSummary("AURA is asking the desktop controller to launch this outside the workspace.");
+      updateWorkspaceSummary("VORIS is asking the desktop controller to launch this outside the workspace.");
       showPresence({
         mode: "floating",
         eyebrow: externalModeLabel,
         title: "Opening that for you.",
-        text: `${classification.label} is being launched through the AURA backend.`,
+        text: `${classification.label} is being launched through the VORIS backend.`,
         duration: 2200,
       });
       renderRightPanel();
@@ -1008,29 +1008,29 @@
         if (launched) {
           setAssistantState("responding", "external:desktop_launch_succeeded");
           setComposerStatus("Opening that for you.");
-          updateWorkspaceSummary(`${classification.label} is opening outside AURA while the assistant stays nearby.`);
+          updateWorkspaceSummary(`${classification.label} is opening outside VORIS while the assistant stays nearby.`);
           showPresence({
             mode: "floating",
             eyebrow: externalModeLabel,
             title: "Opening that for you.",
-            text: `${classification.label} is launching outside AURA while I stay present here.`,
+            text: `${classification.label} is launching outside VORIS while I stay present here.`,
             duration: 2200,
           });
         } else if (needsConfirmation) {
           setAssistantState("responding", "automation:confirmation_required");
-          setComposerStatus("Control approval is needed before AURA types, presses keys, or scrolls.");
-          updateWorkspaceSummary("AURA is waiting for your one-time approval before keyboard or mouse control.");
+          setComposerStatus("Control approval is needed before VORIS types, presses keys, or scrolls.");
+          updateWorkspaceSummary("VORIS is waiting for your one-time approval before keyboard or mouse control.");
           showPresence({
             mode: "floating",
             eyebrow: externalModeLabel,
             title: "Approval needed before control.",
-            text: "AURA will not type, press keys, or scroll until you approve this action.",
+            text: "VORIS will not type, press keys, or scroll until you approve this action.",
             duration: 2600,
           });
         } else if (blockedForSafety) {
           setAssistantState("responding", "external:safety_blocked");
           setComposerStatus(replyText);
-          updateWorkspaceSummary("AURA blocked this action for safety.");
+          updateWorkspaceSummary("VORIS blocked this action for safety.");
           showPresence({
             mode: "floating",
             eyebrow: externalModeLabel,
@@ -1044,7 +1044,7 @@
           updateWorkspaceSummary(
             unavailable
               ? `${classification.label} is not available on this system.`
-              : `${classification.label} could not be launched from the AURA backend.`
+              : `${classification.label} could not be launched from the VORIS backend.`
           );
           showPresence({
             mode: "floating",
@@ -1063,7 +1063,7 @@
         state.currentTask.launchMessage = replyText;
         setAssistantState("error", "external:desktop_launch_failed");
         setComposerStatus(replyText);
-        updateWorkspaceSummary(`${classification.label} could not be launched from the AURA backend.`);
+        updateWorkspaceSummary(`${classification.label} could not be launched from the VORIS backend.`);
         showPresence({
           mode: "floating",
           eyebrow: externalModeLabel,
@@ -1222,7 +1222,7 @@
         headers: {
           "Content-Type": "application/json",
           "Accept": "text/event-stream",
-          "X-AURA-Session-Id": state.sessionId,
+          "X-VORIS-Session-Id": state.sessionId,
         },
         body: JSON.stringify({ message: commandText, mode: "hybrid" }),
         signal: controller.signal,
@@ -1364,7 +1364,7 @@
 
     const eyebrow = document.createElement("p");
     eyebrow.className = "eyebrow";
-    eyebrow.textContent = "AURA ready";
+    eyebrow.textContent = "VORIS ready";
 
     const title = document.createElement("h3");
     title.textContent = "What should we handle first?";
@@ -1402,7 +1402,7 @@
 
     const label = document.createElement("span");
     label.className = "message-card__label";
-    label.textContent = message.role === "user" ? "You" : "AURA";
+    label.textContent = message.role === "user" ? "You" : "VORIS";
 
     const metaRight = document.createElement("div");
     metaRight.className = "message-card__meta-right";
@@ -1449,7 +1449,7 @@
     copy.type = "button";
     const isCopied = state.copiedMessageId === message.id;
     copy.className = `message-action-button${isCopied ? " is-success" : ""}`;
-    setIconButtonContent(copy, isCopied ? "check" : "copy", isCopied ? "Copied AURA response" : "Copy AURA response");
+    setIconButtonContent(copy, isCopied ? "check" : "copy", isCopied ? "Copied VORIS response" : "Copy VORIS response");
     copy.addEventListener("click", () => {
       void copyMessageText(message, copy);
     });
@@ -1529,7 +1529,7 @@
       }
       if (trigger) {
         state.copiedMessageId = message.id || "";
-        setIconButtonContent(trigger, "check", "Copied AURA response");
+        setIconButtonContent(trigger, "check", "Copied VORIS response");
         trigger.classList.add("is-success");
         window.setTimeout(() => {
           if (state.copiedMessageId === message.id) {
@@ -1538,10 +1538,10 @@
           }
         }, 1400);
       }
-      setComposerStatus("Copied AURA's response.");
+      setComposerStatus("Copied VORIS's response.");
     } catch (_error) {
       fallbackCopyText(text);
-      setComposerStatus("Copied AURA's response.");
+      setComposerStatus("Copied VORIS's response.");
     }
   }
 
@@ -1587,7 +1587,7 @@
     utterance.onstart = () => {
       state.speakingMessageId = message.id || "";
       setAssistantState("responding", "tts:speech_started");
-      setComposerStatus("Speaking AURA's response.");
+      setComposerStatus("Speaking VORIS's response.");
       syncAssistantModeChrome();
       renderConversation();
     };
@@ -1651,7 +1651,7 @@
     syncAssistantModeChrome();
     setComposerStatus(state.speechEnabled
       ? "Speech is on for voice responses. Text chat stays silent unless you press Speak."
-      : "Speech is off. You can still press Speak on any AURA message.");
+      : "Speech is off. You can still press Speak on any VORIS message.");
   }
 
   async function toggleDesktopVoice() {
@@ -1684,12 +1684,12 @@
       }
       if (payload.active) {
         setAssistantState("listening", "desktop_voice:started");
-        setComposerStatus('Desktop voice is listening for "Hey AURA".');
-        updateWorkspaceSummary('Desktop voice is active locally and listening for "Hey AURA".');
+        setComposerStatus('Desktop voice is listening for "Hey VORIS".');
+        updateWorkspaceSummary('Desktop voice is active locally and listening for "Hey VORIS".');
       } else {
         setAssistantState("idle", "desktop_voice:stopped");
         setComposerStatus("Desktop voice stopped.");
-        updateWorkspaceSummary("AURA is back to text mode and browser push-to-talk.");
+        updateWorkspaceSummary("VORIS is back to text mode and browser push-to-talk.");
       }
     } catch (error) {
       setAssistantState("error", "desktop_voice:toggle_failed");
@@ -1706,7 +1706,7 @@
       await loadAssistantRuntime();
       syncVoiceControls();
       setComposerStatus(payload.message || "Desktop voice interrupted.");
-      updateWorkspaceSummary("AURA interrupted the desktop voice runtime and returned to a safe listening state.");
+      updateWorkspaceSummary("VORIS interrupted the desktop voice runtime and returned to a safe listening state.");
     } catch (error) {
       setComposerStatus(error.message || "Desktop voice interrupt failed.");
     }
@@ -1736,7 +1736,7 @@
     if (!source.trim()) {
       const placeholder = document.createElement("p");
       placeholder.className = "rich-text__placeholder";
-      placeholder.textContent = "AURA is writing";
+      placeholder.textContent = "VORIS is writing";
       container.appendChild(placeholder);
       return container;
     }
@@ -2320,7 +2320,7 @@
 
       const warningText = document.createElement("p");
       warningText.textContent = actionPlan.confirmationRequired
-        ? "Keyboard/mouse control is pending. AURA will not type, press keys, or scroll until you approve this one action."
+        ? "Keyboard/mouse control is pending. VORIS will not type, press keys, or scroll until you approve this one action."
         : "Controlled OS automation is visible and limited to whitelisted app windows.";
       warning.appendChild(warningText);
 
@@ -2434,9 +2434,9 @@
 
       const warningText = document.createElement("p");
       warningText.textContent = criticalBlocked
-        ? "Blocked for safety. AURA will not run password, payment, banking, deletion, or credential actions."
+        ? "Blocked for safety. VORIS will not run password, payment, banking, deletion, or credential actions."
         : actionPlan.confirmationRequired
-      ? "Approval required. AURA will not type, press keys, or scroll until you allow this one action."
+      ? "Approval required. VORIS will not type, press keys, or scroll until you allow this one action."
           : actionPlan.status === "interrupted"
             ? "Control was interrupted. No further keyboard or mouse action will run."
             : visiblyBlocked
@@ -2508,7 +2508,7 @@
     state.requestInFlight = true;
     setAssistantState("thinking", "automation:confirmation_submitted");
     setComposerStatus("Control approved for this one action.");
-    updateWorkspaceSummary("AURA is running the approved controlled automation path now.");
+    updateWorkspaceSummary("VORIS is running the approved controlled automation path now.");
 
     appendMessage({
       role: "user",
@@ -2574,7 +2574,7 @@
       const reply = String(payload.message || "Control stop requested.").trim();
       setAssistantState("error", "automation:stop_requested");
       setComposerStatus(reply);
-      updateWorkspaceSummary("AURA has requested the automation stop flag.");
+      updateWorkspaceSummary("VORIS has requested the automation stop flag.");
       await revealAssistantMessage({
         role: "assistant",
         text: reply,
@@ -2630,7 +2630,7 @@
       el.rightPanelTitle.textContent = state.currentTask.scope === "external" ? "External action" : "Current task";
       el.rightPanelBody.appendChild(buildTaskCard());
     } else {
-      el.rightPanelTitle.textContent = "AURA context";
+      el.rightPanelTitle.textContent = "VORIS context";
     }
 
     if (state.panelMode === "outputs" && state.recentOutputs.length) {
@@ -2659,7 +2659,7 @@
     const body = document.createElement("p");
     body.className = "panel-card__body";
     body.textContent = state.auth?.authenticated
-      ? "You're signed in. These are the real account and session details AURA has right now."
+      ? "You're signed in. These are the real account and session details VORIS has right now."
       : "You're using public mode. Protected account work stays unavailable until you sign in.";
 
     const grid = document.createElement("div");
@@ -2715,8 +2715,8 @@
     const body = document.createElement("p");
     body.className = "panel-card__body";
     body.textContent = compact
-      ? "These are the safe desktop apps AURA can try to launch from this system."
-      : "AURA only launches a small safe allowlist. Availability reflects what the backend can actually find right now.";
+      ? "These are the safe desktop apps VORIS can try to launch from this system."
+      : "VORIS only launches a small safe allowlist. Availability reflects what the backend can actually find right now.";
 
     const list = document.createElement("div");
     list.className = "desktop-apps-list";
@@ -2763,8 +2763,8 @@
     const body = document.createElement("p");
     body.className = "panel-card__body";
     body.textContent = state.currentTask.scope === "external"
-      ? "AURA routed this outside the workspace and stayed nearby in floating presence mode."
-      : "AURA kept this inside the workspace so the work can stay focused here.";
+      ? "VORIS routed this outside the workspace and stayed nearby in floating presence mode."
+      : "VORIS kept this inside the workspace so the work can stay focused here.";
 
     const grid = document.createElement("div");
     grid.className = "panel-card__grid";
@@ -2814,8 +2814,8 @@
     const body = document.createElement("p");
     body.className = "panel-card__body";
     body.textContent = state.screenShareActive
-      ? "Screen capture is active. AURA reflects that state clearly, but it still does not claim live visual understanding."
-      : "Screen capture is off. If you start it, AURA will only reflect the capture state honestly.";
+      ? "Screen capture is active. VORIS reflects that state clearly, but it still does not claim live visual understanding."
+      : "Screen capture is off. If you start it, VORIS will only reflect the capture state honestly.";
 
     const grid = document.createElement("div");
     grid.className = "panel-card__grid";
@@ -2955,7 +2955,7 @@
     setAssistantState("idle", "chat:new_session_started");
     hidePresence(true);
     setComposerStatus("New chat ready. I'm here when you are.");
-    updateWorkspaceSummary("A fresh AURA workspace is ready for the next thing you want handled.");
+    updateWorkspaceSummary("A fresh VORIS workspace is ready for the next thing you want handled.");
     renderSidebarSessions();
     renderConversation();
     renderRightPanel();
@@ -2987,12 +2987,12 @@
     state.screenShareLabel = "Off";
     el.screenShareButton?.classList.remove("is-active");
     setComposerStatus("Screen capture is off.");
-    updateWorkspaceSummary("AURA is ready for chat, push-to-talk voice, and document generation.");
+    updateWorkspaceSummary("VORIS is ready for chat, push-to-talk voice, and document generation.");
     showPresence({
       mode: state.currentTask?.scope === "external" ? "floating" : "docked",
       eyebrow: "Screen capture",
       title: "Screen capture is off.",
-      text: "AURA is back to its normal workspace presence.",
+      text: "VORIS is back to its normal workspace presence.",
       duration: 1500,
     });
     renderRightPanel();
@@ -3010,13 +3010,13 @@
       if (!wakeMatch.detected) {
         state.wakeModeEnabled = false;
         syncVoiceControls();
-        setComposerStatus('Wake beta listened once, but "Hey AURA" was not detected.');
+        setComposerStatus('Wake beta listened once, but "Hey VORIS" was not detected.');
         setAssistantState("idle", "wake:phrase_not_detected");
         showPresence({
           mode: "center",
           eyebrow: "Wake beta",
           title: "I didn't catch the wake phrase.",
-          text: 'Try "Hey AURA" again when you want me.',
+          text: 'Try "Hey VORIS" again when you want me.',
           duration: 1700,
         });
         settleToIdleLayout();
@@ -3056,7 +3056,7 @@
 
     setAssistantState("analyzing", "voice:transcript_ready_for_chat");
     setComposerStatus(`Heard: "${commandText}". Sending it now.`);
-    updateWorkspaceSummary("AURA captured your voice request and is sending it now.");
+    updateWorkspaceSummary("VORIS captured your voice request and is sending it now.");
 
     const classification = classifyCommand(commandText);
     if (classification.kind === "external") {
@@ -3079,7 +3079,7 @@
         "SpeechRecognition is not available in this browser.",
         {
           event: "voice:unsupported_browser",
-          workspaceSummary: "AURA can't start voice input in this browser.",
+          workspaceSummary: "VORIS can't start voice input in this browser.",
           title: "Voice input is unavailable.",
           resetMs: 1600,
         },
@@ -3091,7 +3091,7 @@
       const reason = "Talk is unavailable until the current request finishes.";
       logVoiceError("Talk blocked while request in flight", { mode });
       setComposerStatus(reason);
-      updateWorkspaceSummary("AURA is still finishing the current request before it can listen again.");
+      updateWorkspaceSummary("VORIS is still finishing the current request before it can listen again.");
       showPresence({
         mode: "docked",
         eyebrow: "Voice input",
@@ -3123,7 +3123,7 @@
         "Mic permission denied.",
         {
           event: "voice:permission_denied",
-          workspaceSummary: "AURA can't listen until microphone access is allowed.",
+          workspaceSummary: "VORIS can't listen until microphone access is allowed.",
           title: "Mic permission denied.",
           resetMs: 1600,
         },
@@ -3140,7 +3140,7 @@
         "SpeechRecognition could not be created.",
         {
           event: "voice:recognition_instance_failed",
-          workspaceSummary: "AURA could not create a browser recognition session.",
+          workspaceSummary: "VORIS could not create a browser recognition session.",
           title: "I couldn't start listening.",
           resetMs: 1600,
         },
@@ -3180,7 +3180,7 @@
       setAssistantState("listening", "voice:recognition_started");
       if (mode === "talk") {
         setComposerStatus("I'm listening. Speak when you're ready.");
-        updateWorkspaceSummary("Microphone is active. AURA is listening for your voice input.");
+        updateWorkspaceSummary("Microphone is active. VORIS is listening for your voice input.");
         showPresence({
           mode: "center",
           eyebrow: "Voice input",
@@ -3274,7 +3274,7 @@
           voiceFailureMessageFromError(error, "The voice request failed before chat completed."),
           {
             event: "api:voice_handoff_failed",
-            workspaceSummary: "AURA captured your words, but the handoff to chat failed.",
+            workspaceSummary: "VORIS captured your words, but the handoff to chat failed.",
             eyebrow: "Voice handoff",
             title: "I couldn't complete that yet.",
             keepTranscript: true,
@@ -3320,7 +3320,7 @@
           reason,
           {
             event: "voice:no_final_transcript",
-            workspaceSummary: "AURA heard audio, but the browser never delivered final speech text.",
+            workspaceSummary: "VORIS heard audio, but the browser never delivered final speech text.",
             title: "I couldn't capture the full transcript.",
             keepTranscript: true,
             resetMs: 1700,
@@ -3368,7 +3368,7 @@
             "The microphone did not start in time.",
             {
               event: "voice:start_timeout",
-              workspaceSummary: "AURA asked the browser to start listening, but the microphone session never became active.",
+              workspaceSummary: "VORIS asked the browser to start listening, but the microphone session never became active.",
               title: "I couldn't start listening.",
               resetMs: 1700,
             },
@@ -3498,12 +3498,12 @@
       el.screenChipLabel.textContent = state.screenShareActive ? "On" : "Off";
     }
     if (!el.workspaceSummary?.textContent) {
-      updateWorkspaceSummary("AURA is ready for chat, documents, and safe app actions.");
+      updateWorkspaceSummary("VORIS is ready for chat, documents, and safe app actions.");
     }
     if (el.composerStatus && !state.requestInFlight && !state.recognitionActive && !state.speechCommandInFlight) {
       el.composerStatus.textContent = state.auth?.authenticated
-        ? "Message AURA. Talk is beta when available."
-        : "Message AURA. Click the orb to wake.";
+        ? "Message VORIS. Talk is beta when available."
+        : "Message VORIS. Click the orb to wake.";
     }
   }
 
@@ -3605,7 +3605,7 @@
       credentials: "same-origin",
       headers: {
         "Content-Type": options?.body ? "application/json" : "application/json",
-        "X-AURA-Session-Id": state.sessionId,
+        "X-VORIS-Session-Id": state.sessionId,
         ...(options?.headers || {}),
       },
       body: options?.body,

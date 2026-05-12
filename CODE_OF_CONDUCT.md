@@ -1,8 +1,8 @@
-# Code of Conduct
+﻿# Code of Conduct
 
 ## Our Standard
 
-AURA is built with a reality-first engineering culture. Contributors are expected to be respectful, honest, and safety-minded.
+VORIS is built with a reality-first engineering culture. Contributors are expected to be respectful, honest, and safety-minded.
 
 ## Expected Behavior
 

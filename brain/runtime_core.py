@@ -104,7 +104,17 @@ from tools.desktop_controller import (
 )
 
 
-GREETING_INPUTS = {"hi", "hello", "hey", "hey aura", "hi aura", "hello aura"}
+GREETING_INPUTS = {
+    "hi",
+    "hello",
+    "hey",
+    "hey voris",
+    "hi voris",
+    "hello voris",
+    "hey aura",
+    "hi aura",
+    "hello aura",
+}
 CONVERSATIONAL_INTENTS = {"greeting", "conversation"}
 INTENT_ALIAS_MAP = {
     "content": "write",
@@ -803,7 +813,7 @@ def handle_special_intents(intent: str) -> Optional[str]:
 
     if intent == "identity":
         return (
-            "I am AURA, your Autonomous Universal Responsive Assistant. "
+        "I am VORIS, your Voice-Oriented Responsive Intelligence System. "
             "I help with research, coding, writing, planning, and agent-based task routing."
         )
 
@@ -2515,7 +2525,7 @@ def _process_action_plan_command(
             "requires_multiple": True,
             "primary_selection_source": "safe_action_plan",
             "mode": "real",
-            "reason": "AURA decomposed the request into safe whitelisted actions and executed them sequentially.",
+            "reason": "VORIS decomposed the request into safe whitelisted actions and executed them sequentially.",
         },
         used_agents=used_agents,
         execution_mode="action_plan" if execution.get("success") else "action_plan_failed",

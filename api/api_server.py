@@ -19,7 +19,7 @@ import uvicorn
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 LEGACY_WEB_DIR = PROJECT_ROOT / "interface" / "web"
 WEB_V2_DIR = PROJECT_ROOT / "interface" / "web_v2"
-APP_HTML = WEB_V2_DIR / "aura.html"
+APP_HTML = WEB_V2_DIR / "voris.html"
 LOGIN_HTML = WEB_V2_DIR / "login.html"
 REGISTER_HTML = WEB_V2_DIR / "register.html"
 FORGOT_PASSWORD_HTML = WEB_V2_DIR / "forgot-password.html"
@@ -527,7 +527,8 @@ def _resolve_session_id(request: Optional[Request], explicit: Optional[str] = No
         return _normalize_session_id(explicit)
     if request is not None:
         raw_session = (
-            request.headers.get("X-AURA-Session-Id")
+            request.headers.get("X-VORIS-Session-Id")
+            or request.headers.get("X-AURA-Session-Id")
             or request.cookies.get("aura_local_session")
         )
         return _normalize_session_id(raw_session)
@@ -686,7 +687,7 @@ def _confirmation_reply(context: dict[str, Any]) -> str:
         return "That action is protected. Sign in before using critical or personal actions."
     if not confirmation_system.code_exists(user_id):
         return "Please set a confirmation code in Settings first."
-    return "AURA requires your confirmation to proceed."
+    return "VORIS requires your confirmation to proceed."
 
 
 def _build_chat_success_payload(
@@ -920,6 +921,9 @@ def _build_casual_conversation_reply(
         "hi": f"{greeting_prefix} What can I help you with?",
         "hello": f"{greeting_prefix} What can I help you with?",
         "hey": f"{greeting_prefix} What can I help you with?",
+        "hi voris": f"{greeting_prefix} I'm here.",
+        "hello voris": f"{greeting_prefix} I'm here.",
+        "hey voris": f"{greeting_prefix} I'm here.",
         "hi aura": f"{greeting_prefix} I'm here.",
         "hello aura": f"{greeting_prefix} I'm here.",
         "hey aura": f"{greeting_prefix} I'm here.",
@@ -935,6 +939,13 @@ def _build_casual_conversation_reply(
         "hi how are you",
         "hello how are you",
         "hey how are you",
+        "hi voris how are you",
+        "hello voris how are you",
+        "hey voris how are you",
+        "hi voris how are you doing",
+        "hello voris how are you doing",
+        "hey voris how are you doing",
+        "hello voris how are you doing today",
         "hi aura how are you",
         "hello aura how are you",
         "hey aura how are you",
@@ -964,7 +975,7 @@ def _build_casual_chat_payload(context: dict[str, Any]) -> Optional[dict[str, An
     payload = _build_chat_success_payload(
         reply=reply,
         intent=intent,
-        agent_used="General AURA",
+        agent_used="General VORIS",
         mode=_normalize_chat_mode(context.get("requested_mode"), "greeting", permission),
         provider="local",
     )
@@ -1439,8 +1450,8 @@ def _reminder_summary(reminders: list[dict[str, Any]]) -> dict[str, int]:
 
 def _build_personalized_greeting(user_name: str | None) -> str:
     if user_name:
-        return f"Welcome back, {user_name}. AURA is ready."
-    return "Hello. AURA is ready."
+        return f"Welcome back, {user_name}. VORIS is ready."
+    return "Hello. VORIS is ready."
 
 
 def _normalize_name(*values: Any) -> Optional[str]:
@@ -1548,7 +1559,7 @@ async def aura_private_access_middleware(request: Request, call_next):
         if path in {"/setup", "/api/setup", "/api/auth/session"}:
             return await call_next(request)
         if path.startswith("/api/"):
-            return JSONResponse(status_code=503, content={"error": "AURA setup is required.", "status": "setup_required"})
+            return JSONResponse(status_code=503, content={"error": "VORIS setup is required.", "status": "setup_required"})
         if path != "/setup":
             return RedirectResponse("/setup", status_code=302)
         return await call_next(request)
@@ -1683,7 +1694,7 @@ async def setup_owner(data: SetupData):
         preferred_name=data.preferred_name or "",
     )
     if success:
-        return {"success": True, "user": result, "message": "AURA online. Owner account created."}
+        return {"success": True, "user": result, "message": "VORIS online. Owner account created."}
     raise HTTPException(status_code=400, detail=result)
 
 
@@ -2845,7 +2856,7 @@ async def get_memory_insights(username: str = "guest"):
             for intent, count in top_intents
         ],
         "insights": [
-            f"Top intent right now is {top_intents[0][0]}." if top_intents else "AURA is still learning your recurring intent patterns.",
+            f"Top intent right now is {top_intents[0][0]}." if top_intents else "VORIS is still learning your recurring intent patterns.",
             "Stored facts come from explicit memory and interaction learning.",
             "Preferences are limited until more real UI controls are connected.",
         ],
@@ -3257,7 +3268,7 @@ async def get_modes():
     if False:  # Legacy static catalog kept only as migration reference.
         return {
         "agents": [
-            {"id": "general", "name": "General AURA", "icon": "🤖", "description": "General AI assistant"},
+            {"id": "general", "name": "General VORIS", "icon": "🤖", "description": "General AI assistant"},
             {"id": "study", "name": "Study Agent", "icon": "📚", "description": "Learn any topic"},
             {"id": "research", "name": "Research Agent", "icon": "🔍", "description": "Deep research"},
             {"id": "code", "name": "Coding Agent", "icon": "💻", "description": "Programming help"},

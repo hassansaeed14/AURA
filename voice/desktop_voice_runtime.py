@@ -16,7 +16,8 @@ except Exception:  # pragma: no cover
     pyttsx3 = None
 
 
-WAKE_PHRASE = "hey aura"
+WAKE_PHRASE = "hey voris"
+LEGACY_WAKE_PHRASES = ("hey aura", "aura")
 UNAVAILABLE_MESSAGE = "Desktop voice runtime is not available on this system."
 INACTIVE_MESSAGE = "Desktop voice runtime is not active."
 DISABLED_MESSAGE = (
@@ -128,7 +129,7 @@ def _message_for_state(payload: Dict[str, Any]) -> str:
     if not payload.get("active"):
         return INACTIVE_MESSAGE
     if state == "listening":
-        return 'Listening for "Hey AURA".'
+        return 'Listening for "Hey VORIS".'
     if state == "awake":
         return "Wake phrase detected. Waiting for the command."
     if state == "processing":
@@ -201,7 +202,7 @@ def start_desktop_voice(
         if _STATE.get("active"):
             status = _status_payload()
             status["success"] = True
-            status["message"] = 'Desktop voice is already listening for "Hey AURA".'
+            status["message"] = 'Desktop voice is already listening for "Hey VORIS".'
             return status
 
         _STOP_EVENT.clear()
@@ -224,7 +225,7 @@ def start_desktop_voice(
             _THREAD = threading.Thread(
                 target=_desktop_voice_loop,
                 kwargs={"session_id": session_id, "user_profile": dict(user_profile or {})},
-                name="AURA Desktop Voice Runtime",
+                name="VORIS Desktop Voice Runtime",
                 daemon=True,
             )
             _THREAD.start()
@@ -233,7 +234,7 @@ def start_desktop_voice(
 
     status = _status_payload()
     status["success"] = True
-    status["message"] = 'Desktop voice runtime started. Listening for "Hey AURA".'
+    status["message"] = 'Desktop voice runtime started. Listening for "Hey VORIS".'
     return status
 
 
@@ -310,7 +311,7 @@ def _desktop_voice_loop(*, session_id: str, user_profile: dict[str, Any]) -> Non
         if not transcript:
             continue
         _set_state(last_transcript=transcript)
-        wake = detect_wake_word(transcript, [WAKE_PHRASE])
+        wake = detect_wake_word(transcript, [WAKE_PHRASE, *LEGACY_WAKE_PHRASES])
         if not wake.get("detected"):
             continue
 
@@ -475,7 +476,7 @@ def _safe_spoken_text(result: Dict[str, Any], response_text: str) -> str:
     if trust_level == "critical":
         return "I blocked that action for safety."
     if trust_level in {"sensitive", "private"} or result.get("automation_confirmation_required"):
-        return "This needs your approval in AURA before I can continue."
+        return "This needs your approval in VORIS before I can continue."
     return response_text[:1200]
 
 

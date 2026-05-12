@@ -50,10 +50,10 @@ def get_voice_status() -> Dict[str, Any]:
                 else "Backend host microphone capture is unavailable. Reliable browser voice input falls back to push-to-talk."
             ),
         },
-        "wake_word_preview": detect_wake_word("hey aura status check", settings.wake_words),
+        "wake_word_preview": detect_wake_word("hey voris status check", settings.wake_words),
         "wake_word": {
             "phrases": list(settings.wake_words),
-            "default_phrase": settings.wake_words[0] if settings.wake_words else "hey aura",
+            "default_phrase": settings.wake_words[0] if settings.wake_words else "hey voris",
             "mode": "beta_single_phrase",
             "continuous_listening_note": (
                 "Always-on ambient wake is not guaranteed. Reliable browser voice input is push-to-talk, "

@@ -1,4 +1,4 @@
-# AURA System Audit
+﻿# VORIS System Audit
 
 Audit date: 2026-05-08
 
@@ -6,9 +6,9 @@ This audit summarizes the current repository truth after stabilization phases. I
 
 ## Executive Summary
 
-AURA is a serious Level 3 / early Level 4 JARVIS-style assistant prototype. It has a real backend, modern interface, document engine, scoped memory, safe action layers, voice scaffolding, OCR safety checks, and a broad test suite.
+VORIS is a serious Level 3 / early Level 4 JARVIS-style assistant prototype. It has a real backend, modern interface, document engine, scoped memory, safe action layers, voice scaffolding, OCR safety checks, and a broad test suite.
 
-AURA is not a real Level 5 JARVIS assistant. Voice is dependency-based, screen understanding is OCR-level, automation is intentionally narrow, provider reliability depends on configured services, and daily-use reliability still needs hardening.
+VORIS is not a real Level 5 JARVIS assistant. Voice is dependency-based, screen understanding is OCR-level, automation is intentionally narrow, provider reliability depends on configured services, and daily-use reliability still needs hardening.
 
 ## Runtime
 
@@ -16,7 +16,7 @@ Status: REAL
 
 Evidence:
 
-- `run_aura.py` is the supported launcher.
+- `run_VORIS.py` is the supported launcher.
 - `api/api_server.py` is the live FastAPI API.
 - Health endpoints exist for session, assistant runtime, desktop apps, and system health.
 
@@ -222,5 +222,5 @@ Browser push-to-talk is useful but browser-dependent. Desktop voice is scaffoldi
 
 ## Automation Truth
 
-AURA can run narrow controlled actions. It should not be marketed as broad computer control.
+VORIS can run narrow controlled actions. It should not be marketed as broad computer control.
 

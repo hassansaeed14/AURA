@@ -1,11 +1,11 @@
-# AURA Roadmap
+﻿# VORIS Roadmap
 
-This roadmap is intentionally conservative. AURA should become more capable only when existing systems are real, stable, and safe.
+This roadmap is intentionally conservative. VORIS should become more capable only when existing systems are real, stable, and safe.
 
 ## Completed Milestones
 
-- FastAPI runtime with `run_aura.py` as the supported launcher.
-- `web_v2` chat-first interface with AURA orb presence.
+- FastAPI runtime with `run_VORIS.py` as the supported launcher.
+- `web_v2` chat-first interface with VORIS orb presence.
 - Auth routes for login, register, forgot password, session state, and logout.
 - Scoped memory and identity safeguards.
 - Provider routing, health status, and degraded response handling.
@@ -20,7 +20,7 @@ This roadmap is intentionally conservative. AURA should become more capable only
 
 ## Current Focus
 
-AURA is being stabilized from a Level 3 JARVIS-style prototype toward an early Level 4 near-JARVIS system.
+VORIS is being stabilized from a Level 3 JARVIS-style prototype toward an early Level 4 near-JARVIS system.
 
 Current priorities:
 
@@ -36,7 +36,7 @@ Current priorities:
 
 ### Phase 1 - Runtime and Reliability Hardening
 
-- Keep `run_aura.py` as the single supported launcher.
+- Keep `run_VORIS.py` as the single supported launcher.
 - Ensure UTF-8 safe console output.
 - Detect port conflicts clearly.
 - Keep startup, health checks, and shutdown predictable.
