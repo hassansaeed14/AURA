@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 
-PROJECT_NAME = "AURA"
-FULL_PROJECT_NAME = "Autonomous Universal Responsive Assistant"
+PROJECT_NAME = "VORIS"
+FULL_PROJECT_NAME = "Voice-Oriented Responsive Intelligence System"
 PROJECT_TYPE = "JARVIS-style AI assistant system"
 PROJECT_ROOT = r"D:\HeyGoku"
 
@@ -172,23 +172,23 @@ NEXT_BUILDS = (
 
 SUPPORT_CHATS = {
     "backend_builder": {
-        "name": "AURA Backend Builder",
+        "name": "VORIS Backend Builder",
         "responsibility": "writes backend code and upgrades or refactors files",
     },
     "code_reviewer": {
-        "name": "AURA Code Reviewer",
+        "name": "VORIS Code Reviewer",
         "responsibility": "checks code quality and safety",
     },
     "output_tester": {
-        "name": "AURA Output Tester",
+        "name": "VORIS Output Tester",
         "responsibility": "analyzes runtime and output behavior",
     },
     "error_explainer": {
-        "name": "AURA Error Explainer",
+        "name": "VORIS Error Explainer",
         "responsibility": "explains bugs clearly",
     },
     "interface_architect": {
-        "name": "AURA Interface Architect",
+        "name": "VORIS Interface Architect",
         "responsibility": "designs the frontend system",
     },
 }
