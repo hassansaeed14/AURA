@@ -1159,11 +1159,11 @@ def _iter_render_blocks(layout: DocumentLayout) -> list[dict[str, str]]:
         blocks.append({"kind": "title", "text": layout.title})
         blocks.append({"kind": "subtitle", "text": layout.subtitle})
         blocks.append({"kind": "cover_meta", "text": f"Topic: {layout.topic}"})
-    blocks.append({"kind": "cover_meta", "text": "Prepared by VORIS"})
+        blocks.append({"kind": "cover_meta", "text": "Prepared by VORIS"})
         blocks.append({"kind": "cover_meta", "text": f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}"})
-        if layout.page_target:
+    if layout.page_target:
             blocks.append({"kind": "cover_meta", "text": f"Requested length: Approximately {layout.page_target} pages"})
-        blocks.append({"kind": "page_break", "text": ""})
+            blocks.append({"kind": "page_break", "text": ""})
     else:
         blocks.extend(
             [

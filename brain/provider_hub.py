@@ -298,7 +298,7 @@ def _humanize_status(status: str) -> str:
 
 
 class ProviderHub:
-"""Shared provider routing and health source of truth for VORIS."""
+    """Shared provider routing and health source of truth for VORIS."""
 
     def __init__(self) -> None:
         self._status_cache: dict[str, ProviderStatus] = {}
@@ -935,7 +935,7 @@ class ProviderHub:
             active_provider = str(active_item.get("provider") or "").strip().lower()
             status = STATUS_HEALTHY if active_provider == preferred_provider else STATUS_DEGRADED
             if active_provider == preferred_provider:
-    message = f"{active_provider.upper()} is healthy and serving VORIS's active reasoning path."
+             message = f"{active_provider.upper()} is healthy and serving VORIS's active reasoning path."
             else:
                 preferred_status = _humanize_status(str(preferred_item.get("status") if preferred_item else STATUS_NOT_CONFIGURED))
                 message = (
