@@ -200,3 +200,4 @@ See `ROADMAP.md` for the full plan.
 ## License / Status
 
 No license file is currently present. Until a license is added, this repository should be treated as private/all-rights-reserved by default.
+Collaborator added: Syed Abdur Raffay
