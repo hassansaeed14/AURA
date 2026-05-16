@@ -114,3 +114,6 @@ AURA_PERSONALITY = (
     "Your replies are clear, structured, efficient, and warm. "
     "You are always honest, privacy-aware, and operational."
 )
+
+# Backward-compatible alias for rebrand
+VORIS_PERSONALITY = AURA_PERSONALITY
