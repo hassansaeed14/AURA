@@ -2498,3 +2498,400 @@ body[data-task-scope="external"] .page-ambient {
     justify-content: flex-start;
   }
 }
+/* ==========================================================================
+   VORIS COMPOSER REFACTOR - UI/UX COMPONENT UPDATE
+   ========================================================================== */
+
+.composer {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    padding: 16px !important;
+    background: #11141a !important; 
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.composer__row {
+    display: none !important;
+}
+
+.composer__main-input-row {
+    display: flex !important;
+    width: 100% !important;
+    align-items: flex-end !important;
+    gap: 12px !important;
+}
+
+.composer__input-shell {
+    flex: 1 !important;
+    width: 100% !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 12px !important;
+    padding: 10px 14px !important;
+}
+
+.composer__input-shell:focus-within {
+    border-color: #00ffcc !important; 
+    box-shadow: 0 0 8px rgba(0, 255, 204, 0.2) !important;
+}
+
+.composer textarea {
+    width: 100% !important;
+    background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    color: #ffffff !important;
+    font-family: 'Manrope', sans-serif !important;
+    font-size: 15px !important;
+    line-height: 1.5 !important;
+    resize: none !important;
+}
+
+.composer__utility-tray {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+    padding-top: 4px !important;
+}
+
+.composer__utility-tray .tool-button {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    color: #a0aec0 !important;
+    padding: 6px 12px !important;
+    border-radius: 6px !important;
+    font-size: 12px !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+}/* ==========================================================================
+   VORIS COMPOSER COMPRESSION & ORB FIX - SYED ABDUR RAFFAY
+   ========================================================================== */
+
+/* 1. SQUASH COMPOSER VERTICAL HEIGHT */
+.composer {
+    padding: 8px 16px !important; /* Cut vertical padding in half */
+    gap: 6px !important;          /* Tightened space between elements */
+}
+
+.composer__input-shell {
+    padding: 6px 12px !important; /* Made the text tracking container thinner */
+    border-radius: 8px !important;
+}
+
+/* 2. STOP THE ORB FROM JUMPING TO THE CENTER IN TEXT MODE */
+body[data-assistant-state="thinking"] .presence-stage,
+body[data-assistant-state="responding"] .presence-stage {
+    display: none !important; /* Completely blocks the giant middle card from showing up */
+}
+
+body[data-assistant-state="thinking"] .assistant-orb,
+body[data-assistant-state="responding"] .assistant-orb {
+    position: absolute !important;
+    top: 16px !important;
+    right: 24px !important;
+    transform: none !important; /* Prevents your friend's layout translation rules from shifting it */
+    margin: 0 !important;
+    width: 40px !important;    /* Keeps it contained as a low-profile status dot in the header */
+    height: 40px !important;
+}/* ==========================================================================
+   VORIS ORB POSITIONING & HEADER COMPRESSION - SYED ABDUR RAFFAY
+   ========================================================================== */
+
+/* 1. PERMANENTLY PIN THE ORB TO THE TOP RIGHT IN TEXT MODE */
+body[data-orb-layout="topbar"] .assistant-orb {
+    position: fixed !important;
+    top: 14px !important;
+    right: 20px !important;
+    left: auto !important;
+    transform: none !important;
+    margin: 0 !important;
+    width: 42px !important;
+    height: 42px !important;
+    z-index: 9999 !important;
+}
+
+/* Hide the giant "Idle" text labels under the corner orb */
+body[data-orb-layout="topbar"] .assistant-orb__meta {
+    display: none !important;
+}
+
+/* 2. SQUASH THE TOPBAR CONTAINER TO MAXIMIZE CHAT VIEWPORT HEIGHT */
+.topbar {
+    padding: 10px 20px !important; /* Drastically reduce vertical padding */
+    min-height: auto !important;
+}
+
+/* Hide redundant descriptive layers in the header to save space */
+.topbar .eyebrow,
+#workspaceSummary {
+    display: none !important;
+}
+
+/* Align headline elements horizontally into a tight layout row */
+.topbar__headline {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin: 0 !important;
+}
+
+.topbar__headline h2 {
+    font-size: 18px !important;
+    margin: 0 !important;
+}/* ==========================================================================
+   VORIS DEEP SCREEN CONDENSATION - SYED ABDUR RAFFAY (UI/UX HARDENING)
+   ========================================================================== */
+
+/* 1. FORCE THE SIDEBAR COLUMNS TO SHRINK FROM 312px TO 230px */
+:root {
+    --sidebar-width: 230px !important;
+}
+
+.sidebar {
+    padding: 12px !important; /* Tighten internal spacing */
+}
+
+/* 2. REMOVE THE REQUSTED HEADER STATUS CHIPS SAFELY VIA CSS */
+/* Hiding them in CSS prevents your friend's JavaScript hooks from crashing */
+.topbar__status {
+    display: none !important;
+}
+
+/* Make the top area an absolute micro-strip */
+.topbar {
+    padding: 4px 16px !important; 
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.topbar__headline h2 {
+    font-size: 15px !important;
+}
+
+/* 3. HARD REFACTOR OF THE MESSAGE AREA FOR MAXIMUM VERTICAL CAPACITY */
+.composer {
+    padding: 6px 12px !important; 
+    gap: 4px !important;
+}
+
+/* Remove the "Message VORIS. Talk is beta..." row entirely to save a full line of text space */
+.composer__status-row {
+    display: none !important;
+}
+
+/* Compact the text area wrapping shell */
+.composer__input-shell {
+    padding: 4px 10px !important;
+    border-radius: 6px !important;
+}
+
+.composer textarea {
+    font-size: 14px !important;
+    line-height: 1.3 !important;
+}
+
+/* Shrink send and utility trays to a tight structural row */
+.send-button {
+    padding: 4px 12px !important;
+    font-size: 13px !important;
+}
+
+.composer__utility-tray .tool-button {
+    padding: 3px 8px !important;
+    font-size: 11px !important;
+}/* ==========================================================================
+   VORIS UX CORRECTION REFACTOR - SYED ABDUR RAFFAY
+   ========================================================================== */
+
+/* 1. VAPORIZE THE ORB FROM THE VIEWPORT AREA */
+.assistant-orb, 
+.presence-stage,
+.assistant-orb__meta {
+    display: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+/* 2. DISAPPEARING SIDEBAR LATICE CONFIGURATION */
+.app-shell {
+    display: grid !important;
+    grid-template-columns: var(--sidebar-width) 1fr !important;
+    transition: grid-template-columns 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    overflow: hidden !important;
+}
+
+:root {
+    --sidebar-width: 230px !important; /* Kept tight sidebar footprint */
+}
+
+.sidebar {
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease !important;
+    transform: translateX(0) !important;
+    opacity: 1 !important;
+    padding: 12px !important;
+}
+
+.app-shell.sidebar-collapsed {
+    grid-template-columns: 0px 1fr !important;
+}
+
+.app-shell.sidebar-collapsed .sidebar {
+    transform: translateX(-100%) !important;
+    opacity: 0 !important;
+}
+
+/* 3. SCROLL SYSTEMS & COLOR RESTORATION */
+/* Removed hardcoded black backgrounds to let your original deep slate blue hues shine through naturally */
+.workspace {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100vh !important;
+    overflow: hidden !important;
+}
+
+.workspace__scroll-container {
+    flex: 1 !important;
+    overflow-y: auto !important; 
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.topbar {
+    display: flex !important;
+    align-items: center !important;
+    gap: 16px !important;
+    padding: 6px 20px !important;
+    min-height: auto !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.topbar__status, .topbar .eyebrow, #workspaceSummary {
+    display: none !important;
+}
+
+.topbar__headline h2 {
+    font-size: 15px !important;
+    margin: 0 !important;
+}
+
+/* 4. COMPACT INPUT TRAY WITH STYLIZED MIC ASSET */
+.composer {
+    padding: 10px 24px 20px 24px !important;
+    gap: 4px !important;
+}
+
+.composer__status-row {
+    display: none !important;
+}
+
+.composer__main-input-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 24px !important;
+    padding: 4px 12px !important;
+}
+
+.composer__input-shell {
+    flex: 1 !important;
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+}
+
+.composer textarea {
+    padding: 6px 0 !important;
+    font-size: 14px !important;
+    line-height: 1.4 !important;
+    resize: none !important;
+}
+
+/* Microscopic glowing Mic layout token */
+.mic-visual-btn {
+    background: transparent !important;
+    border: none !important;
+    color: #a0aec0 !important;
+    cursor: pointer !important;
+    padding: 4px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: color 0.2s ease, transform 0.1s ease !important;
+}
+
+.mic-visual-btn svg {
+    width: 19px !important;
+    height: 19px !important;
+}
+
+.mic-visual-btn:hover {
+    color: #00ffcc !important; /* Retained your signature cyber illumination shade */
+    transform: scale(1.08) !important;
+}
+
+.send-button {
+    padding: 6px 16px !important;
+    font-size: 13px !important;
+    border-radius: 16px !important;
+}
+
+.sidebar-toggle-btn {
+    background: transparent !important;
+    border: none !important;
+    color: #ffffff !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    padding: 4px !important;
+}
+
+.sidebar-toggle-btn svg {
+    width: 18px !important;
+    height: 18px !important;
+}/* ==========================================================================
+   VORIS UNIFIED SCROLL ENGINE CORRECTION - SYED ABDUR RAFFAY
+   ========================================================================== */
+
+/* Disable the inner container's independent scroll tracking */
+.chat-scroll {
+    overflow-y: visible !important;
+    height: auto !important;
+    max-height: none !important;
+}
+
+/* Ensure the outer master container handles the entire viewport scroll flow */
+.workspace__scroll-container {
+    overflow-y: auto !important;
+    flex: 1 !important;
+}/* ==========================================================================
+   VORIS SMART SMART-HEADER NAVIGATION - SYED ABDUR RAFFAY
+   ========================================================================== */
+
+/* Pin the header firmly to the top of the scroll track viewport */
+.topbar {
+    position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    z-index: 1000 !important;
+    background: #090f1e81 !important; /* Keeps your slate-blue workspace solid behind the text */
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    flex-shrink: 0 !important;
+    box-shadow: 0 4px 20px rgba(13, 15, 19, 0.3) !important; /* Soft shadow so bubbles pass under it cleanly */
+}
+
+/* The Glide Action: Translates the entire header box perfectly upward out of frame */
+.topbar--hidden {
+    transform: translateY(-100%) !important;
+}
+
+/* Ensure the chat thread has slight top spacing so it doesn't clip the header baseline */
+.conversation-thread {
+    padding-top: 12px !important;
+}
